@@ -200,7 +200,7 @@ Version $VERSION
         -h, --help                  Display this help and exit.
 
     Examples:
-        $(basename "$0") --domain=... --app=... [--root-dir=...] [--debug]
+        $(basename "$0") --domain=... --app=... --root-dir=... --php-version=... [--debug]
 
 "
     _printPoweredBy
