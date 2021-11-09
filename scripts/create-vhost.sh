@@ -1,0 +1,830 @@
+#!/usr/bin/env bash
+
+#
+# Script to create virtual host for Nginx server
+#
+# @author   Raj KB <magepsycho@gmail.com>
+# @website  http://www.magepsycho.com
+# @version  1.2.0
+
+# UnComment it if bash is lower than 4.x version
+shopt -s extglob
+
+################################################################################
+# CORE FUNCTIONS - Do not edit
+################################################################################
+
+## Uncomment it for debugging purpose
+###set -o errexit
+#set -o pipefail
+#set -o nounset
+#set -o xtrace
+
+#
+# VARIABLES
+#
+_bold=$(tput bold)
+_underline=$(tput sgr 0 1)
+_reset=$(tput sgr0)
+
+_purple=$(tput setaf 171)
+_red=$(tput setaf 1)
+_green=$(tput setaf 76)
+_tan=$(tput setaf 3)
+_blue=$(tput setaf 38)
+
+#
+# HEADERS & LOGGING
+#
+function _debug()
+{
+    if [[ "$DEBUG" = 1 ]]; then
+        "$@"
+    fi
+}
+
+function _header()
+{
+    printf '\n%s%s==========  %s  ==========%s\n' "$_bold" "$_purple" "$@" "$_reset"
+}
+
+function _arrow()
+{
+    printf '➜ %s\n' "$@"
+}
+
+function _success()
+{
+    printf '%s✔ %s%s\n' "$_green" "$@" "$_reset"
+}
+
+function _error() {
+    printf '%s✖ %s%s\n' "$_red" "$@" "$_reset"
+}
+
+function _warning()
+{
+    printf '%s➜ %s%s\n' "$_tan" "$@" "$_reset"
+}
+
+function _underline()
+{
+    printf '%s%s%s%s\n' "$_underline" "$_bold" "$@" "$_reset"
+}
+
+function _bold()
+{
+    printf '%s%s%s\n' "$_bold" "$@" "$_reset"
+}
+
+function _note()
+{
+    printf '%s%s%sNote:%s %s%s%s\n' "$_underline" "$_bold" "$_blue" "$_reset" "$_blue" "$@" "$_reset"
+}
+
+function _die()
+{
+    _error "$@"
+    exit 1
+}
+
+function _safeExit()
+{
+    exit 0
+}
+
+#
+# UTILITY HELPER
+#
+function _seekConfirmation()
+{
+  printf '\n%s%s%s' "$_bold" "$@" "$_reset"
+  read -p " (y/n) " -n 1
+  printf '\n'
+}
+
+# Test whether the result of an 'ask' is a confirmation
+function _isConfirmed()
+{
+    if [[ "$REPLY" =~ ^[Yy]$ ]]; then
+        return 0
+    fi
+    return 1
+}
+
+
+function _typeExists()
+{
+    if type "$1" >/dev/null; then
+        return 0
+    fi
+    return 1
+}
+
+function _isOs()
+{
+    if [[ "${OSTYPE}" == $1* ]]; then
+      return 0
+    fi
+    return 1
+}
+
+function _isOsDebian()
+{
+    if [[ -f /etc/debian_version ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+function _isOsRedHat()
+{
+    if [[ -f /etc/redhat-release ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+function _isOsMac()
+{
+    if [[ "$(uname -s)" = "Darwin" ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+function _checkRootUser()
+{
+    #if [ "$(id -u)" != "0" ]; then
+    if [ "$(whoami)" != 'root' ]; then
+        _die "You cannot run $0 as non-root user. Please use sudo $0"
+    fi
+}
+
+function _printPoweredBy()
+{
+    local mp_ascii
+    mp_ascii='
+   __  ___              ___               __
+  /  |/  /__ ____ ____ / _ \___ __ ______/ /  ___
+ / /|_/ / _ `/ _ `/ -_) ___(_-</ // / __/ _ \/ _ \
+/_/  /_/\_,_/\_, /\__/_/  /___/\_, /\__/_//_/\___/
+            /___/             /___/
+'
+    cat <<EOF
+${_green}
+Powered By:
+$mp_ascii
+
+ >> Store: ${_reset}${_underline}${_blue}http://www.magepsycho.com${_reset}${_reset}${_green}
+ >> Blog:  ${_reset}${_underline}${_blue}http://www.blog.magepsycho.com${_reset}${_reset}${_green}
+
+################################################################
+${_reset}
+EOF
+}
+
+################################################################################
+# SCRIPT FUNCTIONS
+################################################################################
+function _printUsage()
+{
+    echo -n "$(basename "$0") [OPTION]...
+
+Nginx Virtual Host Creator
+Version $VERSION
+
+    Options:
+        --domain                    Server Name.
+        --root-dir                  Application Root Directory.
+        --app                       Application Name (magento1|magento2|wordpress|laravel|default).
+        --php-version               PHP version used for application (php70|php71|php72|php73|php74).
+        -d, --debug                 Run command in debug mode.
+        -h, --help                  Display this help and exit.
+
+    Examples:
+        $(basename "$0") --domain=... --app=... [--root-dir=...] [--debug]
+
+"
+    _printPoweredBy
+    exit 1
+}
+
+function processArgs()
+{
+    # Parse Arguments
+    for arg in "$@"
+    do
+        case $arg in
+            --domain=*)
+                VHOST_DOMAIN="${arg#*=}"
+            ;;
+            --root-dir=*)
+                VHOST_ROOT_DIR="${arg#*=}"
+            ;;
+            --app=*)
+                APP_TYPE="${arg#*=}"
+            ;;
+            --php-version=*)
+                APP_PHP="${arg#*=}"
+            ;;            
+            --debug)
+                DEBUG=1
+                set -o xtrace
+            ;;
+            -h|--help)
+                _printUsage
+            ;;
+            *)
+                _printUsage
+            ;;
+        esac
+    done
+
+    validateArgs
+    sanitizeArgs
+}
+
+function initDefaultArgs()
+{
+    VHOST_ROOT_DIR=
+    NGINX_SITES_CONF_D_FILE=
+    NGINX_SITES_CONF_D="$(pwd)/conf/nginx/conf.d"
+}
+
+function validateArgs()
+{
+    ERROR_COUNT=0
+    if [[ -z "$VHOST_DOMAIN" ]]; then
+        _error "--domain=... parameter is missing."
+        ERROR_COUNT=$((ERROR_COUNT + 1))
+    fi
+    if [[ -z "$APP_TYPE" ]]; then
+        _error "--app=... parameter is missing."
+        ERROR_COUNT=$((ERROR_COUNT + 1))
+    fi
+    if [[ ! -z "$APP_TYPE" && "$APP_TYPE" != @(magento1|magento2|wordpress|laravel|default) ]]; then
+        _error "Please enter valid application name for --app=... parameter(magento1|magento2|wordpress|laravel|default)."
+        ERROR_COUNT=$((ERROR_COUNT + 1))
+    fi
+    if [[ ! -d "$(pwd)/sources/$VHOST_ROOT_DIR" ]]; then
+        _error "--root-dir =...parameter is not valid."
+        ERROR_COUNT=$((ERROR_COUNT + 1))
+    fi
+    if [[ ! -d "$NGINX_SITES_CONF_D" ]]; then
+        _error "Nginx sites-enabled directory: ${NGINX_SITES_CONF_D} doesn't exist."
+        ERROR_COUNT=$((ERROR_COUNT + 1))
+    fi
+    if [[ ! -z "$APP_PHP" && "$APP_PHP" != @(php70|php71|php72|php73|php74) ]]; then
+        _error "Please enter valid application php --php-version=... parameter(php70|php71|php72|php73|php74)."
+        ERROR_COUNT=$((ERROR_COUNT + 1))
+    fi
+
+    [[ "$ERROR_COUNT" -gt 0 ]] && exit 1
+}
+
+function sanitizeArgs()
+{
+    # remove trailing /
+    if [[ ! -z "$VHOST_ROOT_DIR" ]]; then
+        VHOST_ROOT_DIR="${VHOST_ROOT_DIR%/}"
+    fi
+    if [[ ! -z "$VHOST_DOMAIN" ]] && [[ "$VHOST_DOMAIN" == http* ]]; then
+        VHOST_DOMAIN=$(getPureDomain)
+    fi
+}
+
+function getPureDomain()
+{
+    echo "$VHOST_DOMAIN" | awk -F'[:\\/]' '{print $4}'
+}
+
+function checkCmdDependencies()
+{
+    local _dependencies=(
+      wget
+      cat
+      basename
+      mkdir
+      cp
+      mv
+      rm
+      chown
+      chmod
+      date
+      find
+      awk
+    )
+
+    for cmd in "${_dependencies[@]}"
+    do
+        hash "${cmd}" &>/dev/null || _die "'${cmd}' command not found."
+    done;
+}
+
+function createVirtualHost()
+{
+    # @todo magento | default
+
+    _arrow "Virtual host creation for Nginx started..."
+
+    # Prepare virtual host content as per application
+    # @todo move it to template based
+    # @todo add option for https
+    _arrow "Creating Nginx Vhost File..."
+    prepareVhostFilePaths
+    prepareAppVhostContent
+    _success "Done"
+
+    # @todo change-ownership
+
+    _arrow "Creating an entry to /etc/hosts file..."
+    createEtcHostEntry
+    _success "Done"
+
+    # _arrow "Reloading the Nginx configuration..."
+    # reloadNginx
+    _success "Done"
+}
+
+function createDefaultVhost()
+{
+    #@todo implementation
+    _die "Vhost for default application not supported yet. Please specify correct --app=... parameter."
+}
+
+function prepareVhostFilePaths()
+{
+    NGINX_SITES_CONF_D_FILE="${NGINX_SITES_CONF_D}/${VHOST_DOMAIN}.conf"
+}
+
+function prepareAppVhostContent()
+{
+    if [[ "$APP_TYPE" = 'magento2' ]]; then
+        prepareM2VhostContent
+    elif [[ "$APP_TYPE" = 'magento1' ]]; then
+        prepareM1VhostContent
+    elif [[ "$APP_TYPE" = 'wordpress' ]]; then
+        prepareWpVhostContent
+    elif [[ "$APP_TYPE" = 'laravel' ]]; then
+        prepareLaravelVhostContent
+    elif [[ "$APP_TYPE" = 'default' ]]; then
+        prepareDefaultVhostContent
+    fi
+}
+
+function prepareM1VhostContent()
+{
+    echo "server {
+	listen 80;
+    server_name ${VHOST_DOMAIN};
+    root /home/public_html/${VHOST_ROOT_DIR};
+
+    location / {
+        index index.html index.php; ## Allow a static html file to be shown first
+        try_files \$uri \$uri/ @handler; ## If missing pass the URI to Magento's front handler
+        expires 30d; ## Assume all files are cachable
+    }
+
+    # add this for yii else css js will not be picked up
+    location ~ \.(js|css|png|jpg|gif|swf|ico|pdf|mov|fla|zip|rar)$ {
+        try_files \$uri =404;
+    }
+
+    ## These locations would be hidden by .htaccess normally
+    location /app/                { deny all; }
+    location /includes/           { deny all; }
+    location /lib/                { deny all; }
+    location /media/downloadable/ { deny all; }
+    location /pkginfo/            { deny all; }
+    location /report/config.xml   { deny all; }
+    location /var/                { deny all; }
+
+    ## Disable .htaccess and other hidden files
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    location @handler { ## Magento uses a common front handler
+        rewrite / /index.php;
+    }
+
+    location ~ \.php/ { ## Forward paths like /js/index.php/x.js to relevant handler
+        rewrite ^(.*\.php)/ \$1 last;
+    }
+
+    location ~ \.php$ { ## Execute PHP scripts
+        if (!-e \$request_filename) { rewrite / /index.php last; } ## Catch 404s that try_files miss
+
+        # expires        off; ## Do not cache dynamic content
+        fastcgi_pass   ${APP_PHP}:9001;
+        # fastcgi_param  HTTPS \$fastcgi_https;
+        fastcgi_index  index.php;
+        fastcgi_param  SCRIPT_FILENAME  \$document_root\$fastcgi_script_name;
+
+        fastcgi_param PHP_VALUE  \"display_startup_errors=on\";
+        fastcgi_param PHP_VALUE  \"display_errors=on\";
+        fastcgi_param PHP_VALUE  \"html_errors=on\";
+        fastcgi_param PHP_VALUE  \"log_errors=on\";
+        fastcgi_param PHP_VALUE  \"error_log=/home/public_html/${VHOST_ROOT_DIR}/var/log/system.log\";
+        fastcgi_param PHP_VALUE  \"xdebug.show_exception_trace=0\";
+
+        #fastcgi_param  MAGE_RUN_CODE default;
+        #fastcgi_param  MAGE_RUN_TYPE store;
+        fastcgi_param  MAGE_IS_DEVELOPER_MODE true;
+
+        include        fastcgi_params;
+        fastcgi_read_timeout 300;
+    }
+}
+" > "$NGINX_SITES_CONF_D_FILE" || _die "Couldn't write to file: ${NGINX_SITES_CONF_D_FILE}"
+    _arrow "${NGINX_SITES_CONF_D_FILE} file has been created."
+}
+
+function prepareM2VhostContent()
+{
+    echo "server {
+
+  server_name ${VHOST_DOMAIN};
+  set \$MAGE_ROOT /home/public_html/${VHOST_ROOT_DIR};
+
+  access_log /var/log/nginx/${VHOST_DOMAIN}.access.log;
+  error_log /var/log/nginx/${VHOST_DOMAIN}.error.log;
+
+## set \$MAGE_MODE default; # or production or developer
+##
+## If you set MAGE_MODE in server config, you must pass the variable into the
+## PHP entry point blocks, which are indicated below. You can pass
+## it in using:
+##
+## fastcgi_param  MAGE_MODE \$MAGE_MODE;
+##
+## In production mode, you should uncomment the 'expires' directive in the /static/ location block
+
+    root \$MAGE_ROOT/pub;
+
+    index index.php;
+    autoindex off;
+    charset UTF-8;
+    error_page 404 403 = /errors/404.php;
+    #add_header "X-UA-Compatible" "IE=Edge";
+
+
+    # Deny access to sensitive files
+    location /.user.ini {
+        deny all;
+    }
+
+    # PHP entry point for setup application
+    location ~* ^/setup($|/) {
+        root \$MAGE_ROOT;
+        location ~ ^/setup/index.php {
+            fastcgi_pass   ${APP_PHP}:9001;
+
+            fastcgi_param  PHP_FLAG  \"session.auto_start=off \\n suhosin.session.cryptua=off\";
+            fastcgi_param  PHP_VALUE \"memory_limit=756M \\n max_execution_time=600\";
+            fastcgi_param PHP_VALUE  \"error_log=/home/public_html/${VHOST_ROOT_DIR}/var/log/php-error.log\";
+            fastcgi_read_timeout 600s;
+            fastcgi_connect_timeout 600s;
+
+            fastcgi_index  index.php;
+            fastcgi_param  SCRIPT_FILENAME  \$document_root\$fastcgi_script_name;
+            include        fastcgi_params;
+        }
+
+        location ~ ^/setup/(?!pub/). {
+            deny all;
+        }
+
+        location ~ ^/setup/pub/ {
+            add_header X-Frame-Options \"SAMEORIGIN\";
+        }
+    }
+
+    # PHP entry point for update application
+    location ~* ^/update($|/) {
+        root \$MAGE_ROOT;
+
+        location ~ ^/update/index.php {
+            fastcgi_split_path_info ^(/update/index.php)(/.+)$;
+            fastcgi_pass   ${APP_PHP}:9001;
+            fastcgi_param PHP_VALUE  \"error_log=/home/public_html/${VHOST_ROOT_DIR}/var/log/php-error.log\";
+            fastcgi_index  index.php;
+            fastcgi_param  SCRIPT_FILENAME  \$document_root\$fastcgi_script_name;
+            fastcgi_param  PATH_INFO        \$fastcgi_path_info;
+            include        fastcgi_params;
+        }
+
+        # Deny everything but index.php
+        location ~ ^/update/(?!pub/). {
+            deny all;
+        }
+
+        location ~ ^/update/pub/ {
+            add_header X-Frame-Options \"SAMEORIGIN\";
+        }
+    }
+
+    location / {
+        try_files \$uri \$uri/ /index.php\$is_args\$args;
+    }
+
+    location /pub/ {
+        location ~ ^/pub/media/(downloadable|customer|import|custom_options|theme_customization/.*\.xml) {
+            deny all;
+        }
+        alias \$MAGE_ROOT/pub/;
+        add_header X-Frame-Options \"SAMEORIGIN\";
+    }
+
+    location /static/ {
+        # Uncomment the following line in production mode
+        # expires max;
+
+        # Remove signature of the static files that is used to overcome the browser cache
+        location ~ ^/static/version {
+            rewrite ^/static/(version\d*/)?(.*)$ /static/\$2 last;
+        }
+
+        location ~* \.(ico|jpg|jpeg|png|gif|svg|js|css|swf|eot|ttf|otf|woff|woff2|html|json)$ {
+            add_header Cache-Control \"public\";
+            add_header X-Frame-Options \"SAMEORIGIN\";
+            expires +1y;
+
+            if (!-f \$request_filename) {
+                rewrite ^/static/(version\d*/)?(.*)$ /static.php?resource=\$2 last;
+            }
+        }
+        location ~* \.(zip|gz|gzip|bz2|csv|xml)$ {
+            add_header Cache-Control \"no-store\";
+            add_header X-Frame-Options \"SAMEORIGIN\";
+            expires    off;
+
+            if (!-f \$request_filename) {
+            rewrite ^/static/(version\d*/)?(.*)$ /static.php?resource=\$2 last;
+            }
+        }
+        if (!-f \$request_filename) {
+            rewrite ^/static/(version\d*/)?(.*)$ /static.php?resource=\$2 last;
+        }
+        add_header X-Frame-Options \"SAMEORIGIN\";
+    }
+
+    location /media/ {
+        try_files \$uri \$uri/ /get.php\$is_args\$args;
+
+        location ~ ^/media/theme_customization/.*\.xml {
+            deny all;
+        }
+
+        location ~* \.(ico|jpg|jpeg|png|gif|svg|js|css|swf|eot|ttf|otf|woff|woff2)$ {
+            add_header Cache-Control \"public\";
+            add_header X-Frame-Options \"SAMEORIGIN\";
+            expires +1y;
+            try_files \$uri \$uri/ /get.php\$is_args\$args;
+        }
+        location ~* \.(zip|gz|gzip|bz2|csv|xml)$ {
+            add_header Cache-Control \"no-store\";
+            add_header X-Frame-Options \"SAMEORIGIN\";
+            expires    off;
+            try_files \$uri \$uri/ /get.php\$is_args\$args;
+        }
+        add_header X-Frame-Options \"SAMEORIGIN\";
+    }
+
+    location /media/customer/ {
+        deny all;
+    }
+
+    location /media/downloadable/ {
+        deny all;
+    }
+
+    location /media/import/ {
+        deny all;
+    }
+
+    location /media/custom_options/ {
+        deny all;
+    }
+
+    location /errors/ {
+        location ~* \.xml$ {
+            deny all;
+        }
+    }
+
+    # PHP entry point for main application
+    location ~ ^/(index|get|static|errors/report|errors/404|errors/503|health_check)\.php$ {
+        try_files \$uri =404;
+        fastcgi_pass   ${APP_PHP}:9001;
+        fastcgi_param PHP_VALUE  \"error_log=/home/public_html/${VHOST_ROOT_DIR}/var/log/php-error.log\";
+        fastcgi_buffers 16 16k;
+        fastcgi_buffer_size 32k;
+
+        fastcgi_param  PHP_FLAG  \"session.auto_start=off \\n suhosin.session.cryptua=off\";
+        fastcgi_param  PHP_VALUE \"memory_limit=756M \\n max_execution_time=18000\";
+        fastcgi_read_timeout 600s;
+        fastcgi_connect_timeout 600s;
+
+        fastcgi_index  index.php;
+        fastcgi_param  SCRIPT_FILENAME  \$document_root\$fastcgi_script_name;
+        include        fastcgi_params;
+    }
+
+    gzip on;
+    gzip_disable \"msie6\";
+
+    gzip_comp_level 6;
+    gzip_min_length 1100;
+    gzip_buffers 16 8k;
+    gzip_proxied any;
+    gzip_types
+        text/plain
+        text/css
+        text/js
+        text/xml
+        text/javascript
+        application/javascript
+        application/x-javascript
+        application/json
+        application/xml
+        application/xml+rss
+        image/svg+xml;
+    gzip_vary on;
+
+    # Banned locations (only reached if the earlier PHP entry point regexes don't match)
+    location ~* (\.php$|\.phtml$|\.htaccess$|\.git) {
+        deny all;
+    }
+}
+" > "$NGINX_SITES_CONF_D_FILE" || _die "Couldn't write to file: ${NGINX_SITES_CONF_D_FILE}"
+    _arrow "${NGINX_SITES_CONF_D_FILE} file has been created."
+}
+
+function prepareWpVhostContent()
+{
+    echo "server {
+    listen 80;
+
+    access_log /var/log/nginx/${VHOST_DOMAIN}.access.log;
+    error_log /var/log/nginx/${VHOST_DOMAIN}.error.log;
+
+    server_name ${VHOST_DOMAIN};
+    root /home/public_html/${VHOST_ROOT_DIR};
+
+    location / {
+        index index.html index.php;
+        try_files \$uri \$uri/ /index.php?\$args;
+    }
+
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico)$ {
+        expires max;
+        log_not_found off;
+    }
+
+    ## Disable .htaccess and other hidden files
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    location ~ \.php$ {
+        if (!-e \$request_filename) { rewrite / /index.php last; } ## Catch 404s that try_files miss
+
+        # expires        off; ## Do not cache dynamic content
+        fastcgi_pass   ${APP_PHP}:9001;
+        fastcgi_param  SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+        include        fastcgi_params;
+        fastcgi_read_timeout 300;
+    }
+}" > "$NGINX_SITES_CONF_D_FILE" || _die "Couldn't write to file: ${NGINX_SITES_CONF_D_FILE}"
+
+    _arrow "${NGINX_SITES_CONF_D_FILE} file has been created."
+}
+
+function prepareLaravelVhostContent()
+{
+    echo "server {
+     listen 80;
+
+     # Log files for Debugging
+     access_log /var/log/nginx/${VHOST_DOMAIN}.access.log;
+     error_log /var/log/nginx/${VHOST_DOMAIN}.error.log;
+
+     # Web root Directory for Laravel project
+     root /home/public_html/${VHOST_ROOT_DIR};
+     index index.php index.html index.htm;
+     server_name ${VHOST_DOMAIN};
+
+     location / {
+         try_files \$uri \$uri/ /index.php?\$query_string;
+     }
+
+     # PHP-FPM Configuration Nginx
+     location ~ \.php$ {
+         try_files \$uri =404;
+         fastcgi_split_path_info ^(.+\.php)(/.+)$;
+         fastcgi_pass ${APP_PHP}:9001;
+         fastcgi_index index.php;
+         fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+         include fastcgi_params;
+     }
+ }" > "$NGINX_SITES_CONF_D_FILE" || _die "Couldn't write to file: ${NGINX_SITES_CONF_D_FILE}"
+
+    _arrow "${NGINX_SITES_CONF_D_FILE} file has been created."
+}
+
+function prepareDefaultVhostContent()
+{
+    echo "server {
+     listen 80;
+
+     # Log files for Debugging
+     access_log /var/log/nginx/${VHOST_DOMAIN}.access.log;
+     error_log /var/log/nginx/${VHOST_DOMAIN}.error.log;
+
+     # Web root Directory for Laravel project
+     root /home/public_html/${VHOST_ROOT_DIR};
+     index index.html index.htm;
+     server_name ${VHOST_DOMAIN};
+
+     location / {
+         try_files \$uri \$uri/ =404;
+     }
+ }" > "$NGINX_SITES_CONF_D_FILE" || _die "Couldn't write to file: ${NGINX_SITES_CONF_D_FILE}"
+
+    _arrow "${NGINX_SITES_CONF_D_FILE} file has been created."
+}
+
+function createEtcHostEntry()
+{
+    local _etcHostLine="127.0.0.1  ${VHOST_DOMAIN}"
+    if grep -Eq "127.0.0.1[[:space:]]+${VHOST_DOMAIN}" /etc/hosts; then
+        _warning "Entry ${_etcHostLine} already exists in host file"
+    else
+        echo "127.0.0.1  ${VHOST_DOMAIN}" >> /etc/hosts || _die "Unable to write host to /etc/hosts"
+    fi
+}
+
+function reloadNginx()
+{
+    local _nginxTest=$(nginx -t)
+    if [[ $? -eq 0 ]]; then
+        nginx -s reload || _die "Nginx couldn't be reloaded."
+    else
+        echo "$_nginxTest"
+    fi
+}
+
+function printSuccessMessage()
+{
+    _success "Virtual host for Nginx has been successfully created!"
+
+    echo "################################################################"
+    echo ""
+    echo " >> Domain               : ${VHOST_DOMAIN}"
+    echo " >> Application          : ${APP_TYPE}"
+    echo " >> PHP version          : ${APP_PHP}"
+    echo " >> Document Root        : ${VHOST_ROOT_DIR}"
+    echo " >> Nginx Config File    : ${NGINX_SITES_CONF_D_FILE}"
+    echo ""
+    echo "################################################################"
+
+}
+
+################################################################################
+# Main
+################################################################################
+export LC_CTYPE=C
+export LANG=C
+
+DEBUG=0
+_debug set -x
+VERSION="1.2.0"
+
+function main()
+{
+    _checkRootUser
+    checkCmdDependencies
+
+    [[ $# -lt 1 ]] && _printUsage
+
+    initDefaultArgs
+    processArgs "$@"
+
+    createVirtualHost
+
+    printSuccessMessage
+    exit 0
+}
+
+main "$@"
+
+_debug set +x

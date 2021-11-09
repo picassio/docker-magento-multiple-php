@@ -1,0 +1,105 @@
+version: "3"
+services:
+  nginx:
+    container_name: nginx
+    build:
+      context: ./build/nginx
+    image: nginx-mage:v1.0
+    hostname: nginx
+    volumes:
+      - ./conf/nginx/conf.d:/etc/nginx/conf.d
+      - ./sources:/home/public_html
+      - ./conf/nginx/nginx.conf:/etc/nginx/nginx.conf
+    ports:
+      - 80:80
+      - 443:443
+
+  php70:
+    container_name: php70
+    build:
+      context: ./build/php70
+    image: php7.0-mage:v1.0
+    hostname: php70
+    volumes:
+      - ./sources:/home/public_html
+      - ./conf/php/php70/magento.conf:/etc/php/7.0/fpm/pool.d/www.conf
+      - ./conf/php/php70/php.ini:/etc/php/7.0/fpm/php.ini
+      - ./conf/php/php70/php.ini:/etc/php/7.0/cli/php.ini
+
+
+  php71:
+    container_name: php71
+    build:
+      context: ./build/php71
+    image: php7.1-mage:v1.0
+    hostname: php71
+    volumes:
+      - ./sources:/home/public_html
+      - ./conf/php/php71/magento.conf:/etc/php/7.1/fpm/pool.d/www.conf
+      - ./conf/php/php71/php.ini:/etc/php/7.1/fpm/php.ini
+      - ./conf/php/php71/php.ini:/etc/php/7.1/cli/php.ini
+
+
+  php72:
+    container_name: php72
+    build:
+      context: ./build/php72
+    image: php7.2-mage:v1.0
+    hostname: php72
+    volumes:
+      - ./sources:/home/public_html
+      - ./conf/php/php72/magento.conf:/etc/php/7.2/fpm/pool.d/www.conf
+      - ./conf/php/php72/php.ini:/etc/php/7.2/fpm/php.ini
+      - ./conf/php/php72/php.ini:/etc/php/7.2/cli/php.ini
+
+  php73:
+    container_name: php
+    build:
+      context: ./build/php73
+    image: php7.3-mage:v1.0
+    hostname: php73
+    volumes:
+      - ./sources:/home/public_html
+      - ./conf/php/php73/magento.conf:/etc/php/7.3/fpm/pool.d/www.conf
+      - ./conf/php/php73/php.ini:/etc/php/7.3/fpm/php.ini
+      - ./conf/php/php73/php.ini:/etc/php/7.3/cli/php.ini
+
+  php74:
+    container_name: php74
+    build:
+      context: ./build/php74
+    image: php7.4-mage:v1.0
+    hostname: php74
+    volumes:
+      - ./sources:/home/public_html
+      - ./conf/php/php74/magento.conf:/etc/php/7.4/fpm/pool.d/www.conf
+      - ./conf/php/php74/php.ini:/etc/php/7.4/fpm/php.ini
+      - ./conf/php/php74/php.ini:/etc/php/7.4/cli/php.ini
+
+  mysql:
+    container_name: mysql
+    hostname: mysql
+    image: mysql:5.7
+    environment:
+      - MYSQL_DATABASE=magento
+      - MYSQL_USER=admin
+      - MYSQL_PASSWORD=magentosmartosc123
+      - MYSQL_ROOT_PASSWORD=magentosmartosc123
+    volumes:
+      - ./mysql:/var/lib/mysql
+    ports:
+      - 3306:3306
+
+  mailhog:
+    build:
+      context: ./build/mailhog
+    image: mailhog
+    container_name: mailhog
+    ports:
+      - 1025:1025
+      - 8025:8025
+    
+
+volumes: 
+  composer_cache:
+  composer_cache_file:
