@@ -1,0 +1,4 @@
+sources/
+conf/nginx/ssl/
+conf/nginx/conf.d/
+logs/
