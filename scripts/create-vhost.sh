@@ -3,9 +3,6 @@
 #
 # Script to create virtual host for Nginx server
 #
-# @author   Raj KB <magepsycho@gmail.com>
-# @website  http://www.magepsycho.com
-# @version  1.2.0
 
 # UnComment it if bash is lower than 4.x version
 shopt -s extglob
@@ -168,19 +165,16 @@ function _printPoweredBy()
 {
     local mp_ascii
     mp_ascii='
-   __  ___              ___               __
-  /  |/  /__ ____ ____ / _ \___ __ ______/ /  ___
- / /|_/ / _ `/ _ `/ -_) ___(_-</ // / __/ _ \/ _ \
-/_/  /_/\_,_/\_, /\__/_/  /___/\_, /\__/_//_/\___/
-            /___/             /___/
+                ____  __  __    _    ____ _____ ___  ____   ____
+               / ___||  \/  |  / \  |  _ \_   _/ _ \/ ___| / ___|
+               \___ \| |\/| | / _ \ | |_) || || | | \___ \| |
+                ___) | |  | |/ ___ \|  _ < | || |_| |___) | |___
+               |____/|_|  |_/_/   \_\_| \_\|_| \___/|____/ \____|
+
 '
     cat <<EOF
 ${_green}
-Powered By:
 $mp_ascii
-
- >> Store: ${_reset}${_underline}${_blue}http://www.magepsycho.com${_reset}${_reset}${_green}
- >> Blog:  ${_reset}${_underline}${_blue}http://www.blog.magepsycho.com${_reset}${_reset}${_green}
 
 ################################################################
 ${_reset}
@@ -345,8 +339,8 @@ function createVirtualHost()
     createEtcHostEntry
     _success "Done"
 
-    # _arrow "Reloading the Nginx configuration..."
-    # reloadNginx
+    _arrow "Reloading the Nginx container configuration..."
+    reloadNginx
     _success "Done"
 }
 
@@ -775,9 +769,9 @@ function createEtcHostEntry()
 
 function reloadNginx()
 {
-    local _nginxTest=$(nginx -t)
+    local _nginxTest=$(docker-compose exec nginx nginx -t)
     if [[ $? -eq 0 ]]; then
-        nginx -s reload || _die "Nginx couldn't be reloaded."
+        docker-compose exec nginx nginx -s reload || _die "Nginx couldn't be reloaded."
     else
         echo "$_nginxTest"
     fi
@@ -811,7 +805,7 @@ VERSION="1.2.0"
 
 function main()
 {
-    _checkRootUser
+    # _checkRootUser
     checkCmdDependencies
 
     [[ $# -lt 1 ]] && _printUsage
