@@ -281,19 +281,18 @@ function getMysqlRootInformation()
 
 function exportMysqlDatabase()
 {
-
+    echo "Invalid option"
 }
 
 function importMysqlDatabase()
 {
-    
+    echo "Invalid option"
 }
 
 function createMysqlDatabase()
 {
-    
+    echo "Invalid option"
 }
-
 
 function printSuccessMessage()
 {
