@@ -1,7 +1,6 @@
 version: "3"
 services:
   nginx:
-    container_name: nginx
     build:
       context: ./build/nginx
     image: nginx-mage:v1.0
@@ -15,7 +14,6 @@ services:
       - 443:443
 
   php70:
-    container_name: php70
     build:
       context: ./build/php70
     image: php7.0-mage:v1.0
@@ -29,7 +27,6 @@ services:
 
 
   php71:
-    container_name: php71
     build:
       context: ./build/php71
     image: php7.1-mage:v1.0
@@ -43,7 +40,6 @@ services:
 
 
   php72:
-    container_name: php72
     build:
       context: ./build/php72
     image: php7.2-mage:v1.0
@@ -56,7 +52,6 @@ services:
       - ./conf/php/php72/php.ini:/etc/php/7.2/cli/php.ini
 
   php73:
-    container_name: php73
     build:
       context: ./build/php73
     image: php7.3-mage:v1.0
@@ -69,7 +64,6 @@ services:
       - ./conf/php/php73/php.ini:/etc/php/7.3/cli/php.ini
 
   php74:
-    container_name: php74
     build:
       context: ./build/php74
     image: php7.4-mage:v1.0
