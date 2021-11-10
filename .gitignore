@@ -1,4 +1,5 @@
 /sources/*
+!/sources/.keepme
 /conf/nginx/ssl/
 /conf/nginx/conf.d/
 /logs/nginx/*
