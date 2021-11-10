@@ -224,7 +224,7 @@ function processArgs()
     for opt in "$0"
     do
         case $opt in      
-            create|import|export)
+            create)
                 COMMAND="${opt}"
             ;;      
             -h|--help)
