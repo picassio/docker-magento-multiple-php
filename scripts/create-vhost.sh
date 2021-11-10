@@ -764,7 +764,7 @@ function createEtcHostEntry()
         _warning "Entry ${_etcHostLine} already exists in host file"
     else
         echo "Your system password has been requested to add an entry to /etc/hosts..."
-        sudo echo "127.0.0.1  ${VHOST_DOMAIN}" >> /etc/hosts || _die "Unable to write host to /etc/hosts"
+        echo "127.0.0.1  ${VHOST_DOMAIN}" | sudo tee -a /etc/hosts || _die "Unable to write host to /etc/hosts"
     fi
 }
 
