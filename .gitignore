@@ -8,3 +8,11 @@
 !/logs/nginx/.keepme
 /data/*
 !/data/.keepme
+/databases/*
+!/databases/.keepme
+/databases/import/*
+/databases/export/*
+!/databases/import
+!/databases/export
+!/databases/import/.keepme
+!/databases/export/.keepme

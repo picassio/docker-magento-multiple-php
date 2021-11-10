@@ -1,0 +1,4 @@
+MYSQL_DATABASE=magento
+MYSQL_USER=admin
+MYSQL_PASSWORD=magentosmartosc123
+MYSQL_ROOT_PASSWORD=magentosmartosc123

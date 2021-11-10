@@ -86,10 +86,10 @@ services:
     hostname: mysql
     image: mysql:5.7
     environment:
-      - MYSQL_DATABASE=magento
-      - MYSQL_USER=admin
-      - MYSQL_PASSWORD=magentosmartosc123
-      - MYSQL_ROOT_PASSWORD=magentosmartosc123
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
     volumes:
       - ./data/mysql:/var/lib/mysql
     ports:
