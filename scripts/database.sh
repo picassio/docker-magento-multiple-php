@@ -190,7 +190,7 @@ function _printUsage()
 Docker Mysql tools
 Version $VERSION
 
-$(basename "$0") [OPTION]... [ARG]
+$(basename "$0") [OPTION] [ARG]...
 
     Options:
         create                    Create database.
