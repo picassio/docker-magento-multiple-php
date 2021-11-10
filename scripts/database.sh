@@ -221,12 +221,30 @@ function processArgs()
 {
     # Parse Arguments
 
-    for opt in "$0"
+    case $0 in      
+        create|import|export)
+            COMMAND="$0"
+        ;;      
+        -h|--help)
+            _printUsage
+        ;;
+        *)
+            _printUsage
+        ;;
+    esac
+
+    for arg in "$1"
     do
-        case $opt in      
-            create)
-                COMMAND="${opt}"
-            ;;      
+        case $arg in
+            --database-name=*)
+                DATABASE_NAME="${arg#*=}"
+            ;;
+            --source=*)
+                DATABASE_IMPORT_SOURCE_NAME="${arg#*=}"
+            ;;            
+            --target=*)
+                DATABASE_IMPORT_TARGET_NAME="${arg#*=}"
+            ;;    
             -h|--help)
                 _printUsage
             ;;
@@ -235,27 +253,6 @@ function processArgs()
             ;;
         esac
     done
-
-    # for arg in "$1"
-    # do
-    #     case $arg in
-    #         --database-name=*)
-    #             DATABASE_NAME="${arg#*=}"
-    #         ;;
-    #         --source=*)
-    #             DATABASE_IMPORT_SOURCE_NAME="${arg#*=}"
-    #         ;;            
-    #         --target=*)
-    #             DATABASE_IMPORT_TARGET_NAME="${arg#*=}"
-    #         ;;    
-    #         -h|--help)
-    #             _printUsage
-    #         ;;
-    #         *)
-    #             _printUsage
-    #         ;;
-    #     esac
-    # done
 
     # validateArgs
 }
