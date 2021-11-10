@@ -234,26 +234,26 @@ function processArgs()
         ;;
     esac
 
-    for arg in "$1"
-    do
-        case $arg in
-            --database-name=*)
-                DATABASE_NAME="${arg#*=}"
-            ;;
-            --source=*)
-                DATABASE_IMPORT_SOURCE_NAME="${arg#*=}"
-            ;;            
-            --target=*)
-                DATABASE_IMPORT_TARGET_NAME="${arg#*=}"
-            ;;    
-            -h|--help)
-                _printUsage
-            ;;
-            *)
-                _printUsage
-            ;;
-        esac
-    done
+    # for arg in "$1"
+    # do
+    #     case $arg in
+    #         --database-name=*)
+    #             DATABASE_NAME="${arg#*=}"
+    #         ;;
+    #         --source=*)
+    #             DATABASE_IMPORT_SOURCE_NAME="${arg#*=}"
+    #         ;;            
+    #         --target=*)
+    #             DATABASE_IMPORT_TARGET_NAME="${arg#*=}"
+    #         ;;    
+    #         -h|--help)
+    #             _printUsage
+    #         ;;
+    #         *)
+    #             _printUsage
+    #         ;;
+    #     esac
+    # done
 
     # validateArgs
 }
