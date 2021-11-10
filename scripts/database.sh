@@ -194,13 +194,24 @@ Version $VERSION
         create                    Create database.
         export                    Export database.
         import                    Import database.
-
         -h, --help                  Display this help and exit.
+
     Arg:
-        --source                    Database name of for import in databases/import folder.
+      create:
+        --database-name             Database name need to create.
+      export:
+        --database-name             Database name need to export.
+      import:
+        --source                    Name of the database backup file (in database/import folder) use for import.
+        --target                    Name of the target database name import to.
+
+
     Examples:
+      Create database:
         $(basename "$0") create --database-name=database_name
+      Export database:
         $(basename "$0") export --database-name=database_name
+      Import database:
         $(basename "$0") import --source=database_file --target=database_name
 
 "
