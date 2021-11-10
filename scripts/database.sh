@@ -259,6 +259,7 @@ function processArgs()
 
 function validateArgs()
 {
+    CMD_LENS=$#
     ERROR_COUNT=0
     case $COMMAND in      
         create)
@@ -266,7 +267,7 @@ function validateArgs()
                 _error "--database-name=... parameter is missing."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
-            if [[ "${@:2}" -gt 0 ]]; then
+            if [[ "$CMD_LENS" -gt 2 ]]; then
                 _error "too many parameter."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
@@ -280,7 +281,7 @@ function validateArgs()
                 _error "--source=... parameter is missing."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
-            if [[ "${@:2}" -gt 1 ]]; then
+            if [[ "CMD_LENS" -gt 3 ]]; then
                 _error "too many parameter."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
@@ -290,7 +291,7 @@ function validateArgs()
                 _error "--database-name=... parameter is missing."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
-            if [[ "${@:2}" -gt 0 ]]; then
+            if [[ "$CMD_LENS" -gt 2 ]]; then
                 _error "too many parameter."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
