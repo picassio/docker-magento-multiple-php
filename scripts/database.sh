@@ -234,26 +234,29 @@ function processArgs()
         ;;
     esac
 
-    # for arg in "$2"
-    # do
-    #     case $arg in
-    #         --database-name=*)
-    #             DATABASE_NAME="${arg#*=}"
-    #         ;;
-    #         --source=*)
-    #             DATABASE_IMPORT_SOURCE_NAME="${arg#*=}"
-    #         ;;            
-    #         --target=*)
-    #             DATABASE_IMPORT_TARGET_NAME="${arg#*=}"
-    #         ;;    
-    #         -h|--help)
-    #             _printUsage
-    #         ;;
-    #         *)
-    #             _printUsage
-    #         ;;
-    #     esac
-    # done
+    for arg in "${@:2}"
+    do
+        case $arg in
+            --database-name=*)
+                DATABASE_NAME="${arg#*=}"
+                echo $DATABASE_NAME
+            ;;
+            --source=*)
+                DATABASE_IMPORT_SOURCE_NAME="${arg#*=}"
+                echo $DATABASE_IMPORT_SOURCE_NAME
+            ;;            
+            --target=*)
+                DATABASE_IMPORT_TARGET_NAME="${arg#*=}"
+                echo "$DATABASE_IMPORT_TARGET_NAME"
+            ;;    
+            -h|--help)
+                _printUsage
+            ;;
+            *)
+                _printUsage
+            ;;
+        esac
+    done
 
     # validateArgs
 }
@@ -322,13 +325,13 @@ function doAction()
 {
     case $COMMAND in      
         create)
-            echo "create"
+            echo $COMMAND
         ;;      
         import)
-            echo "import"
+            echo $COMMAND
         ;;
         export)
-            echo "export"
+            echo $COMMAND
         ;;
     esac
 }
