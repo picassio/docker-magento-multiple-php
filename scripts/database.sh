@@ -266,7 +266,7 @@ function validateArgs()
                 _error "--database-name=... parameter is missing."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
-            if [[ $# -gt 1 ]]; then
+            if [[ ${@:2} -gt 0 ]]; then
                 _error "too many parameter."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
@@ -280,7 +280,7 @@ function validateArgs()
                 _error "--source=... parameter is missing."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
-            if [[ $# -gt 2 ]]; then
+            if [[ ${@:2} -gt 1 ]]; then
                 _error "too many parameter."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
@@ -290,7 +290,7 @@ function validateArgs()
                 _error "--database-name=... parameter is missing."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
-            if [[ $# -gt 1 ]]; then
+            if [[ ${@:2} -gt 0 ]]; then
                 _error "too many parameter."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
