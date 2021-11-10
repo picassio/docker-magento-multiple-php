@@ -229,7 +229,8 @@ function processArgs()
             _printUsage
         ;;
         *)
-            _printUsage
+            # _printUsage
+            echo "error"
         ;;
     esac
 
