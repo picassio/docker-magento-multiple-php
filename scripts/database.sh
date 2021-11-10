@@ -229,8 +229,7 @@ function processArgs()
             _printUsage
         ;;
         *)
-            # _printUsage
-            echo "error"
+            _printUsage
         ;;
     esac
 
@@ -239,15 +238,12 @@ function processArgs()
         case $arg in
             --database-name=*)
                 DATABASE_NAME="${arg#*=}"
-                echo $DATABASE_NAME
             ;;
             --source=*)
                 DATABASE_IMPORT_SOURCE_NAME="${arg#*=}"
-                echo $DATABASE_IMPORT_SOURCE_NAME
             ;;            
             --target=*)
                 DATABASE_IMPORT_TARGET_NAME="${arg#*=}"
-                echo "$DATABASE_IMPORT_TARGET_NAME"
             ;;    
             -h|--help)
                 _printUsage
@@ -258,20 +254,36 @@ function processArgs()
         esac
     done
 
-    # validateArgs
+    validateArgs
 }
 
 function validateArgs()
 {
     ERROR_COUNT=0
-    if [[ -z "$DATABASE_IMPORT_TARGET_NAME" ]]; then
-        _error "--import-target=... parameter is missing."
-        ERROR_COUNT=$((ERROR_COUNT + 1))
-    fi
-    if [[ -z "$DATABASE_IMPORT_SOURCE_NAME" ]]; then
-        _error "--source=... parameter is missing."
-        ERROR_COUNT=$((ERROR_COUNT + 1))
-    fi
+    case $COMMAND in      
+        create)
+            if [[ -z "$DATABASE_NAME" ]]; then
+                _error "--database-name=... parameter is missing."
+                ERROR_COUNT=$((ERROR_COUNT + 1))
+            fi
+        ;;      
+        import)
+            if [[ -z "$DATABASE_IMPORT_TARGET_NAME" ]]; then
+                _error "--import-target=... parameter is missing."
+                ERROR_COUNT=$((ERROR_COUNT + 1))
+            fi
+            if [[ -z "$DATABASE_IMPORT_SOURCE_NAME" ]]; then
+                _error "--source=... parameter is missing."
+                ERROR_COUNT=$((ERROR_COUNT + 1))
+            fi
+        ;;
+        export)
+            if [[ -z "$DATABASE_NAME" ]]; then
+                _error "--database-name=... parameter is missing."
+                ERROR_COUNT=$((ERROR_COUNT + 1))
+            fi
+        ;;
+    esac
 
     [[ "$ERROR_COUNT" -gt 0 ]] && exit 1
 }
