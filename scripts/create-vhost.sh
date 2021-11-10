@@ -763,7 +763,8 @@ function createEtcHostEntry()
     if grep -Eq "127.0.0.1[[:space:]]+${VHOST_DOMAIN}" /etc/hosts; then
         _warning "Entry ${_etcHostLine} already exists in host file"
     else
-        echo "127.0.0.1  ${VHOST_DOMAIN}" >> /etc/hosts || _die "Unable to write host to /etc/hosts"
+        echo "Your system password has been requested to add an entry to /etc/hosts..."
+        sudo echo "127.0.0.1  ${VHOST_DOMAIN}" >> /etc/hosts || _die "Unable to write host to /etc/hosts"
     fi
 }
 
