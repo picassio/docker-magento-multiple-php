@@ -185,10 +185,12 @@ EOF
 ################################################################################
 function _printUsage()
 {
-    echo -n "$(basename "$0") [OPTION]... [ARG]
+    echo -n "
 
 Docker Mysql tools
 Version $VERSION
+
+$(basename "$0") [OPTION]... [ARG]
 
     Options:
         create                    Create database.
