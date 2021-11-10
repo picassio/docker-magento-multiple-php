@@ -22,6 +22,7 @@ services:
     hostname: php70
     volumes:
       - ./sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
       - ./conf/php/php70/magento.conf:/etc/php/7.0/fpm/pool.d/www.conf
       - ./conf/php/php70/php.ini:/etc/php/7.0/fpm/php.ini
       - ./conf/php/php70/php.ini:/etc/php/7.0/cli/php.ini
@@ -35,6 +36,7 @@ services:
     hostname: php71
     volumes:
       - ./sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
       - ./conf/php/php71/magento.conf:/etc/php/7.1/fpm/pool.d/www.conf
       - ./conf/php/php71/php.ini:/etc/php/7.1/fpm/php.ini
       - ./conf/php/php71/php.ini:/etc/php/7.1/cli/php.ini
@@ -48,6 +50,7 @@ services:
     hostname: php72
     volumes:
       - ./sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
       - ./conf/php/php72/magento.conf:/etc/php/7.2/fpm/pool.d/www.conf
       - ./conf/php/php72/php.ini:/etc/php/7.2/fpm/php.ini
       - ./conf/php/php72/php.ini:/etc/php/7.2/cli/php.ini
@@ -60,6 +63,7 @@ services:
     hostname: php73
     volumes:
       - ./sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
       - ./conf/php/php73/magento.conf:/etc/php/7.3/fpm/pool.d/www.conf
       - ./conf/php/php73/php.ini:/etc/php/7.3/fpm/php.ini
       - ./conf/php/php73/php.ini:/etc/php/7.3/cli/php.ini
@@ -72,6 +76,7 @@ services:
     hostname: php74
     volumes:
       - ./sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
       - ./conf/php/php74/magento.conf:/etc/php/7.4/fpm/pool.d/www.conf
       - ./conf/php/php74/php.ini:/etc/php/7.4/fpm/php.ini
       - ./conf/php/php74/php.ini:/etc/php/7.4/cli/php.ini
@@ -86,7 +91,7 @@ services:
       - MYSQL_PASSWORD=magentosmartosc123
       - MYSQL_ROOT_PASSWORD=magentosmartosc123
     volumes:
-      - ./mysql:/var/lib/mysql
+      - ./data/mysql:/var/lib/mysql
     ports:
       - 3306:3306
 

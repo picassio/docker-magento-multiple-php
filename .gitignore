@@ -6,3 +6,5 @@
 /logs/nginx/*
 !/logs/.keepme
 !/logs/nginx/.keepme
+/data/*
+!/data/.keepme
