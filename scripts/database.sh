@@ -185,9 +185,7 @@ EOF
 ################################################################################
 function _printUsage()
 {
-    echo -n "
-
-Docker Mysql tools
+    echo -n "Docker Mysql tools
 Version $VERSION
 
 $(basename "$0") [OPTION] [ARG]...
@@ -207,7 +205,6 @@ $(basename "$0") [OPTION] [ARG]...
         --source                    Name of the database backup file (in database/import folder) use for import.
         --target                    Name of the target database name import to.
 
-
     Examples:
       Create database:
         $(basename "$0") create --database-name=database_name
@@ -215,7 +212,6 @@ $(basename "$0") [OPTION] [ARG]...
         $(basename "$0") export --database-name=database_name
       Import database:
         $(basename "$0") import --source=database_file --target=database_name
-
 "
     _printPoweredBy
     exit 1
@@ -224,26 +220,6 @@ $(basename "$0") [OPTION] [ARG]...
 function processArgs()
 {
     # Parse Arguments
-    for arg in "$1"
-    do
-        case $arg in
-            --database-name=*)
-                DATABASE_NAME="${arg#*=}"
-            ;;
-            --source=*)
-                DATABASE_IMPORT_SOURCE_NAME="${arg#*=}"
-            ;;            
-            --target=*)
-                DATABASE_IMPORT_TARGET_NAME="${arg#*=}"
-            ;;    
-            -h|--help)
-                _printUsage
-            ;;
-            *)
-                _printUsage
-            ;;
-        esac
-    done
 
     for opt in "$0"
     do
@@ -259,6 +235,27 @@ function processArgs()
             ;;
         esac
     done
+
+    # for arg in "$1"
+    # do
+    #     case $arg in
+    #         --database-name=*)
+    #             DATABASE_NAME="${arg#*=}"
+    #         ;;
+    #         --source=*)
+    #             DATABASE_IMPORT_SOURCE_NAME="${arg#*=}"
+    #         ;;            
+    #         --target=*)
+    #             DATABASE_IMPORT_TARGET_NAME="${arg#*=}"
+    #         ;;    
+    #         -h|--help)
+    #             _printUsage
+    #         ;;
+    #         *)
+    #             _printUsage
+    #         ;;
+    #     esac
+    # done
 
     # validateArgs
 }
@@ -353,7 +350,7 @@ function main()
     # _checkRootUser
     # checkCmdDependencies
 
-    [[ $# -lt 1 ]] && _printUsage
+    # [[ $# -lt 1 ]] && _printUsage
 
     processArgs "$@"
 
