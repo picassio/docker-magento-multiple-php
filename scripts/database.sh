@@ -221,7 +221,7 @@ function processArgs()
 {
     # Parse Arguments
 
-    case $0 in      
+    case $1 in      
         create|import|export)
             COMMAND="$1"
         ;;      
