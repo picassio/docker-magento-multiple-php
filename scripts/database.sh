@@ -266,6 +266,10 @@ function validateArgs()
                 _error "--database-name=... parameter is missing."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
+            if [[ $# -gt 1 ]]; then
+                _error "too many parameter."
+                ERROR_COUNT=$((ERROR_COUNT + 1))
+            fi
         ;;      
         import)
             if [[ -z "$DATABASE_IMPORT_TARGET_NAME" ]]; then
@@ -276,10 +280,18 @@ function validateArgs()
                 _error "--source=... parameter is missing."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
+            if [[ $# -gt 2 ]]; then
+                _error "too many parameter."
+                ERROR_COUNT=$((ERROR_COUNT + 1))
+            fi
         ;;
         export)
             if [[ -z "$DATABASE_NAME" ]]; then
                 _error "--database-name=... parameter is missing."
+                ERROR_COUNT=$((ERROR_COUNT + 1))
+            fi
+            if [[ $# -gt 1 ]]; then
+                _error "too many parameter."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
         ;;
