@@ -187,7 +187,7 @@ function _printUsage()
 {
     echo -n "$(basename "$0") [OPTION]... [ARG]
 
-Nginx Virtual Host Creator
+Docker Mysql tools
 Version $VERSION
 
     Options:
@@ -344,7 +344,7 @@ export LANG=C
 
 DEBUG=0
 _debug set -x
-VERSION="1.2.0"
+VERSION="1"
 
 function main()
 {
