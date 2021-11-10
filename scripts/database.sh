@@ -259,7 +259,6 @@ function processArgs()
 
 function validateArgs()
 {
-    CMD_LENS=$#
     ERROR_COUNT=0
     case $COMMAND in      
         create)
@@ -267,8 +266,12 @@ function validateArgs()
                 _error "--database-name=... parameter is missing."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
-            if [[ "$CMD_LENS" -gt 2 ]]; then
-                _error "too many parameter."
+            if [[ -n "$DATABASE_IMPORT_TARGET_NAME" ]]; then
+                _error "Too many parameter."
+                ERROR_COUNT=$((ERROR_COUNT + 1))
+            fi
+            if [[ -n "$DATABASE_IMPORT_SOURCE_NAME" ]]; then
+                _error "Too many parameter."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
         ;;      
@@ -281,8 +284,8 @@ function validateArgs()
                 _error "--source=... parameter is missing."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
-            if [[ "CMD_LENS" -gt 3 ]]; then
-                _error "too many parameter."
+            if [[ -n "$DATABASE_NAME" ]]; then
+                _error "Too many parameter."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
         ;;
@@ -291,8 +294,12 @@ function validateArgs()
                 _error "--database-name=... parameter is missing."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
-            if [[ "$CMD_LENS" -gt 2 ]]; then
-                _error "too many parameter."
+            if [[ -n "$DATABASE_IMPORT_TARGET_NAME" ]]; then
+                _error "Too many parameter."
+                ERROR_COUNT=$((ERROR_COUNT + 1))
+            fi
+            if [[ -n "$DATABASE_IMPORT_SOURCE_NAME" ]]; then
+                _error "Too many parameter."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
         ;;
