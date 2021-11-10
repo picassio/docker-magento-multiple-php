@@ -353,7 +353,7 @@ function main()
     # _checkRootUser
     # checkCmdDependencies
 
-    [[ $# -lt 2 ]] && _printUsage
+    [[ $# -lt 1 ]] && _printUsage
 
     processArgs "$@"
 
