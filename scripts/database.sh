@@ -222,7 +222,7 @@ function processArgs()
     # Parse Arguments
 
     case $0 in      
-        'create'|'import'|'export')
+        create|import|export)
             COMMAND="$1"
         ;;      
         -h|--help)
