@@ -351,7 +351,7 @@ VERSION="1"
 function main()
 {
     # _checkRootUser
-    checkCmdDependencies
+    # checkCmdDependencies
 
     [[ $# -lt 2 ]] && _printUsage
 
