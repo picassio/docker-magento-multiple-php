@@ -223,7 +223,7 @@ function processArgs()
 
     case $0 in      
         'create'|'import'|'export')
-            COMMAND="$0"
+            COMMAND="$1"
         ;;      
         -h|--help)
             _printUsage
@@ -234,7 +234,7 @@ function processArgs()
         ;;
     esac
 
-    # for arg in "$1"
+    # for arg in "$2"
     # do
     #     case $arg in
     #         --database-name=*)
