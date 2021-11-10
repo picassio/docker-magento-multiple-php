@@ -185,22 +185,23 @@ EOF
 ################################################################################
 function _printUsage()
 {
-    echo -n "$(basename "$0") [OPTION]...
+    echo -n "$(basename "$0") [OPTION]... [ARG]
 
 Nginx Virtual Host Creator
 Version $VERSION
 
     Options:
-        --create                    Create database.
-        --export                    Export database.
-        --import-target             Import database.
-        --source                    Database name of for import in databases/import folder.
-        -h, --help                  Display this help and exit.
+        create                    Create database.
+        export                    Export database.
+        import                    Import database.
 
+        -h, --help                  Display this help and exit.
+    Arg:
+        --source                    Database name of for import in databases/import folder.
     Examples:
-        $(basename "$0") --create=database_name
-        $(basename "$0") --export=database_name
-        $(basename "$0") --import-target=database_name --source=database_file
+        $(basename "$0") create --database-name=database_name
+        $(basename "$0") export --database-name=database_name
+        $(basename "$0") import --source=database_file --target=database_name
 
 "
     _printPoweredBy
@@ -210,21 +211,33 @@ Version $VERSION
 function processArgs()
 {
     # Parse Arguments
-    for arg in "$@"
+    for arg in "$1"
     do
         case $arg in
-            --create=*)
-                CREATE_DATABASE_NAME="${arg#*=}"
-            ;;
-            --export=*)
-                DATABASE_EXPORT_NAME="${arg#*=}"
-            ;;
-            --import-target=*)
-                DATABASE_IMPORT_TARGET_NAME="${arg#*=}"
+            --database-name=*)
+                DATABASE_NAME="${arg#*=}"
             ;;
             --source=*)
                 DATABASE_IMPORT_SOURCE_NAME="${arg#*=}"
             ;;            
+            --target=*)
+                DATABASE_IMPORT_TARGET_NAME="${arg#*=}"
+            ;;    
+            -h|--help)
+                _printUsage
+            ;;
+            *)
+                _printUsage
+            ;;
+        esac
+    done
+
+    for opt in "$0"
+    do
+        case $opt in      
+            create|import|export)
+                COMMAND="${opt}"
+            ;;      
             -h|--help)
                 _printUsage
             ;;
@@ -254,8 +267,89 @@ function validateArgs()
 
 function getMysqlRootInformation()
 {
-    for cmd in "${_dependencies[@]}"
-    do
-        hash "${cmd}" &>/dev/null || _die "'${cmd}' command not found."
-    done;
+    containerNameDB=$(docker inspect -f '{{.Name}}' $(docker-compose ps -q mysql) | cut -c2-)
+
+    mysqlUser=$(docker inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}'  $containerNameDB | grep MYSQL_USER)
+    user="${mysqlUser/MYSQL_USER=/$replace}" 
+
+    mysqlPass=$(docker inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}'  $containerNameDB | grep MYSQL_PASSWORD)
+    pass="${mysqlPass/MYSQL_PASSWORD=/$replace}" 
+
+    mysqRootPass=$(docker inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}'  $containerNameDB | grep MYSQL_ROOT_PASSWORD)
+    rootPass="${mysqRootPass/MYSQL_ROOT_PASSWORD=/$replace}" 
 }
+
+function exportMysqlDatabase()
+{
+
+}
+
+function importMysqlDatabase()
+{
+    
+}
+
+function createMysqlDatabase()
+{
+    
+}
+
+
+function printSuccessMessage()
+{
+    _success "YOUR Action had done!"
+
+    # echo "################################################################"
+    # echo ""
+    # echo " >> Domain               : ${VHOST_DOMAIN}"
+    # echo " >> Application          : ${APP_TYPE}"
+    # echo " >> PHP version          : ${APP_PHP}"
+    # echo " >> Document Root        : ${VHOST_ROOT_DIR}"
+    # echo " >> Nginx Config File    : ${NGINX_SITES_CONF_D_FILE}"
+    # echo ""
+    # echo "################################################################"
+
+}
+
+function doAction()
+{
+    case $COMMAND in      
+        create)
+            echo "create"
+        ;;      
+        import)
+            echo "import"
+        ;;
+        export)
+            echo "export"
+        ;;
+    esac
+}
+
+################################################################################
+# Main
+################################################################################
+export LC_CTYPE=C
+export LANG=C
+
+DEBUG=0
+_debug set -x
+VERSION="1.2.0"
+
+function main()
+{
+    # _checkRootUser
+    checkCmdDependencies
+
+    [[ $# -lt 2 ]] && _printUsage
+
+    processArgs "$@"
+
+    doAction
+    printSuccessMessage
+    exit 0
+}
+
+main "$@"
+
+_debug set +x
