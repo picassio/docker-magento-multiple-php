@@ -194,6 +194,7 @@ Version $VERSION
         create                    Create database.
         export                    Export database.
         import                    Import database.
+        drop                      Drop database.
         -h, --help                Display this help and exit.
 
     Arg:
@@ -201,6 +202,8 @@ Version $VERSION
         --database-name             Database name need to create.
       export:
         --database-name             Database name need to export.
+      drop:
+        --database-name             Database name need to drop.
       import:
         --source                    Name of the database backup file (in database/import folder) use for import.
         --target                    Name of the target database name import to.
@@ -210,6 +213,8 @@ Version $VERSION
         ./scripts/$(basename "$0") create --database-name=database_name
       Export database:
         ./scripts/$(basename "$0") export --database-name=database_name
+      Drop database:
+        ./scripts/$(basename "$0") drop --database-name=database_name
       Import database:
         ./scripts/$(basename "$0") import --source=database_file --target=database_name
 "
@@ -240,6 +245,23 @@ function processArgs()
             done
         ;;      
         export)
+            COMMAND="$1"
+            for arg in "${@:2}"
+            do
+                case $arg in
+                    --database-name=*)
+                        DATABASE_NAME="${arg#*=}"
+                    ;;  
+                    -h|--help)
+                        _printUsage
+                    ;;
+                    *)
+                        _printUsage
+                    ;;
+                esac
+            done
+        ;; 
+        drop)
             COMMAND="$1"
             for arg in "${@:2}"
             do
@@ -308,6 +330,12 @@ function validateArgs()
             fi
         ;;
         export)
+            if [[ -z "$DATABASE_NAME" ]]; then
+                _error "--database-name=... parameter is missing."
+                ERROR_COUNT=$((ERROR_COUNT + 1))
+            fi
+        ;;
+        drop)
             if [[ -z "$DATABASE_NAME" ]]; then
                 _error "--database-name=... parameter is missing."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
@@ -389,9 +417,27 @@ function createMysqlDatabase()
         exit 1
     else 
         _arrow "Database name avaiable, create database ${DATABASE_NAME}"
-        docker-compose exec mysql mysql -u root --password=${rootPass} -e "create database ${DATABASE_NAME}" 2>/dev/null
+        docker-compose exec mysql mysql -u root --password=${rootPass} -e "create database ${DATABASE_NAME}"
         _success "Database name ${DATABASE_NAME} created"
-        docker-compose exec mysql mysql -u root --password=${rootPass} -e "show databases" 2>/dev/null
+        docker-compose exec mysql mysql -u root --password=${rootPass} -e "show databases"
+    fi
+}
+
+function dropMysqlDatabase()
+{
+    _arrow "Check database name"
+    checkDatabaseName
+    _arrow "Check database ${DATABASE_NAME} avaiable?"
+    if [[ $(docker-compose exec mysql mysql -u root --password=${rootPass} -e "show databases" | grep "${DATABASE_NAME}" | awk '{print $2}') ]]
+    then
+        _success "Database existed" 
+        _arrow "drop database!"
+        docker-compose exec mysql mysql -u root --password=${rootPass} -e "drop database ${DATABASE_NAME}"
+        _success "Database name ${DATABASE_NAME} dropped"
+        docker-compose exec mysql mysql -u root --password=${rootPass} -e "show databases"
+    else 
+        _error "Database name not exists!"
+        exit 1
     fi
 }
 
@@ -411,6 +457,9 @@ function doAction()
         ;;
         export)
             exportMysqlDatabase
+        ;;
+        drop)
+            dropMysqlDatabase
         ;;
     esac
 }
