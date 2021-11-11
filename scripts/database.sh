@@ -359,6 +359,16 @@ function getMysqlRootInformation()
 
 function exportMysqlDatabase()
 {
+    echo "Invalid option"
+}
+
+function importMysqlDatabase()
+{
+    echo "Invalid option"
+}
+
+function createMysqlDatabase()
+{
     _arrow "Check database ${DATABASE_NAME} avaiable?"
     if [[ $(docker-compose exec mysql mysql -u root --password=${rootPass} -e "show databases" | grep "${DATABASE_NAME}" | awk '{print $2}') ]]
     then
@@ -369,17 +379,6 @@ function exportMysqlDatabase()
         exit 0
     fi
     # _arrow "Create database name: ${DATABASE_NAME}"
-
-}
-
-function importMysqlDatabase()
-{
-    echo "Invalid option"
-}
-
-function createMysqlDatabase()
-{
-    echo "Invalid option"
 }
 
 function printSuccessMessage()
