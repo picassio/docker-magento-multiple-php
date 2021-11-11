@@ -354,8 +354,7 @@ function getMysqlInformation()
     pass="${mysqlPass/MYSQL_PASSWORD=/$replace}" 
 
     mysqRootPass=$(docker inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}'  $containerNameDB | grep MYSQL_ROOT_PASSWORD)
-    rootPass="${mysqRootPass/MYSQL_ROOT_PASSWORD=/$replace}" 
-    allDatabaseName=$(docker-compose exec mysql mysql -u root --password=${rootPass} -e "show databases")
+    rootPass="${mysqRootPass/MYSQL_ROOT_PASSWORD=/$replace}"
 }
 
 function exportMysqlDatabase()
@@ -379,7 +378,7 @@ function createMysqlDatabase()
         _arrow "Database name avaiable, create database ${DATABASE_NAME}"
         docker-compose exec mysql mysql -u root --password=${rootPass} -e "create database ${DATABASE_NAME}"
         _success "Database name ${DATABASE_NAME} created"
-        echo $allDatabaseName
+        docker-compose exec mysql mysql -u root --password=${rootPass} -e "show databases"
     fi
 }
 
