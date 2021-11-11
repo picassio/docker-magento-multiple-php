@@ -410,7 +410,7 @@ function createMysqlDatabase()
 {
     _arrow "Check database name"
     checkDatabaseName
-    _arrow "Check database ${DATABASE_NAME} avaiable?"
+    _arrow "Check database ${DATABASE_NAME} exist?"
     if [[ $(docker-compose exec mysql mysql -u root --password=${rootPass} -e "show databases" | grep "${DATABASE_NAME}" | awk '{print $2}') ]]
     then
         _error "Database existed, please choose other name!"
