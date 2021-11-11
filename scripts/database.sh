@@ -239,7 +239,7 @@ function processArgs()
                 esac
             done
         ;;      
-        import)
+        export)
             COMMAND="$1"
             for arg in "${@:2}"
             do
@@ -256,7 +256,7 @@ function processArgs()
                 esac
             done
         ;; 
-        export)
+        import)
             COMMAND="$1"
             for arg in "${@:2}"
             do
