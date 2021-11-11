@@ -191,6 +191,7 @@ Version $VERSION
 ./scripts/$(basename "$0") [OPTION] [ARG]...
 
     Options:
+        list                      List databases.
         create                    Create database.
         export                    Export database.
         import                    Import database.
@@ -198,6 +199,7 @@ Version $VERSION
         -h, --help                Display this help and exit.
 
     Arg:
+      list:
       create:
         --database-name             Database name need to create.
       export:
@@ -209,6 +211,8 @@ Version $VERSION
         --target                    Name of the target database name import to.
 
     Examples:
+      List database:
+        ./scripts/$(basename "$0") list
       Create database:
         ./scripts/$(basename "$0") create --database-name=database_name
       Export database:
@@ -298,6 +302,20 @@ function processArgs()
                 esac
             done
         ;; 
+        list)
+            COMMAND="$1"
+            for arg in "${@:2}"
+            do
+                case $arg in   
+                    -h|--help)
+                        _printUsage
+                    ;;
+                    *)
+                        _printUsage
+                    ;;
+                esac
+            done
+        ;;
         -h|--help)
             _printUsage
         ;;
@@ -396,6 +414,11 @@ function checkDatabaseName()
     fi
 }
 
+function listMysqlDatabase()
+{
+    docker-compose exec mysql mysql -u root --password=${rootPass} -e "show databases"
+}
+
 function exportMysqlDatabase()
 {
     echo "Invalid option"
@@ -419,7 +442,7 @@ function createMysqlDatabase()
         _arrow "Database name avaiable, create database ${DATABASE_NAME}"
         docker-compose exec mysql mysql -u root --password=${rootPass} -e "create database ${DATABASE_NAME}"
         _success "Database name ${DATABASE_NAME} created"
-        docker-compose exec mysql mysql -u root --password=${rootPass} -e "show databases"
+        listMysqlDatabase
     fi
 }
 
@@ -434,7 +457,7 @@ function dropMysqlDatabase()
         _arrow "drop database!"
         docker-compose exec mysql mysql -u root --password=${rootPass} -e "drop database ${DATABASE_NAME}"
         _success "Database name ${DATABASE_NAME} dropped"
-        docker-compose exec mysql mysql -u root --password=${rootPass} -e "show databases"
+        listMysqlDatabase
     else 
         _error "Database name not exists!"
         exit 1
@@ -460,6 +483,9 @@ function doAction()
         ;;
         drop)
             dropMysqlDatabase
+        ;;
+        list)
+            listMysqlDatabase
         ;;
     esac
 }
