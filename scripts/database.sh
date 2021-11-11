@@ -359,12 +359,11 @@ function getMysqlInformation()
 
 function checkDatabaseName()
 {
-    DATABASE_PATTERN="^([[:alnum:]]([[:alnum:]\-]{0,61}[[:alnum:]]))$"
+    DATABASE_PATTERN="^([[:alnum:]]([[:alnum:]_]{0,61}[[:alnum:]]))$"
     if [[ ${DATABASE_NAME} =~ $DATABASE_PATTERN ]]; then
-        _error "Database name have special character, please choose other name!!"
-        exit 1
-    else
         _success "Good database name"
+    else
+        _error "Database name have special character, please choose other name!!"
     fi
 }
 
