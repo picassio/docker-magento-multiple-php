@@ -434,13 +434,13 @@ function createMysqlDatabase()
     _arrow "Check database name"
     checkDatabaseName
     _arrow "Check database ${DATABASE_NAME} exist?"
-    if [[ $(docker-compose exec mysql mysql --defaults-extra-file=<(printf "[client]\nuser = %s\npassword = %s" "root" "${rootPass}") -e "show databases" | grep "${DATABASE_NAME}" | awk '{print $2}') ]]
+    if [[ $(docker-compose exec mysql mysql -u root --password=${rootPass} -e "show databases" | grep "${DATABASE_NAME}" | awk '{print $2}') ]]
     then
         _error "Database existed, please choose other name!"
         exit 1
     else 
         _arrow "Database name avaiable, create database ${DATABASE_NAME}"
-        docker-compose exec mysql mysql --defaults-extra-file=<(printf "[client]\nuser = %s\npassword = %s" "root" "${rootPass}") -e "create database ${DATABASE_NAME}"
+        docker-compose exec mysql mysql -u root --password=${rootPass} -e "create database ${DATABASE_NAME}"
         _success "Database name ${DATABASE_NAME} created"
         listMysqlDatabase
     fi
@@ -455,7 +455,7 @@ function dropMysqlDatabase()
     then
         _success "Database existed" 
         _arrow "drop database!"
-        docker-compose exec mysql mysql --defaults-extra-file=<(printf "[client]\nuser = %s\npassword = %s" "root" "${rootPass}") -e "drop database ${DATABASE_NAME}"
+        docker-compose exec mysql mysql -u root --password=${rootPass} -e "drop database ${DATABASE_NAME}"
         _success "Database name ${DATABASE_NAME} dropped"
         listMysqlDatabase
     else 
