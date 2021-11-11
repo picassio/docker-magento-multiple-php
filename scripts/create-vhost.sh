@@ -186,7 +186,7 @@ EOF
 ################################################################################
 function _printUsage()
 {
-    echo -n "$(basename "$0") [OPTION]...
+    echo -n "./scripts/$(basename "$0") [OPTION]...
 
 Nginx Virtual Host Creator
 Version $VERSION
@@ -200,7 +200,7 @@ Version $VERSION
         -h, --help                  Display this help and exit.
 
     Examples:
-        $(basename "$0") --domain=... --app=... --root-dir=... --php-version=... [--debug]
+        ./scripts/$(basename "$0") --domain=... --app=... --root-dir=... --php-version=... [--debug]
 
 "
     _printPoweredBy

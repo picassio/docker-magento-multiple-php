@@ -188,7 +188,7 @@ function _printUsage()
     echo -n "Docker Mysql tools
 Version $VERSION
 
-$(basename "$0") [OPTION] [ARG]...
+./scripts/$(basename "$0") [OPTION] [ARG]...
 
     Options:
         create                    Create database.
@@ -207,11 +207,11 @@ $(basename "$0") [OPTION] [ARG]...
 
     Examples:
       Create database:
-        $(basename "$0") create --database-name=database_name
+        ./scripts/$(basename "$0") create --database-name=database_name
       Export database:
-        $(basename "$0") export --database-name=database_name
+        ./scripts/$(basename "$0") export --database-name=database_name
       Import database:
-        $(basename "$0") import --source=database_file --target=database_name
+        ./scripts/$(basename "$0") import --source=database_file --target=database_name
 "
     _printPoweredBy
     exit 1
