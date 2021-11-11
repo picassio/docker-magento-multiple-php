@@ -360,7 +360,8 @@ function getMysqlRootInformation()
 function exportMysqlDatabase()
 {
     _arrow "Check database ${DATABASE_NAME} avaiable?"
-    if [[ $(docker-compose exec mysql mysql -u root --password=${rootPass} -e "show databases" | grep "${DATABASE_NAME}" | awk '{print $2}') ]], then
+    if [[ $(docker-compose exec mysql mysql -u root --password=${rootPass} -e "show databases" | grep "${DATABASE_NAME}" | awk '{print $2}') ]]
+    then
         echo "Database da ton tai"
         exit 1
     else 
