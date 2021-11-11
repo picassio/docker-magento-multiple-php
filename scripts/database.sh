@@ -372,18 +372,17 @@ function createMysqlDatabase()
     _arrow "Check database ${DATABASE_NAME} avaiable?"
     if [[ $(docker-compose exec mysql mysql -u root --password=${rootPass} -e "show databases" | grep "${DATABASE_NAME}" | awk '{print $2}') ]]
     then
-        echo "Database da ton tai"
+        _error "Database existed, please choose othe name!"
         exit 1
     else 
-        echo "Database chua ton tai"
-        exit 0
+        _arrow "Database name avaiable, create database ${DATABASE_NAME}"
+        _success "Database name ${DATABASE_NAME} created"
     fi
-    # _arrow "Create database name: ${DATABASE_NAME}"
 }
 
 function printSuccessMessage()
 {
-    _success "YOUR Action had done!"
+    _success "Your Action had done!"
 
     # echo "################################################################"
     # echo ""
