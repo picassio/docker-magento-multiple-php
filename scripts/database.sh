@@ -343,7 +343,7 @@ function checkCmdDependencies()
     done;
 }
 
-function getMysqlRootInformation()
+function getMysqlInformation()
 {
     containerNameDB=$(docker inspect -f '{{.Name}}' $(docker-compose ps -q mysql) | cut -c2-)
 
@@ -355,6 +355,7 @@ function getMysqlRootInformation()
 
     mysqRootPass=$(docker inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}'  $containerNameDB | grep MYSQL_ROOT_PASSWORD)
     rootPass="${mysqRootPass/MYSQL_ROOT_PASSWORD=/$replace}" 
+    showAllDatabaseName=$(docker-compose exec mysql mysql -u root --password=${rootPass} -e "show databases")
 }
 
 function exportMysqlDatabase()
@@ -376,24 +377,15 @@ function createMysqlDatabase()
         exit 1
     else 
         _arrow "Database name avaiable, create database ${DATABASE_NAME}"
+        $(docker-compose exec mysql mysql -u root --password=${rootPass} -e create database ${DATABASE_NAME})
         _success "Database name ${DATABASE_NAME} created"
+        showAllDatabaseName
     fi
 }
 
 function printSuccessMessage()
 {
     _success "Your Action had done!"
-
-    # echo "################################################################"
-    # echo ""
-    # echo " >> Domain               : ${VHOST_DOMAIN}"
-    # echo " >> Application          : ${APP_TYPE}"
-    # echo " >> PHP version          : ${APP_PHP}"
-    # echo " >> Document Root        : ${VHOST_ROOT_DIR}"
-    # echo " >> Nginx Config File    : ${NGINX_SITES_CONF_D_FILE}"
-    # echo ""
-    # echo "################################################################"
-
 }
 
 function doAction()
@@ -430,7 +422,7 @@ function main()
 
     processArgs "$@"
 
-    getMysqlRootInformation
+    getMysqlInformation
     doAction
     printSuccessMessage
     exit 0
