@@ -466,7 +466,7 @@ function dropMysqlDatabase()
 
 function printSuccessMessage()
 {
-    _success "Your Action had done!"
+    _success "Your Action has done!"
 }
 
 function doAction()
