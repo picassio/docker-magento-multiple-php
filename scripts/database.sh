@@ -379,7 +379,7 @@ function createMysqlDatabase()
         _arrow "Database name avaiable, create database ${DATABASE_NAME}"
         $(docker-compose exec mysql mysql -u root --password=${rootPass} -e create database ${DATABASE_NAME})
         _success "Database name ${DATABASE_NAME} created"
-        showAllDatabaseName
+        echo showAllDatabaseName
     fi
 }
 
