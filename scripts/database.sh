@@ -363,7 +363,8 @@ function checkDatabaseName()
     if [[ ${DATABASE_NAME} =~ $DATABASE_PATTERN ]]; then
         _success "Good database name"
     else
-        _error "Database name have special character, please choose other name!!"
+        _error "Invalid Database name, please choose other name!!"
+        exit 1
     fi
 }
 
