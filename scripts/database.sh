@@ -194,7 +194,7 @@ Version $VERSION
         create                    Create database.
         export                    Export database.
         import                    Import database.
-        -h, --help                  Display this help and exit.
+        -h, --help                Display this help and exit.
 
     Arg:
       create:
@@ -318,6 +318,31 @@ function validateArgs()
     [[ "$ERROR_COUNT" -gt 0 ]] && exit 1
 }
 
+function checkCmdDependencies()
+{
+    local _dependencies=(
+      wget
+      cat
+      basename
+      mkdir
+      cp
+      mv
+      rm
+      chown
+      chmod
+      date
+      find
+      awk
+      docker-compose
+      docker
+    )
+
+    for cmd in "${_dependencies[@]}"
+    do
+        hash "${cmd}" &>/dev/null || _die "'${cmd}' command not found."
+    done;
+}
+
 function getMysqlRootInformation()
 {
     containerNameDB=$(docker inspect -f '{{.Name}}' $(docker-compose ps -q mysql) | cut -c2-)
@@ -334,7 +359,16 @@ function getMysqlRootInformation()
 
 function exportMysqlDatabase()
 {
-    echo "Invalid option"
+    _arrow "Check database ${DATABASE_NAME} avaiable?"
+    if [[ docker-compose exec mysql mysql -u root --password=${rootPass} -e "show databases" | grep "${DATABASE_NAME}" | awk '{print $2}']], then
+        echo "Database chua ton tai"
+        exit 0
+    else 
+        echo "Database da ton tai"
+        exit 1
+    fi
+    # _arrow "Create database name: ${DATABASE_NAME}"
+
 }
 
 function importMysqlDatabase()
@@ -367,13 +401,13 @@ function doAction()
 {
     case $COMMAND in      
         create)
-            echo $COMMAND
+            createMysqlDatabase
         ;;      
         import)
-            echo $COMMAND
+            importMysqlDatabase
         ;;
         export)
-            echo $COMMAND
+            exportMysqlDatabase
         ;;
     esac
 }
@@ -391,12 +425,13 @@ VERSION="1"
 function main()
 {
     # _checkRootUser
-    # checkCmdDependencies
+    checkCmdDependencies
 
-    # [[ $# -lt 1 ]] && _printUsage
+    [[ $# -lt 1 ]] && _printUsage
 
     processArgs "$@"
 
+    getMysqlRootInformation
     doAction
     printSuccessMessage
     exit 0
