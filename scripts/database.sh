@@ -357,6 +357,16 @@ function getMysqlInformation()
     rootPass="${mysqRootPass/MYSQL_ROOT_PASSWORD=/$replace}"
 }
 
+function checkDatabaseName()
+{
+    if [[ ${DATABASE_NAME} =~ ['{}<>?!@#$%^&*()-+'] ]]; then
+        _error "Database name have special character, please choose other name!!"
+        exit 1
+    else
+        _success "Good database name"
+    fi
+}
+
 function exportMysqlDatabase()
 {
     echo "Invalid option"
@@ -369,16 +379,18 @@ function importMysqlDatabase()
 
 function createMysqlDatabase()
 {
+    _arrow "Check database name"
+    checkDatabaseName
     _arrow "Check database ${DATABASE_NAME} avaiable?"
     if [[ $(docker-compose exec mysql mysql -u root --password=${rootPass} -e "show databases" | grep "${DATABASE_NAME}" | awk '{print $2}') ]]
     then
-        _error "Database existed, please choose othe name!"
+        _error "Database existed, please choose other name!"
         exit 1
     else 
         _arrow "Database name avaiable, create database ${DATABASE_NAME}"
-        docker-compose exec mysql mysql -u root --password=${rootPass} -e "create database ${DATABASE_NAME}"
+        docker-compose exec mysql mysql -u root --password=${rootPass} -e "create database ${DATABASE_NAME}" 2>/dev/null
         _success "Database name ${DATABASE_NAME} created"
-        docker-compose exec mysql mysql -u root --password=${rootPass} -e "show databases"
+        docker-compose exec mysql mysql -u root --password=${rootPass} -e "show databases" 2>/dev/null
     fi
 }
 
