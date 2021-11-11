@@ -359,7 +359,7 @@ function getMysqlInformation()
 
 function checkDatabaseName()
 {
-    if [[ ${DATABASE_NAME} =~ ['{}<>?!@#$%^&*()-+'] ]]; then
+    if [[ ${DATABASE_NAME} =~ '[^[:alnum:][:blank:]]' ]]; then
         _error "Database name have special character, please choose other name!!"
         exit 1
     else
