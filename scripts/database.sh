@@ -284,27 +284,6 @@ function processArgs()
         ;;
     esac
 
-    # for arg in "${@:2}"
-    # do
-    #     case $arg in
-    #         --database-name=*)
-    #             DATABASE_NAME="${arg#*=}"
-    #         ;;
-    #         --source=*)
-    #             DATABASE_IMPORT_SOURCE_NAME="${arg#*=}"
-    #         ;;            
-    #         --target=*)
-    #             DATABASE_IMPORT_TARGET_NAME="${arg#*=}"
-    #         ;;    
-    #         -h|--help)
-    #             _printUsage
-    #         ;;
-    #         *)
-    #             _printUsage
-    #         ;;
-    #     esac
-    # done
-
     validateArgs
 }
 
@@ -317,42 +296,22 @@ function validateArgs()
                 _error "--database-name=... parameter is missing."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
-            # if [[ -n "$DATABASE_IMPORT_TARGET_NAME" ]]; then
-            #     _error "Too many parameter."
-            #     ERROR_COUNT=$((ERROR_COUNT + 1))
-            # fi
-            # if [[ -n "$DATABASE_IMPORT_SOURCE_NAME" ]]; then
-            #     _error "Too many parameter."
-            #     ERROR_COUNT=$((ERROR_COUNT + 1))
-            # fi
         ;;      
         import)
             if [[ -z "$DATABASE_IMPORT_TARGET_NAME" ]]; then
-                _error "--import-target=... parameter is missing."
+                _error "--target=... parameter is missing."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
             if [[ -z "$DATABASE_IMPORT_SOURCE_NAME" ]]; then
                 _error "--source=... parameter is missing."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
-            # if [[ -n "$DATABASE_NAME" ]]; then
-            #     _error "Too many parameter."
-            #     ERROR_COUNT=$((ERROR_COUNT + 1))
-            # fi
         ;;
         export)
             if [[ -z "$DATABASE_NAME" ]]; then
                 _error "--database-name=... parameter is missing."
                 ERROR_COUNT=$((ERROR_COUNT + 1))
             fi
-            # if [[ -n "$DATABASE_IMPORT_TARGET_NAME" ]]; then
-            #     _error "Too many parameter."
-            #     ERROR_COUNT=$((ERROR_COUNT + 1))
-            # fi
-            # if [[ -n "$DATABASE_IMPORT_SOURCE_NAME" ]]; then
-            #     _error "Too many parameter."
-            #     ERROR_COUNT=$((ERROR_COUNT + 1))
-            # fi
         ;;
     esac
 
