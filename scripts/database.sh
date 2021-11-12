@@ -161,33 +161,16 @@ function _checkRootUser()
 }
 
 
-function yesno() 
-{
-    while true; do
-        printf "${BLUE}"
-        printf " • $1 "
-
-        if [[ $2 == "no" ]]; then
-            printf "${PLAIN}[yes | ${GREEN_BOLD}no${PLAIN}] "
-            read ans
-            if [[ -z "$ans" ]]; then
-                ans="no"
-            fi
-        else
-            printf "${PLAIN}[${GREEN_BOLD}yes${PLAIN} | no] "
-            read ans
-            if [[ -z "$ans" ]]; then
-                ans="yes"
-            fi
-        fi
-
-        if [[ $ans == "yes" ]] || [[ $ans == "y" ]]; then
-            return 0
-        elif [[ $ans == "no" ]] || [[ $ans == "n" ]]; then
-            return 1
-        else
-            printf "   ${RED}Invalid answer. Please answer with 'yes' or 'no'."
-        fi
+function askYesOrNo {
+    REPLY=""
+    while [ -z "$REPLY" ] ; do
+        read -ep "$1 $YES_NO_PROMPT" -n1 REPLY
+        REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
+        case $REPLY in
+            $YES_CAPS ) return 0 ;;
+            $NO_CAPS ) return 1 ;;
+            * ) REPLY=""
+        esac
     done
 }
 
@@ -404,6 +387,12 @@ function initDefaultArgs()
     BACKDATE="$(date +"%Y-%m-%d")"
     DATABASE_PATTERN="^([[:alnum:]]([[:alnum:]_]{0,61}[[:alnum:]]))$"
 
+    YES_STRING=$"y"
+    NO_STRING=$"n"
+    YES_NO_PROMPT=$"[y/n]: "
+    YES_CAPS=$(echo ${YES_STRING}|tr [:lower:] [:upper:])
+    NO_CAPS=$(echo ${NO_STRING}|tr [:lower:] [:upper:])
+
 }
 
 function checkCmdDependencies()
@@ -536,7 +525,7 @@ function dropMysqlDatabase()
         _error "Database name not exists!"
         exit 1
     fi
-    if yesno $"Are you sure, bro?"
+    if askYesOrNo $"Are you sure, bro?"
     then
         _arrow "drop database!"
         docker-compose exec mysql mysql -u root -p${rootPass} -e "drop database ${DATABASE_NAME}"
