@@ -538,12 +538,14 @@ function main()
 {
     # _checkRootUser
     checkCmdDependencies
+    
 
     [[ $# -lt 1 ]] && _printUsage
-
+    initDefaultArgs
     processArgs "$@"
 
     getMysqlInformation
+    
     doAction
     printSuccessMessage
     exit 0
