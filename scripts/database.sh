@@ -447,7 +447,7 @@ function exportMysqlDatabase()
     if [[ $(docker-compose exec mysql mysql -u root -p${rootPass} -e "show databases" | grep "${DATABASE_NAME}" | awk '{print $2}') ]]; then
         _success "Database existed"
         _arrow "Export database"
-        docker-compose exec -T mysql /usr/bin/mysqldump -u root --password=${rootPass} ${DATABASE_NAME} > ${DES_DIR}/${DATABASE_NAME}.${BACKDATE}.sql
+        docker-compose exec -T mysql /usr/bin/mysqldump -u root --password=${rootPass} ${DATABASE_NAME} > ${DES_DIR}/${DATABASE_NAME}-${BACKDATE}.sql
         _success "Your database exported"
         echo " >> Nginx Config File    : ${DES_DIR}/${DATABASE_NAME}.${BACKDATE}.sql"
     else
