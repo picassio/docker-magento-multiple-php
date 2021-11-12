@@ -410,8 +410,9 @@ function checkDatabaseFileName()
         exit 1
     elif [[ -e ./databases/import/${DATABASE_IMPORT_SOURCE_NAME} ]]
         echo "File exists"
-    else 
+    else
         echo "File not exists"
+        exit 1
     fi
 }
 
