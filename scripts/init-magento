@@ -274,8 +274,8 @@ function checkComposerAuth()
     hash composer 2>/dev/null && IS_COMPOSER_ON_HOST=true
 
     if [ $IS_COMPOSER_ON_HOST ]; then
-        PUBLIC_KEY="$(SCRIPTS_DIR/shell ${APP_PHP} composer config --global $MAGENTO_USERNAME_PROP 2>/dev/null)"
-        PRIVATE_KEY="$(SCRIPTS_DIR/shell ${APP_PHP} composer config --global $MAGENTO_PASSWORD_PROP 2>/dev/null)"
+        PUBLIC_KEY="$(docker-compose exec ${APP_PHP} composer config --global $MAGENTO_USERNAME_PROP 2>/dev/null)"
+        PRIVATE_KEY="$(docker-compose exec ${APP_PHP} composer config --global $MAGENTO_PASSWORD_PROP 2>/dev/null)"
     fi
 
     if [ -z "$PUBLIC_KEY" ] || [ -z "$PRIVATE_KEY" ]; then
