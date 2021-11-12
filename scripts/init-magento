@@ -252,6 +252,7 @@ function createSourceCodeFolder()
         exit 1
     else
         mkidr -p ${SOURCE_DIR}/$VHOST_DOMAIN
+    fi
 }
 
 function createMagentoDomain()
