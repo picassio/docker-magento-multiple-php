@@ -416,7 +416,7 @@ function checkDatabaseName()
 
 function listMysqlDatabase()
 {
-    docker-compose exec -T mysql mysql -u root --password=${rootPass} -e "show databases"
+    docker-compose exec mysql mysql -u root --password=${rootPass} -e "show databases"
 }
 
 function exportMysqlDatabase()
@@ -440,7 +440,7 @@ function createMysqlDatabase()
         exit 1
     else 
         _arrow "Database name avaiable, create database ${DATABASE_NAME}"
-        docker-compose exec -T mysql mysql -u root -p${rootPass} -e "create database ${DATABASE_NAME}"
+        docker-compose exec mysql mysql -u root -p${rootPass} -e "create database ${DATABASE_NAME}"
         _success "Database name ${DATABASE_NAME} created"
         listMysqlDatabase
     fi
@@ -455,7 +455,7 @@ function dropMysqlDatabase()
     then
         _success "Database existed" 
         _arrow "drop database!"
-        docker-compose exec -T mysql mysql -u root -p${rootPass} -e "drop database ${DATABASE_NAME}"
+        docker-compose exec mysql mysql -u root -p${rootPass} -e "drop database ${DATABASE_NAME}"
         _success "Database name ${DATABASE_NAME} dropped"
         listMysqlDatabase
     else 
