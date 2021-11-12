@@ -356,6 +356,7 @@ function initDefaultArgs()
     BACKDATE="$(date +"%Y-%m-%d")"
     DATABASE_PATTERN="^([[:alnum:]]([[:alnum:]_]{0,61}[[:alnum:]]))$"
     SOURCE_DIR="./sources"
+    WEBSITE_SOURCE_DIR="/home/public_html/${VHOST_DOMAIN}"
 
     YES_STRING=$"y"
     NO_STRING=$"n"
