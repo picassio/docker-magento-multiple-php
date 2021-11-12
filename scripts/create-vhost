@@ -192,7 +192,7 @@ Nginx Virtual Host Creator
 Version $VERSION
 
     Options:
-        --domain                    Server Name.
+        --domain                    Domain Name.
         --root-dir                  Application Root Directory.
         --app                       Application Name (magento1|magento2|wordpress|laravel|default).
         --php-version               PHP version used for application (php70|php71|php72|php73|php74).

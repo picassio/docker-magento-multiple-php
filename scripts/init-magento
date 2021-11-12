@@ -203,39 +203,18 @@ function _printUsage()
     echo -n "Docker Mysql tools
 Version $VERSION
 
-./scripts/$(basename "$0") [OPTION] [ARG]...
+./scripts/$(basename "$0") [ARG]...
 
     Options:
-        list                      List databases.
-        create                    Create database.
-        export                    Export database.
-        import                    Import database.
-        drop                      Drop database.
+        --php-version             PHP version used for application (php70|php71|php72|php73|php74).
+        --domain                  Domain name (eg: test.com).
+        --mangeto-version         Magento Version (eg: 2.3.4).
+        --magento-edition         Magento Edition. (community|enterprise)
         -h, --help                Display this help and exit.
 
-    Arg:
-      list:
-      create:
-        --database-name             Database name need to create.
-      export:
-        --database-name             Database name need to export.
-      drop:
-        --database-name             Database name need to drop.
-      import:
-        --source                    Name of the database backup file (in database/import folder) use for import.
-        --target                    Name of the target database name import to.
-
     Examples:
-      List database:
+      Install Magento community edition version 2.3.4 with PHP version 7.2 for domain test-magento.com:
         ./scripts/$(basename "$0") list
-      Create database:
-        ./scripts/$(basename "$0") create --database-name=database_name
-      Export database:
-        ./scripts/$(basename "$0") export --database-name=database_name
-      Drop database:
-        ./scripts/$(basename "$0") drop --database-name=database_name
-      Import database:
-        ./scripts/$(basename "$0") import --source=database_file --target=database_name
 "
     _printPoweredBy
     exit 1
@@ -266,9 +245,110 @@ function checkCmdDependencies()
     done;
 }
 
+function createSourceCodeFolder()
+{
+    if [[ -d ${SOURCE_DIR}/$VHOST_DOMAIN ]]; then
+        _error "Folder exists"
+        exit 1
+    else
+        mkidr -p ${SOURCE_DIR}/$VHOST_DOMAIN
+}
+
+function createMagentoDomain()
+{
+    echo "1"
+}
+
+function createDomainDatabase()
+{
+    echo "1"
+}
+
+function checkComposerAuth()
+{
+    echo "1"
+    MAGENTO_USERNAME_PROP="http-basic.repo.magento.com.username"
+    MAGENTO_PASSWORD_PROP="http-basic.repo.magento.com.password"
+    hash composer 2>/dev/null && IS_COMPOSER_ON_HOST=true
+
+    if [ $IS_COMPOSER_ON_HOST ]; then
+        PUBLIC_KEY="$(SCRIPTS_DIR/shell ${APP_PHP} composer config --global $MAGENTO_USERNAME_PROP 2>/dev/null)"
+        PRIVATE_KEY="$(SCRIPTS_DIR/shell ${APP_PHP} composer config --global $MAGENTO_PASSWORD_PROP 2>/dev/null)"
+    fi
+
+    if [ -z "$PUBLIC_KEY" ] || [ -z "$PRIVATE_KEY" ]; then
+        exec < /dev/tty
+        echo
+        echo "Composer authentication required (repo.magento.com public and private keys):"
+        read -r -p "    Username: " PUBLIC_KEY
+        read -r -p "    Password: " PRIVATE_KEY
+        echo
+        exec <&-
+    fi
+
+    if [ -z "$PUBLIC_KEY" ] || [ -z "$PRIVATE_KEY" ]; then
+        echo "Please setup Composer auth for repo.magento.com to continue." && exit 1
+    fi
+
+    $(docker-compose exec -T ${APP_PHP} composer --global http-basic.repo.magento.com ${PUBLIC_KEY} ${PRIVATE_KEY})
+}
+
+function downloadMagentoVersion()
+{
+    VERSION=${MAGENTO_VERSION}
+    EDITION=${MAGENTO_EDITION}
+
+    checkComposerAuth
+    SCRIPTS_DIR/shell ${APP_PHP} composer create-project --repository=https://repo.magento.com/ magento/project-"${EDITION}"-edition="${VERSION}" ${WEBSITE_SOURCE_DIR}/
+}
+
+function composerInstall()
+{
+    echo "1"
+}
+
+function installMagentoVersion()
+{
+    echo "1"
+}
+
+function processArgs()
+{
+    for arg in "$@"
+    do
+        case $arg in
+            --domain=*)
+                VHOST_DOMAIN="${arg#*=}"
+            ;;
+            --mangeto-version=*)
+                MAGENTO_VERSION="${arg#*=}"
+            ;;
+            --magento-edition=*)
+                MAGENTO_EDITION="${arg#*=}"
+            ;;
+            --php-version=*)
+                APP_PHP="${arg#*=}"
+            ;;            
+            --debug)
+                DEBUG=1
+                set -o xtrace
+            ;;
+            -h|--help)
+                _printUsage
+            ;;
+            *)
+                _printUsage
+            ;;
+        esac
+    done
+        
+    validateArgs
+}
+
 function initDefaultArgs()
 {
     IMPORT_DIR="./databases/import"
+    SCRIPTS_DIR="./scripts"
     DES_DIR="./databases/export"
     TODAY="$(date +"%Y-%m-%d")"
     BACKDATE="$(date +"%Y-%m-%d")"
@@ -282,3 +362,63 @@ function initDefaultArgs()
     NO_CAPS=$(echo ${NO_STRING}|tr [:lower:] [:upper:])
 }
 
+
+function validateArgs()
+{
+    ERROR_COUNT=0
+    if [[ -z "$VHOST_DOMAIN" ]]; then
+        _error "--domain=... parameter is missing."
+        ERROR_COUNT=$((ERROR_COUNT + 1))
+    fi
+    if [[ ! -z "$APP_PHP" && "$APP_PHP" != @(php70|php71|php72|php73|php74) ]]; then
+        _error "Please enter valid application php --php-version=... parameter(php70|php71|php72|php73|php74)."
+        ERROR_COUNT=$((ERROR_COUNT + 1))
+    fi
+    if [[ -z "$MAGENTO_VERSION" ]]; then
+        _error "--mangeto-version=... parameter is missing."
+        ERROR_COUNT=$((ERROR_COUNT + 1))
+    fi
+    if [[ ! -z "$MAGENTO_EDITION" && "$MAGENTO_EDITION" != @(community|enterprise) ]]; then
+        _error "Please enter valid application magento edition --magento-edition=... parameter(community|enterprise)."
+        ERROR_COUNT=$((ERROR_COUNT + 1))
+    fi
+
+    [[ "$ERROR_COUNT" -gt 0 ]] && exit 1
+}
+
+################################################################################
+# Main
+################################################################################
+export LC_CTYPE=C
+export LANG=C
+
+DEBUG=0
+_debug set -x
+VERSION="1"
+
+function main()
+{
+    # _checkRootUser
+    checkCmdDependencies
+    
+    [[ $# -lt 1 ]] && _printUsage
+    initDefaultArgs
+    processArgs "$@"
+
+    createSourceCodeFolder
+    # createMagentoDomain
+
+    checkComposerAuth
+    downloadMagentoVersion
+
+    # createDomainDatabase
+    # composerInstall
+    # installMagentoVersion
+
+    printSuccessMessage
+    exit 0
+}
+
+main "$@"
+
+_debug set +x
