@@ -364,6 +364,16 @@ function validateArgs()
     [[ "$ERROR_COUNT" -gt 0 ]] && exit 1
 }
 
+function initDefaultArgs()
+{
+    IMPORT_DIR="./databases/import"
+    DES_DIR="./databases/export"
+    TODAY="$(date +"%Y-%m-%d")"
+    BACKDATE="$(date +"%Y-%m-%d")"
+    DATABASE_PATTERN="^([[:alnum:]]([[:alnum:]_]{0,61}[[:alnum:]]))$"
+
+}
+
 function checkCmdDependencies()
 {
     local _dependencies=(
@@ -408,7 +418,7 @@ function checkDatabaseFileName()
     if [[ $(echo ${DATABASE_IMPORT_SOURCE_NAME} | awk -F\. '{print $NF}') != "sql" ]]; then
         _error "Database source file name extension invalid, must be end .sql. EG: abc.sql"
         exit 1
-    elif [[ -f ./databases/import/${DATABASE_IMPORT_SOURCE_NAME} ]]; then
+    elif [[ -f ${IMPORT_DIR}/${DATABASE_IMPORT_SOURCE_NAME} ]]; then
         _success "Database source file exists"
     else
         _error "Database source file not exists"
@@ -418,7 +428,6 @@ function checkDatabaseFileName()
 
 function checkDatabaseName()
 {
-    DATABASE_PATTERN="^([[:alnum:]]([[:alnum:]_]{0,61}[[:alnum:]]))$"
     if [[ ${DATABASE_NAME} =~ $DATABASE_PATTERN ]]; then
         _success "Good database name"
     else
@@ -434,7 +443,7 @@ function listMysqlDatabase()
 
 function exportMysqlDatabase()
 {
-    echo "Invalid option"
+    docker-compose exec -T mysql /usr/bin/mysqldump -u root --password=${rootPass} ${DATABASE_NAME} > ${DES_DIR}/${DATABASE_NAME}.${BACKDATE}.sql
 }
 
 function importMysqlDatabase()
@@ -444,8 +453,8 @@ function importMysqlDatabase()
     _arrow "Check database ${DATABASE_IMPORT_TARGET_NAME} exist?"
     if [[ $(docker-compose exec mysql mysql -u root -p${rootPass} -e "show databases" | grep "${DATABASE_IMPORT_TARGET_NAME}" | awk '{print $2}') ]]
     then
-        _success "Database existed, please choose other name!"
-        docker-compose exec -T mysql mysql -u root -p${rootPass} ${DATABASE_IMPORT_TARGET_NAME} < ./databases/import/${DATABASE_IMPORT_SOURCE_NAME}
+        _success "Database existed"
+        docker-compose exec -T mysql mysql -u root -p${rootPass} ${DATABASE_IMPORT_TARGET_NAME} < ${IMPORT_DIR}/${DATABASE_IMPORT_SOURCE_NAME}
         _success "Database name ${DATABASE_IMPORT_TARGET_NAME} imported"
     else 
         _error "Database ${DATABASE_IMPORT_TARGET_NAME} not exists. Please create it!!"
