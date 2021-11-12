@@ -160,6 +160,38 @@ function _checkRootUser()
     fi
 }
 
+
+function yesno() 
+{
+    while true; do
+        printf "${BLUE}"
+        printf " • $1 "
+
+        if [[ $2 == "no" ]]; then
+            printf "${PLAIN}[yes | ${GREEN_BOLD}no${PLAIN}] "
+            read ans
+            if [[ -z "$ans" ]]; then
+                ans="no"
+            fi
+        else
+            printf "${PLAIN}[${GREEN_BOLD}yes${PLAIN} | no] "
+            read ans
+            if [[ -z "$ans" ]]; then
+                ans="yes"
+            fi
+        fi
+
+        if [[ $ans == "yes" ]] || [[ $ans == "y" ]]; then
+            return 0
+        elif [[ $ans == "no" ]] || [[ $ans == "n" ]]; then
+            return 1
+        else
+            printf "   ${RED}Invalid answer. Please answer with 'yes' or 'no'."
+        fi
+    done
+}
+
+
 function _printPoweredBy()
 {
     local mp_ascii
@@ -500,6 +532,9 @@ function dropMysqlDatabase()
     if [[ $(docker-compose exec mysql mysql -u root -p${rootPass} -e "show databases" | grep "${DATABASE_NAME}" | awk '{print $2}') ]]
     then
         _success "Database existed" 
+        if [[ ! yesno "Are you sure, bro?" ]]; then
+            exit 1
+        fi
         _arrow "drop database!"
         docker-compose exec mysql mysql -u root -p${rootPass} -e "drop database ${DATABASE_NAME}"
         _success "Database name ${DATABASE_NAME} dropped"
