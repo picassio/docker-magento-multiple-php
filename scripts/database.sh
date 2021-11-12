@@ -465,6 +465,7 @@ function importMysqlDatabase()
     if [[ $(docker-compose exec mysql mysql -u root -p${rootPass} -e "show databases" | grep "${DATABASE_IMPORT_TARGET_NAME}" | awk '{print $2}') ]]
     then
         _success "Database existed"
+        _arrow "Import database"
         docker-compose exec -T mysql mysql -u root -p${rootPass} ${DATABASE_IMPORT_TARGET_NAME} < ${IMPORT_DIR}/${DATABASE_IMPORT_SOURCE_NAME}
         _success "Database name ${DATABASE_IMPORT_TARGET_NAME} imported"
     else 
