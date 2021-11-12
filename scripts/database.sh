@@ -410,6 +410,7 @@ function checkDatabaseFileName()
         exit 1
     else
         echo "File name valid"
+    fi
 }
 
 function checkDatabaseName()
