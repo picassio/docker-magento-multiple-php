@@ -300,7 +300,7 @@ function downloadMagentoVersion()
     VERSION=${MAGENTO_VERSION}
     EDITION=${MAGENTO_EDITION}
 
-    docker-compose exec ${APP_PHP} composer create-project --repository=https://repo.magento.com/ magento/project-"${EDITION}"-edition="${VERSION}" ${WEBSITE_SOURCE_DIR}/ || _die "Cannot download source code"
+    docker-compose exec ${APP_PHP} composer create-project --repository=https://repo.magento.com/ magento/project-"${EDITION}"-edition="${VERSION}" /home/public_html/${VHOST_DOMAIN}/ || _die "Cannot download source code"
 }
 
 function composerInstall()
@@ -355,7 +355,6 @@ function initDefaultArgs()
     BACKDATE="$(date +"%Y-%m-%d")"
     DATABASE_PATTERN="^([[:alnum:]]([[:alnum:]_]{0,61}[[:alnum:]]))$"
     SOURCE_DIR="./sources"
-    WEBSITE_SOURCE_DIR="/home/public_html/${VHOST_DOMAIN}"
 
     YES_STRING=$"y"
     NO_STRING=$"n"
