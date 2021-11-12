@@ -302,7 +302,7 @@ function downloadMagentoVersion()
     EDITION=${MAGENTO_EDITION}
 
     checkComposerAuth
-    SCRIPTS_DIR/shell ${APP_PHP} composer create-project --repository=https://repo.magento.com/ magento/project-"${EDITION}"-edition="${VERSION}" ${WEBSITE_SOURCE_DIR}/
+    ${SCRIPTS_DIR}/shell ${APP_PHP} composer create-project --repository=https://repo.magento.com/ magento/project-"${EDITION}"-edition="${VERSION}" ${WEBSITE_SOURCE_DIR}/
 }
 
 function composerInstall()
@@ -391,6 +391,11 @@ function validateArgs()
     fi
 
     [[ "$ERROR_COUNT" -gt 0 ]] && exit 1
+}
+
+function printSuccessMessage()
+{
+    _success "Your Action has done!"
 }
 
 ################################################################################

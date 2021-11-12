@@ -272,6 +272,10 @@ function validateArgs()
         _error "Nginx sites-enabled directory: ${NGINX_SITES_CONF_D} doesn't exist."
         ERROR_COUNT=$((ERROR_COUNT + 1))
     fi
+    if [[ -z "$APP_PHP" ]]; then
+        _error "--php-version=... parameter is missing."
+        ERROR_COUNT=$((ERROR_COUNT + 1))
+    fi
     if [[ ! -z "$APP_PHP" && "$APP_PHP" != @(php70|php71|php72|php73|php74) ]]; then
         _error "Please enter valid application php --php-version=... parameter(php70|php71|php72|php73|php74)."
         ERROR_COUNT=$((ERROR_COUNT + 1))
