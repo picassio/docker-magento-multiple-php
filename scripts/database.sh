@@ -403,6 +403,15 @@ function getMysqlInformation()
     rootPass="${mysqRootPass/MYSQL_ROOT_PASSWORD=/$replace}"
 }
 
+function checkDatabaseFileName()
+{
+    if [[ echo ${DATABASE_IMPORT_SOURCE_NAME} | awk -F\. '{print $NF}' != "sql"]]; then
+        echo "File name not invalid, must be abc.sql"
+        exit 1
+    else
+        echo "File name valid"
+}
+
 function checkDatabaseName()
 {
     DATABASE_PATTERN="^([[:alnum:]]([[:alnum:]_]{0,61}[[:alnum:]]))$"
@@ -426,7 +435,7 @@ function exportMysqlDatabase()
 
 function importMysqlDatabase()
 {
-    echo "Invalid option"
+    checkDatabaseFileName
 }
 
 function createMysqlDatabase()
