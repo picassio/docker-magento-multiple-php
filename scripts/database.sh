@@ -405,7 +405,7 @@ function getMysqlInformation()
 
 function checkDatabaseFileName()
 {
-    if [[ echo ${DATABASE_IMPORT_SOURCE_NAME} | awk -F\. '{print $NF}' != "sql"]]; then
+    if [[ $(echo ${DATABASE_IMPORT_SOURCE_NAME} | awk -F\. '{print $NF}') != "sql"]]; then
         echo "File name not invalid, must be abc.sql"
         exit 1
     else
