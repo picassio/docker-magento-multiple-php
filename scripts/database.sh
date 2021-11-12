@@ -406,12 +406,12 @@ function getMysqlInformation()
 function checkDatabaseFileName()
 {
     if [[ $(echo ${DATABASE_IMPORT_SOURCE_NAME} | awk -F\. '{print $NF}') != "sql" ]]; then
-        echo "File name not invalid, must be abc.sql"
+        _error "File name extension invalid, must be end .sql. EG: abc.sql"
         exit 1
     elif [[ -f ./databases/import/${DATABASE_IMPORT_SOURCE_NAME} ]]; then
-        echo "File exists"
+        _arrow "File exists"
     else
-        echo "File not exists"
+        _error "File not exists"
         exit 1
     fi
 }
