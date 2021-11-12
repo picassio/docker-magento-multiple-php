@@ -301,7 +301,7 @@ function downloadMagentoVersion()
     EDITION=${MAGENTO_EDITION}
 
     checkComposerAuth
-    docker-compose exec ${APP_PHP} composer create-project --repository=https://repo.magento.com/ magento/project-"${EDITION}"-edition="${VERSION}" ${WEBSITE_SOURCE_DIR}/
+    docker-compose exec ${APP_PHP} composer create-project --repository=https://repo.magento.com/magento/project-"${EDITION}"-edition="${VERSION}" ${WEBSITE_SOURCE_DIR}/
 }
 
 function composerInstall()
@@ -420,7 +420,7 @@ function main()
     createSourceCodeFolder
     # createMagentoDomain
 
-    checkComposerAuth
+    # checkComposerAuth
     downloadMagentoVersion
 
     # createDomainDatabase
