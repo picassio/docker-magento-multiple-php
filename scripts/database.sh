@@ -449,7 +449,7 @@ function exportMysqlDatabase()
         _arrow "Export database"
         docker-compose exec -T mysql /usr/bin/mysqldump -u root --password=${rootPass} ${DATABASE_NAME} > ${DES_DIR}/${DATABASE_NAME}-${BACKDATE}.sql
         _success "Your database exported"
-        echo "Export file location   : ${DES_DIR}/${DATABASE_NAME}.${BACKDATE}.sql"
+        echo "  >> Export file location   : ${DES_DIR}/${DATABASE_NAME}.${BACKDATE}.sql"
     else
         _error "Database ${DATABASE_NAME} not exists. Please check!!"
         exit 1
