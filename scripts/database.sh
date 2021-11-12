@@ -443,7 +443,10 @@ function listMysqlDatabase()
 
 function exportMysqlDatabase()
 {
+    _arrow "Export database"
     docker-compose exec -T mysql /usr/bin/mysqldump -u root --password=${rootPass} ${DATABASE_NAME} > ${DES_DIR}/${DATABASE_NAME}.${BACKDATE}.sql
+    _success "Your database exported"
+    echo " >> Nginx Config File    : ${DES_DIR}/${DATABASE_NAME}.${BACKDATE}.sql"
 }
 
 function importMysqlDatabase()
@@ -545,7 +548,7 @@ function main()
     processArgs "$@"
 
     getMysqlInformation
-    
+
     doAction
     printSuccessMessage
     exit 0
