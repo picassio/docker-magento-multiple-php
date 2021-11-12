@@ -532,17 +532,18 @@ function dropMysqlDatabase()
     if [[ $(docker-compose exec mysql mysql -u root -p${rootPass} -e "show databases" | grep "${DATABASE_NAME}" | awk '{print $2}') ]]
     then
         _success "Database existed" 
-        if yesno "Are you sure, bro?" ; then
-            _arrow "drop database!"
-            docker-compose exec mysql mysql -u root -p${rootPass} -e "drop database ${DATABASE_NAME}"
-            _success "Database name ${DATABASE_NAME} dropped"
-            listMysqlDatabase
-        else
-          exit 1
     else 
         _error "Database name not exists!"
         exit 1
     fi
+    if yesno "Are you sure, bro?"
+    then
+        _arrow "drop database!"
+        docker-compose exec mysql mysql -u root -p${rootPass} -e "drop database ${DATABASE_NAME}"
+        _success "Database name ${DATABASE_NAME} dropped"
+        listMysqlDatabase
+    else
+        exit 1
 }
 
 function printSuccessMessage()
