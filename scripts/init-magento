@@ -1,0 +1,284 @@
+#!/usr/bin/env bash
+#
+# Script to create virtual host for Nginx server
+#
+
+# UnComment it if bash is lower than 4.x version
+shopt -s extglob
+
+################################################################################
+# CORE FUNCTIONS - Do not edit
+################################################################################
+
+## Uncomment it for debugging purpose
+###set -o errexit
+#set -o pipefail
+#set -o nounset
+#set -o xtrace
+
+#
+# VARIABLES
+#
+_bold=$(tput bold)
+_underline=$(tput sgr 0 1)
+_reset=$(tput sgr0)
+
+_purple=$(tput setaf 171)
+_red=$(tput setaf 1)
+_green=$(tput setaf 76)
+_tan=$(tput setaf 3)
+_blue=$(tput setaf 38)
+
+#
+# HEADERS & LOGGING
+#
+function _debug()
+{
+    if [[ "$DEBUG" = 1 ]]; then
+        "$@"
+    fi
+}
+
+function _header()
+{
+    printf '\n%s%s==========  %s  ==========%s\n' "$_bold" "$_purple" "$@" "$_reset"
+}
+
+function _arrow()
+{
+    printf '➜ %s\n' "$@"
+}
+
+function _success()
+{
+    printf '%s✔ %s%s\n' "$_green" "$@" "$_reset"
+}
+
+function _error() {
+    printf '%s✖ %s%s\n' "$_red" "$@" "$_reset"
+}
+
+function _warning()
+{
+    printf '%s➜ %s%s\n' "$_tan" "$@" "$_reset"
+}
+
+function _underline()
+{
+    printf '%s%s%s%s\n' "$_underline" "$_bold" "$@" "$_reset"
+}
+
+function _bold()
+{
+    printf '%s%s%s\n' "$_bold" "$@" "$_reset"
+}
+
+function _note()
+{
+    printf '%s%s%sNote:%s %s%s%s\n' "$_underline" "$_bold" "$_blue" "$_reset" "$_blue" "$@" "$_reset"
+}
+
+function _die()
+{
+    _error "$@"
+    exit 1
+}
+
+function _safeExit()
+{
+    exit 0
+}
+
+#
+# UTILITY HELPER
+#
+function _seekConfirmation()
+{
+  printf '\n%s%s%s' "$_bold" "$@" "$_reset"
+  read -p " (y/n) " -n 1
+  printf '\n'
+}
+
+# Test whether the result of an 'ask' is a confirmation
+function _isConfirmed()
+{
+    if [[ "$REPLY" =~ ^[Yy]$ ]]; then
+        return 0
+    fi
+    return 1
+}
+
+
+function _typeExists()
+{
+    if type "$1" >/dev/null; then
+        return 0
+    fi
+    return 1
+}
+
+function _isOs()
+{
+    if [[ "${OSTYPE}" == $1* ]]; then
+      return 0
+    fi
+    return 1
+}
+
+function _isOsDebian()
+{
+    if [[ -f /etc/debian_version ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+function _isOsRedHat()
+{
+    if [[ -f /etc/redhat-release ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+function _isOsMac()
+{
+    if [[ "$(uname -s)" = "Darwin" ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+function _checkRootUser()
+{
+    #if [ "$(id -u)" != "0" ]; then
+    if [ "$(whoami)" != 'root' ]; then
+        _die "You cannot run $0 as non-root user. Please use sudo $0"
+    fi
+}
+
+
+function askYesOrNo {
+    REPLY=""
+    while [ -z "$REPLY" ] ; do
+        read -ep "$1 $YES_NO_PROMPT" -n1 REPLY
+        REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
+        case $REPLY in
+            $YES_CAPS ) return 0 ;;
+            $NO_CAPS ) return 1 ;;
+            * ) REPLY=""
+        esac
+    done
+}
+
+
+function _printPoweredBy()
+{
+    local mp_ascii
+    mp_ascii='
+                ____  __  __    _    ____ _____ ___  ____   ____
+               / ___||  \/  |  / \  |  _ \_   _/ _ \/ ___| / ___|
+               \___ \| |\/| | / _ \ | |_) || || | | \___ \| |
+                ___) | |  | |/ ___ \|  _ < | || |_| |___) | |___
+               |____/|_|  |_/_/   \_\_| \_\|_| \___/|____/ \____|
+
+'
+    cat <<EOF
+${_green}
+$mp_ascii
+
+################################################################################
+${_reset}
+EOF
+}
+
+################################################################################
+# SCRIPT FUNCTIONS
+################################################################################
+function _printUsage()
+{
+    echo -n "Docker Mysql tools
+Version $VERSION
+
+./scripts/$(basename "$0") [OPTION] [ARG]...
+
+    Options:
+        list                      List databases.
+        create                    Create database.
+        export                    Export database.
+        import                    Import database.
+        drop                      Drop database.
+        -h, --help                Display this help and exit.
+
+    Arg:
+      list:
+      create:
+        --database-name             Database name need to create.
+      export:
+        --database-name             Database name need to export.
+      drop:
+        --database-name             Database name need to drop.
+      import:
+        --source                    Name of the database backup file (in database/import folder) use for import.
+        --target                    Name of the target database name import to.
+
+    Examples:
+      List database:
+        ./scripts/$(basename "$0") list
+      Create database:
+        ./scripts/$(basename "$0") create --database-name=database_name
+      Export database:
+        ./scripts/$(basename "$0") export --database-name=database_name
+      Drop database:
+        ./scripts/$(basename "$0") drop --database-name=database_name
+      Import database:
+        ./scripts/$(basename "$0") import --source=database_file --target=database_name
+"
+    _printPoweredBy
+    exit 1
+}
+
+function checkCmdDependencies()
+{
+    local _dependencies=(
+      wget
+      cat
+      basename
+      mkdir
+      cp
+      mv
+      rm
+      chown
+      chmod
+      date
+      find
+      awk
+      docker-compose
+      docker
+    )
+
+    for cmd in "${_dependencies[@]}"
+    do
+        hash "${cmd}" &>/dev/null || _die "'${cmd}' command not found."
+    done;
+}
+
+function initDefaultArgs()
+{
+    IMPORT_DIR="./databases/import"
+    DES_DIR="./databases/export"
+    TODAY="$(date +"%Y-%m-%d")"
+    BACKDATE="$(date +"%Y-%m-%d")"
+    DATABASE_PATTERN="^([[:alnum:]]([[:alnum:]_]{0,61}[[:alnum:]]))$"
+    SOURCE_DIR="./sources"
+
+    YES_STRING=$"y"
+    NO_STRING=$"n"
+    YES_NO_PROMPT=$"[y/n]: "
+    YES_CAPS=$(echo ${YES_STRING}|tr [:lower:] [:upper:])
+    NO_CAPS=$(echo ${NO_STRING}|tr [:lower:] [:upper:])
+}
+
