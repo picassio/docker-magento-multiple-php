@@ -299,8 +299,7 @@ function downloadMagentoVersion()
 {
     VERSION=${MAGENTO_VERSION}
     EDITION=${MAGENTO_EDITION}
-
-    checkComposerAuth
+    
     docker-compose exec ${APP_PHP} composer create-project --repository=https://repo.magento.com/magento/project-"${EDITION}"-edition="${VERSION}" ${WEBSITE_SOURCE_DIR}/
 }
 
