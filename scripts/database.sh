@@ -533,6 +533,7 @@ function dropMysqlDatabase()
         listMysqlDatabase
     else
         exit 1
+    fi
 }
 
 function printSuccessMessage()
