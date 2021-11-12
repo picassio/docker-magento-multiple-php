@@ -251,7 +251,9 @@ function createSourceCodeFolder()
         _error "Folder exists"
         exit 1
     else
-        mkidr -p ${SOURCE_DIR}/$VHOST_DOMAIN
+        _arrow "Create source code folder"
+        mkdir -p ${SOURCE_DIR}/$VHOST_DOMAIN || _die "Error"
+        _success "Source code folder created"
     fi
 }
 
@@ -379,7 +381,11 @@ function validateArgs()
         _error "--mangeto-version=... parameter is missing."
         ERROR_COUNT=$((ERROR_COUNT + 1))
     fi
-    if [[ ! -z "$MAGENTO_EDITION" && "$MAGENTO_EDITION" != @(community|enterprise) ]]; then
+    if [[ -z "$MAGENTO_EDITION" ]]; then
+        _error "--magento-edition=... parameter is missing."
+        ERROR_COUNT=$((ERROR_COUNT + 1))
+    fi
+    if [[ ! "$MAGENTO_EDITION" != @(community|enterprise) ]]; then
         _error "Please enter valid application magento edition --magento-edition=... parameter(community|enterprise)."
         ERROR_COUNT=$((ERROR_COUNT + 1))
     fi
