@@ -325,7 +325,7 @@ function initDefaultArgs()
 
     PHP_INI_LOCATION="./conf/${APP_PHP}/php.ini"
 
-    XDEBUG_STATUS=""
+    XDEBUG_STATUS=
 }
 
 function validateArgs()
@@ -383,10 +383,10 @@ function statusXdebug()
     _arrow "Check Xdebug status for ${APP_PHP}"
     if [[ $(docker-compose exec ${APP_PHP} php -i | grep xdebug) ]]; then 
         _success "${APP_PHP}: Xdebug enabled"
-    $XDEBUG_STATUS=1
+    XDEBUG_STATUS=1
     else 
        _success "${APP_PHP}: Xdebug disabled"
-    $XDEBUG_STATUS=0
+    XDEBUG_STATUS=0
     fi
 }
 
