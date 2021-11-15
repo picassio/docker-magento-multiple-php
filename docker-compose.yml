@@ -44,6 +44,8 @@ services:
       context: ./build/php72
     image: php7.2-mage:v1.0
     hostname: php72
+    extra_hosts:
+      - "host.docker.internal:host-gateway" 
     volumes:
       - ./sources:/home/public_html
       - composer_cache:/home/nginx/.composer

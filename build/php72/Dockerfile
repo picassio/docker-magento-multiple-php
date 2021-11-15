@@ -33,6 +33,8 @@ RUN su - nginx -c "curl https://raw.githubusercontent.com/nvm-sh/nvm/master/inst
 RUN chmod +x /home/nginx/.nvm/nvm.sh
 RUN su - nginx -c "echo '[ -s /home/nginx/.nvm/nvm.sh ] && . /home/nginx/.nvm/nvm.sh # This loads NVM' > .profile"
 
+RUN pecl install mcrypt xdebug sockets
+
 RUN mkdir /home/nginx/.composer && chown -R nginx:nginx /home/nginx/.composer
 
 
