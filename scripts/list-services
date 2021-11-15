@@ -1,2 +1,2 @@
 #!/bin/bash
-docker-compose --services --filter "status=running"
+docker-compose ps --services --filter "status=running"
