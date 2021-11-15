@@ -22,7 +22,8 @@ RUN apt-get install -y curl
 RUN curl https://getcomposer.org/download/1.10.19/composer.phar --output /usr/bin/composer && chmod +x /usr/bin/composer
 RUN curl https://files.magerun.net/n98-magerun2.phar --output /usr/bin/n98-magerun2.phar && chmod +x /usr/bin/n98-magerun2.phar
 
-RUN curl -sL https://deb.nodesource.com/setup_10.x -o nodesource_setup.sh \
+RUN export DEBIAN_FRONTEND=noninteractive \ 
+	&& curl -sL https://deb.nodesource.com/setup_15.x -o nodesource_setup.sh \
     && sudo bash nodesource_setup.sh \
     && apt-get install -y nodejs \
     && apt-get update \
@@ -33,7 +34,9 @@ RUN su - nginx -c "curl https://raw.githubusercontent.com/nvm-sh/nvm/master/inst
 RUN chmod +x /home/nginx/.nvm/nvm.sh
 RUN su - nginx -c "echo '[ -s /home/nginx/.nvm/nvm.sh ] && . /home/nginx/.nvm/nvm.sh # This loads NVM' > .profile"
 
-RUN pecl install mcrypt xdebug sockets
+RUN pecl install mcrypt
+RUN pecl install xdebug
+RUN pecl install sockets
 
 RUN mkdir /home/nginx/.composer && chown -R nginx:nginx /home/nginx/.composer
 
