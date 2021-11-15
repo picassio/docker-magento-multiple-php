@@ -295,6 +295,12 @@ function initDefaultArgs()
     YES_CAPS=$(echo ${YES_STRING}|tr [:lower:] [:upper:])
     NO_CAPS=$(echo ${NO_STRING}|tr [:lower:] [:upper:])
     DATABASE_NAME="magento"_"$(date +%s)"
+
+    NGINX_SITES_CONF_D="$(pwd)/conf/nginx/conf.d"
+    NGINX_SITES_CONF_D_FILE="${NGINX_SITES_CONF_D}/${VHOST_DOMAIN}.conf"
+
+    ADMIN_USER="admin"
+    ADMIN_PASSWORD="smartosc123"
 }
 
 
@@ -420,8 +426,9 @@ function installMagentoVersion()
         --admin-firstname="admin" \
         --admin-lastname="admin" \
         --admin-email="admin@localhost.com" \
-        --admin-user="admin" \
-        --admin-password="smartosc123" \
+        --admin-user="$ADMIN_USER" \
+        --admin-password="$ADMIN_PASSWORD" \
+        --backend-frontname="admin" \
         --language="en_US" \
         --currency="USD" \
         --timezone="America/Chicago" \
@@ -431,7 +438,22 @@ function installMagentoVersion()
 
 function printSuccessMessage()
 {
-    _success "Your Action has done!"
+    _success "You have successful init fresh Magento ${EDITION} version ${VERSION} for $VHOST_DOMAIN!"
+    echo "################################################################"
+    echo ""
+    echo " >> Domain               : ${VHOST_DOMAIN}"
+    echo " >> Application          : ${APP_TYPE}"
+    echo " >> PHP version          : ${APP_PHP}"
+    echo " >> Document Root        : /home/public_html/${VHOST_DOMAIN}/"
+    echo " >> Nginx Config File    : ${NGINX_SITES_CONF_D_FILE}"
+    echo " >> Database name        : ${DATABASE_NAME}"
+    echo " >> Database User        : root"
+    echo " >> Database Password    : $rootPass"
+    echo " >> Admin URL            : http://${VHOST_DOMAIN}/admin"
+    echo " >> Admin User           : $ADMIN_USER"
+    echo " >> Admin Password       : $ADMIN_PASSWORD"
+    echo ""
+    echo "################################################################"
 }
 
 ################################################################################
