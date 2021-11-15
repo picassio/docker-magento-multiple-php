@@ -30,7 +30,7 @@ RUN export DEBIAN_FRONTEND=noninteractive \
     && apt-get update \
     && npm install -g grunt-cli
 
-RUN su - nginx -c "touch ~/.bash_profile"
+RUN su - nginx -c "touch /home/nginx/.bash_profile"
 RUN su - nginx -c "curl https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash"
 RUN chmod +x /home/nginx/.nvm/nvm.sh
 RUN su - nginx -c "echo '[ -s /home/nginx/.nvm/nvm.sh ] && . /home/nginx/.nvm/nvm.sh # This loads NVM' > .profile"
