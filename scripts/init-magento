@@ -272,8 +272,8 @@ function checkComposerAuth()
     MAGENTO_USERNAME_PROP="http-basic.repo.magento.com.username"
     MAGENTO_PASSWORD_PROP="http-basic.repo.magento.com.password"
 
-        PUBLIC_KEY="$(docker-compose exec ${APP_PHP} composer config --global $MAGENTO_USERNAME_PROP 2>/dev/null)"
-        PRIVATE_KEY="$(docker-compose exec ${APP_PHP} composer config --global $MAGENTO_PASSWORD_PROP 2>/dev/null)"
+        PUBLIC_KEY="$(docker-compose exec --user nginx ${APP_PHP} composer config --global $MAGENTO_USERNAME_PROP 2>/dev/null)"
+        PRIVATE_KEY="$(docker-compose exec --user nginx ${APP_PHP} composer config --global $MAGENTO_PASSWORD_PROP 2>/dev/null)"
 
     if [ -z "$PUBLIC_KEY" ] || [ -z "$PRIVATE_KEY" ]; then
         exec < /dev/tty
@@ -287,7 +287,7 @@ function checkComposerAuth()
             _error "Please setup Composer auth for repo.magento.com to continue."
         fi
         _arrow "Configure magento repo auth"
-        $(docker-compose exec -T ${APP_PHP} composer config --global http-basic.repo.magento.com ${PUBLIC_KEY} ${PRIVATE_KEY}) || _die "Cannot configure magento auth"
+        $(docker-compose exec -T --user nginx ${APP_PHP} composer config --global http-basic.repo.magento.com ${PUBLIC_KEY} ${PRIVATE_KEY}) || _die "Cannot configure magento auth"
         _success "Configure magento repo auth done"
     fi
 
