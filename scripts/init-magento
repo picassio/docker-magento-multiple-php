@@ -271,9 +271,9 @@ function checkComposerAuth()
 {
     MAGENTO_USERNAME_PROP="http-basic.repo.magento.com.username"
     MAGENTO_PASSWORD_PROP="http-basic.repo.magento.com.password"
-    hash composer 2>/dev/null && IS_COMPOSER_ON_HOST=true
+    IS_COMPOSER_ON_HOST="/root/.composer/auth.json"
 
-    if [ $IS_COMPOSER_ON_HOST ]; then
+    if [ -f $IS_COMPOSER_ON_HOST ]; then
         PUBLIC_KEY="$(docker-compose exec ${APP_PHP} composer config --global $MAGENTO_USERNAME_PROP 2>/dev/null)"
         PRIVATE_KEY="$(docker-compose exec ${APP_PHP} composer config --global $MAGENTO_PASSWORD_PROP 2>/dev/null)"
     fi
