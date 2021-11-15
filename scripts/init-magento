@@ -286,13 +286,13 @@ function checkComposerAuth()
         read -r -p "    Password: " PRIVATE_KEY
         echo
         exec <&-
+        if [ -z "$PUBLIC_KEY" ] || [ -z "$PRIVATE_KEY" ]; then
+            echo "Please setup Composer auth for repo.magento.com to continue." && exit 1
+        fi
+
+        $(docker-compose exec -T ${APP_PHP} composer config --global http-basic.repo.magento.com ${PUBLIC_KEY} ${PRIVATE_KEY})
     fi
 
-    if [ -z "$PUBLIC_KEY" ] || [ -z "$PRIVATE_KEY" ]; then
-        echo "Please setup Composer auth for repo.magento.com to continue." && exit 1
-    fi
-
-    $(docker-compose exec -T ${APP_PHP} composer --global http-basic.repo.magento.com ${PUBLIC_KEY} ${PRIVATE_KEY})
 }
 
 function downloadMagentoVersion()
