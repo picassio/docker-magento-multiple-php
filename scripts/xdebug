@@ -349,7 +349,7 @@ function restartPhpContainer()
 function enableXdebug()
 {
     if [[ XDEBUG_STATUS == 1 ]]; then
-        _success "Xdebug enabled, no need to do anything" && exit 1
+        _warning "Xdebug enabled, no need to do anything" && exit 1
     fi
     _arrow "Enable Xdebug for ${APP_PHP}"
     sed -i 's/;extension=xdebug.so/extension=xdebug.so/g' $PHP_INI_LOCATION || _die "Cannot change Xdebug setting"
@@ -360,7 +360,7 @@ function enableXdebug()
 function disableXdebug()
 {
     if [[ XDEBUG_STATUS == 0 ]]; then
-        _success "Xdebug disabled, no need to do anything" && exit 1
+        _warning "Xdebug disabled, no need to do anything" && exit 1
     fi
     _arrow "Disable Xdebug for ${APP_PHP}"
     sed -i 's/extension=xdebug.so/;extension=xdebug.so/g' $PHP_INI_LOCATION || _die "Cannot change Xdebug setting"
@@ -385,7 +385,7 @@ function statusXdebug()
         _success "${APP_PHP}: Xdebug enabled"
     XDEBUG_STATUS=1
     else 
-       _success "${APP_PHP}: Xdebug disabled"
+       _warning "${APP_PHP}: Xdebug disabled"
     XDEBUG_STATUS=0
     fi
 }
