@@ -39,7 +39,7 @@ RUN pecl channel-update pecl.php.net
 RUN export DEBIAN_FRONTEND=noninteractive\ 
 		&& apt-get install libmcrypt-dev php7.0-mcrypt -y
 # RUN pecl install mcrypt
-RUN pecl install xdebug
+RUN pecl install -f xdebug-2.7
 
 RUN mkdir /home/nginx/.composer && chown -R nginx:nginx /home/nginx/.composer
 
