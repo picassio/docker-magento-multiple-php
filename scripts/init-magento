@@ -301,6 +301,8 @@ function initDefaultArgs()
 
     ADMIN_USER="admin"
     ADMIN_PASSWORD="smartosc123"
+
+    MYSQL_HOST="mysql"
 }
 
 
