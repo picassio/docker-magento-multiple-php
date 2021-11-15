@@ -427,9 +427,10 @@ function main()
     
 
     [[ $# -lt 1 ]] && _printUsage
-    initDefaultArgs
-    processArgs "$@"
 
+    processArgs "$@"
+    
+    initDefaultArgs
     checkPhpContainerRunning
 
     doAction
