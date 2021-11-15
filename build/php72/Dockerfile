@@ -14,7 +14,7 @@ WORKDIR /home/public_html
 RUN export DEBIAN_FRONTEND=noninteractive &&\
 	apt-get update -y &&\
 	apt-get install apt-utils sudo vim  zip unzip -y &&\
-	apt-get -y install php7.2 php7.2-pear php7.2-dev php7.2-apcu php7.2-fpm php7.2-common php7.2-gd php7.2-intl php7.2-soap php7.2-opcache php7.2-xml php7.2-mysql php7.2-mbstring php7.2-bcmath php7.2-json php7.2-curl php7.2-zip
+	apt-get -y install php7.2 php7.2-dev php7.2-apcu php7.2-fpm php7.2-common php7.2-gd php7.2-intl php7.2-soap php7.2-opcache php7.2-xml php7.2-mysql php7.2-mbstring php7.2-bcmath php7.2-json php7.2-curl php7.2-zip
 
 RUN ln -fs /usr/share/zoneinfo/Asia/Ho_Chi_Minh /etc/localtime && dpkg-reconfigure -f noninteractive tzdata
 

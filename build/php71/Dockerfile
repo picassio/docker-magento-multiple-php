@@ -15,7 +15,7 @@ RUN export DEBIAN_FRONTEND=noninteractive && apt-get update -y
 RUN export DEBIAN_FRONTEND=noninteractive && apt-get install -y software-properties-common
 RUN export DEBIAN_FRONTEND=noninteractive && LC_ALL=C.UTF-8 add-apt-repository ppa:ondrej/php && apt-get update -y
 RUN export DEBIAN_FRONTEND=noninteractive &&\
-	apt-get -y install php7.1 php7.1-apcu php7.1-fpm php7.1-common php7.1-gd php7.1-intl php7.1-soap php7.1-opcache php7.1-xml php7.1-mysql php7.1-mbstring php7.1-bcmath php7.1-json php7.1-curl php7.1-zip
+	apt-get -y install php7.1 php7.1-dev php7.1-apcu php7.1-fpm php7.1-common php7.1-gd php7.1-intl php7.1-soap php7.1-opcache php7.1-xml php7.1-mysql php7.1-mbstring php7.1-bcmath php7.1-json php7.1-curl php7.1-zip
 
 RUN export DEBIAN_FRONTEND=noninteractive && apt-get install -y curl git sudo apt-utils vim zip unzip
 RUN dpkg-reconfigure -f noninteractive tzdata
