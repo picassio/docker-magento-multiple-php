@@ -259,12 +259,12 @@ function createSourceCodeFolder()
 
 function createMagentoDomain()
 {
-    echo "1"
+    ${SCRIPTS_DIR}/create-vhost --domain=${VHOST_DOMAIN} --app=magento2 --root-dir=${VHOST_DOMAIN} --php-version=${APP_PHP}
 }
 
 function createDomainDatabase()
 {
-    echo "1"
+    ${SCRIPTS_DIR}/database create --database-name=${DATABASE_NAME}
 }
 
 function checkComposerAuth()
@@ -303,11 +303,6 @@ function downloadMagentoVersion()
     _success "Download Magento ${EDITION} version ${VERSION} done"
 }
 
-function composerInstall()
-{
-    echo "1"
-}
-
 function installMagentoVersion()
 {
     echo "1"
@@ -344,6 +339,7 @@ function processArgs()
     done
         
     validateArgs
+    sanitizeArgs
 }
 
 function initDefaultArgs()
@@ -361,6 +357,7 @@ function initDefaultArgs()
     YES_NO_PROMPT=$"[y/n]: "
     YES_CAPS=$(echo ${YES_STRING}|tr [:lower:] [:upper:])
     NO_CAPS=$(echo ${NO_STRING}|tr [:lower:] [:upper:])
+    DATABASE_NAME="magento"_${BACKDATE}
 }
 
 
@@ -391,6 +388,17 @@ function validateArgs()
     [[ "$ERROR_COUNT" -gt 0 ]] && exit 1
 }
 
+function sanitizeArgs()
+{
+    # remove trailing /
+    if [[ ! -z "$VHOST_ROOT_DIR" ]]; then
+        VHOST_ROOT_DIR="${VHOST_ROOT_DIR%/}"
+    fi
+    if [[ ! -z "$VHOST_DOMAIN" ]] && [[ "$VHOST_DOMAIN" == http* ]]; then
+        VHOST_DOMAIN=$(getPureDomain)
+    fi
+}
+
 function printSuccessMessage()
 {
     _success "Your Action has done!"
@@ -412,17 +420,17 @@ function main()
     checkCmdDependencies
     
     [[ $# -lt 1 ]] && _printUsage
-    initDefaultArgs
+
     processArgs "$@"
+    initDefaultArgs
 
     createSourceCodeFolder
-    # createMagentoDomain
+    createMagentoDomain
 
     checkComposerAuth
     downloadMagentoVersion
 
-    # createDomainDatabase
-    # composerInstall
+    createDomainDatabase
     # installMagentoVersion
 
     printSuccessMessage
