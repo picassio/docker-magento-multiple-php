@@ -287,8 +287,8 @@ function processArgs()
                 esac
             done
         ;; 
-        disable)
-            status="$1"
+        status)
+            COMMAND="$1"
             for arg in "${@:2}"
             do
                 case $arg in
