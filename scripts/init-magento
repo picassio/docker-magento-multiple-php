@@ -301,7 +301,9 @@ function downloadMagentoVersion()
     VERSION=${MAGENTO_VERSION}
     EDITION=${MAGENTO_EDITION}
 
-    docker-compose exec ${APP_PHP} COMPOSER_MEMORY_LIMIT=-1 composer create-project --repository=https://repo.magento.com/ magento/project-"${EDITION}"-edition="${VERSION}" /home/public_html/${VHOST_DOMAIN}/ || _die "Cannot download source code"
+    _arrow "Download Magento ${EDITION} version ${VERSION}"
+    docker-compose exec ${APP_PHP} php -d memory_limit=-1 composer create-project --repository=https://repo.magento.com/ magento/project-"${EDITION}"-edition="${VERSION}" /home/public_html/${VHOST_DOMAIN}/ || _die "Cannot download source code"
+    _success "Download Magento ${EDITION} version ${VERSION} done"
 }
 
 function composerInstall()
