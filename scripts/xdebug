@@ -325,7 +325,7 @@ function initDefaultArgs()
 
     PHP_INI_LOCATION="./conf/${APP_PHP}/php.ini"
 
-    XDEBUG_STATUS=0
+    XDEBUG_STATUS=""
 }
 
 function validateArgs()
@@ -429,7 +429,7 @@ function main()
     [[ $# -lt 1 ]] && _printUsage
 
     processArgs "$@"
-    
+
     initDefaultArgs
     checkPhpContainerRunning
 
