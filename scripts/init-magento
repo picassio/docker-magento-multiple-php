@@ -418,7 +418,7 @@ function main()
     createSourceCodeFolder
     # createMagentoDomain
 
-    # checkComposerAuth
+    checkComposerAuth
     downloadMagentoVersion
 
     # createDomainDatabase
