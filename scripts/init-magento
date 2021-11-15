@@ -287,10 +287,11 @@ function checkComposerAuth()
         echo
         exec <&-
         if [ -z "$PUBLIC_KEY" ] || [ -z "$PRIVATE_KEY" ]; then
-            echo "Please setup Composer auth for repo.magento.com to continue." && exit 1
+            _error "Please setup Composer auth for repo.magento.com to continue."
         fi
-
-        $(docker-compose exec -T ${APP_PHP} composer config --global http-basic.repo.magento.com ${PUBLIC_KEY} ${PRIVATE_KEY})
+        _arrow "Configure magento repo auth"
+        $(docker-compose exec -T ${APP_PHP} composer config --global http-basic.repo.magento.com ${PUBLIC_KEY} ${PRIVATE_KEY}) || _die "Cannot configure magento auth"
+        _success "Configure magento repo auth done"
     fi
 
 }
@@ -300,7 +301,7 @@ function downloadMagentoVersion()
     VERSION=${MAGENTO_VERSION}
     EDITION=${MAGENTO_EDITION}
 
-    docker-compose exec ${APP_PHP} composer create-project --repository=https://repo.magento.com/ magento/project-"${EDITION}"-edition="${VERSION}" /home/public_html/${VHOST_DOMAIN}/ || _die "Cannot download source code"
+    docker-compose exec ${APP_PHP} COMPOSER_MEMORY_LIMIT=-1 composer create-project --repository=https://repo.magento.com/ magento/project-"${EDITION}"-edition="${VERSION}" /home/public_html/${VHOST_DOMAIN}/ || _die "Cannot download source code"
 }
 
 function composerInstall()
