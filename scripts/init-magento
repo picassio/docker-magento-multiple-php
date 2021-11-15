@@ -245,69 +245,6 @@ function checkCmdDependencies()
     done;
 }
 
-function createSourceCodeFolder()
-{
-    if [[ -d ${SOURCE_DIR}/$VHOST_DOMAIN ]]; then
-        _error "Folder exists"
-        exit 1
-    else
-        _arrow "Create source code folder"
-        mkdir -p ${SOURCE_DIR}/$VHOST_DOMAIN || _die "Error"
-        _success "Source code folder created"
-    fi
-}
-
-function createMagentoDomain()
-{
-    ${SCRIPTS_DIR}/create-vhost --domain=${VHOST_DOMAIN} --app=magento2 --root-dir=${VHOST_DOMAIN} --php-version=${APP_PHP}
-}
-
-function createDomainDatabase()
-{
-    ${SCRIPTS_DIR}/database create --database-name=${DATABASE_NAME}
-}
-
-function checkComposerAuth()
-{
-    MAGENTO_USERNAME_PROP="http-basic.repo.magento.com.username"
-    MAGENTO_PASSWORD_PROP="http-basic.repo.magento.com.password"
-
-        PUBLIC_KEY="$(docker-compose exec -T --user nginx ${APP_PHP} composer config --global $MAGENTO_USERNAME_PROP 2>/dev/null)"
-        PRIVATE_KEY="$(docker-compose exec -T --user nginx ${APP_PHP} composer config --global $MAGENTO_PASSWORD_PROP 2>/dev/null)"
-
-    if [ -z "$PUBLIC_KEY" ] || [ -z "$PRIVATE_KEY" ]; then
-        exec < /dev/tty
-        echo
-        echo "Composer authentication required (repo.magento.com public and private keys):"
-        read -r -p "    Username: " PUBLIC_KEY
-        read -r -p "    Password: " PRIVATE_KEY
-        echo
-        exec <&-
-        if [ -z "$PUBLIC_KEY" ] || [ -z "$PRIVATE_KEY" ]; then
-            _error "Please setup Composer auth for repo.magento.com to continue."
-        fi
-        _arrow "Configure magento repo auth"
-        $(docker-compose exec -T --user nginx ${APP_PHP} composer config --global http-basic.repo.magento.com ${PUBLIC_KEY} ${PRIVATE_KEY}) || _die "Cannot configure magento auth"
-        _success "Configure magento repo auth done"
-    fi
-
-}
-
-function downloadMagentoVersion()
-{
-    VERSION=${MAGENTO_VERSION}
-    EDITION=${MAGENTO_EDITION}
-
-    _arrow "Download Magento ${EDITION} version ${VERSION}"
-    docker-compose exec --user nginx ${APP_PHP} php -d memory_limit=-1 /usr/bin/composer create-project --repository=https://repo.magento.com/ magento/project-"${EDITION}"-edition="${VERSION}" /home/public_html/${VHOST_DOMAIN}/ || _die "Cannot download source code"
-    _success "Download Magento ${EDITION} version ${VERSION} done"
-}
-
-function installMagentoVersion()
-{
-    echo "1"
-}
-
 function processArgs()
 {
     for arg in "$@"
@@ -399,6 +336,99 @@ function sanitizeArgs()
     fi
 }
 
+function getMysqlInformation()
+{
+    containerNameDB=$(docker inspect -f '{{.Name}}' $(docker-compose ps -q mysql) | cut -c2-)
+
+    mysqlUser=$(docker inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}'  $containerNameDB | grep MYSQL_USER)
+    user="${mysqlUser/MYSQL_USER=/$replace}" 
+
+    mysqlPass=$(docker inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}'  $containerNameDB | grep MYSQL_PASSWORD)
+    pass="${mysqlPass/MYSQL_PASSWORD=/$replace}" 
+
+    mysqRootPass=$(docker inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}'  $containerNameDB | grep MYSQL_ROOT_PASSWORD)
+    rootPass="${mysqRootPass/MYSQL_ROOT_PASSWORD=/$replace}"
+}
+
+function createSourceCodeFolder()
+{
+    if [[ -d ${SOURCE_DIR}/$VHOST_DOMAIN ]]; then
+        _error "Folder exists"
+        exit 1
+    else
+        _arrow "Create source code folder"
+        mkdir -p ${SOURCE_DIR}/$VHOST_DOMAIN || _die "Error"
+        _success "Source code folder created"
+    fi
+}
+
+function createMagentoDomain()
+{
+    ${SCRIPTS_DIR}/create-vhost --domain=${VHOST_DOMAIN} --app=magento2 --root-dir=${VHOST_DOMAIN} --php-version=${APP_PHP}
+}
+
+function createDomainDatabase()
+{
+    ${SCRIPTS_DIR}/database create --database-name=${DATABASE_NAME}
+}
+
+function checkComposerAuth()
+{
+    MAGENTO_USERNAME_PROP="http-basic.repo.magento.com.username"
+    MAGENTO_PASSWORD_PROP="http-basic.repo.magento.com.password"
+
+        PUBLIC_KEY="$(docker-compose exec -T --user nginx ${APP_PHP} composer config --global $MAGENTO_USERNAME_PROP 2>/dev/null)"
+        PRIVATE_KEY="$(docker-compose exec -T --user nginx ${APP_PHP} composer config --global $MAGENTO_PASSWORD_PROP 2>/dev/null)"
+
+    if [ -z "$PUBLIC_KEY" ] || [ -z "$PRIVATE_KEY" ]; then
+        exec < /dev/tty
+        echo
+        echo "Composer authentication required (repo.magento.com public and private keys):"
+        read -r -p "    Username: " PUBLIC_KEY
+        read -r -p "    Password: " PRIVATE_KEY
+        echo
+        exec <&-
+        if [ -z "$PUBLIC_KEY" ] || [ -z "$PRIVATE_KEY" ]; then
+            _error "Please setup Composer auth for repo.magento.com to continue."
+        fi
+        _arrow "Configure magento repo auth"
+        $(docker-compose exec -T --user nginx ${APP_PHP} composer config --global http-basic.repo.magento.com ${PUBLIC_KEY} ${PRIVATE_KEY}) || _die "Cannot configure magento auth"
+        _success "Configure magento repo auth done"
+    fi
+
+}
+
+function downloadMagentoVersion()
+{
+    VERSION=${MAGENTO_VERSION}
+    EDITION=${MAGENTO_EDITION}
+
+    _arrow "Download Magento ${EDITION} version ${VERSION}"
+    docker-compose exec --user nginx ${APP_PHP} php -d memory_limit=-1 /usr/bin/composer create-project --repository=https://repo.magento.com/ magento/project-"${EDITION}"-edition="${VERSION}" /home/public_html/${VHOST_DOMAIN}/ || _die "Cannot download source code"
+    _success "Download Magento ${EDITION} version ${VERSION} done"
+}
+
+function installMagentoVersion()
+{
+    _arrow "Install Magento ${EDITION} version ${VERSION} for $VHOST_DOMAIN"
+    docker-compose exec --user nginx ${APP_PHP} php -d memory_limit=-1 /home/public_html/${VHOST_DOMAIN}/bin/magento \
+        --db-host="$MYSQL_HOST" \
+        --db-name="${DATABASE_NAME}" \
+        --db-user="root" \
+        --db-password="$rootPass" \
+        --base-url=http://"$VHOST_DOMAIN"/ \
+        --admin-firstname="admin" \
+        --admin-lastname="admin" \
+        --admin-email="admin@localhost.com" \
+        --admin-user="admin" \
+        --admin-password="smartosc123" \
+        --language="en_US" \
+        --currency="USD" \
+        --timezone="America/Chicago" \
+        --use-rewrites=1 || _die "Cannot Install Magento"
+    _success "Install Magento ${EDITION} version ${VERSION} for $VHOST_DOMAIN successful!"
+}
+
 function printSuccessMessage()
 {
     _success "Your Action has done!"
@@ -431,6 +461,7 @@ function main()
     checkComposerAuth
     downloadMagentoVersion
 
+    getMysqlInformation
     # installMagentoVersion
 
     printSuccessMessage
