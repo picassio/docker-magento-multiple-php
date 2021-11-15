@@ -21,6 +21,25 @@ RUN export DEBIAN_FRONTEND=noninteractive && apt-get install -y curl git sudo ap
 RUN dpkg-reconfigure -f noninteractive tzdata
 
 RUN curl https://getcomposer.org/download/1.10.19/composer.phar --output /usr/bin/composer && chmod +x /usr/bin/composer
+RUN curl https://files.magerun.net/n98-magerun2.phar --output /usr/bin/n98-magerun2.phar && chmod +x /usr/bin/n98-magerun2.phar
+
+RUN export DEBIAN_FRONTEND=noninteractive \ 
+	&& curl -sL https://deb.nodesource.com/setup_14.x -o nodesource_setup.sh \
+    && sudo bash nodesource_setup.sh \
+    && apt-get install -y nodejs \
+    && apt-get update \
+    && npm install -g grunt-cli
+
+RUN su - nginx -c "touch ~/.bash_profile"
+RUN su - nginx -c "curl https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash"
+RUN chmod +x /home/nginx/.nvm/nvm.sh
+RUN su - nginx -c "echo '[ -s /home/nginx/.nvm/nvm.sh ] && . /home/nginx/.nvm/nvm.sh # This loads NVM' > .profile"
+
+RUN pecl channel-update pecl.php.net
+RUN export DEBIAN_FRONTEND=noninteractive\ 
+		&& apt-get install libmcrypt-dev -y
+RUN pecl install mcrypt
+RUN pecl install -f xdebug-2.9.8
 
 RUN mkdir /home/nginx/.composer && chown -R nginx:nginx /home/nginx/.composer
 
