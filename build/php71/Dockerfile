@@ -5,7 +5,7 @@ ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /tini
 RUN chmod +x /tini
 
 RUN mkdir -p /home/public_html /run/php /var/lib/php/session &&\
-	groupadd -g 1000 nginx && useradd -u 1000 -g nginx -M -d /home/nginx -s /bin/bash nginx &&\
+	groupadd -g 1000 nginx && useradd -u 1000 -g nginx -m -d /home/nginx -s /bin/bash nginx &&\
 	chown -R nginx:nginx /home/public_html/	&&\
 	chown -R nginx:nginx /var/lib/php/
 
