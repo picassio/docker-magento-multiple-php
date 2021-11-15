@@ -419,7 +419,7 @@ function downloadMagentoVersion()
 function installMagentoVersion()
 {
     _arrow "Install Magento ${EDITION} version ${VERSION} for $VHOST_DOMAIN"
-    docker-compose exec --user nginx ${APP_PHP} php -d memory_limit=-1 /home/public_html/${VHOST_DOMAIN}/bin/magento \
+    docker-compose exec --user nginx ${APP_PHP} php -d memory_limit=-1 /home/public_html/${VHOST_DOMAIN}/bin/magento setup:install \
         --db-host="$MYSQL_HOST" \
         --db-name="${DATABASE_NAME}" \
         --db-user="root" \
