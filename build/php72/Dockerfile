@@ -29,9 +29,9 @@ RUN curl -sL https://deb.nodesource.com/setup_10.x -o nodesource_setup.sh \
     && npm install -g grunt-cli
 
 RUN su - nginx -c "touch ~/.bash_profile"
-RUN su - nginx -c "curl https://raw.github.com/creationix/nvm/master/install.sh | sh"
+RUN su - nginx -c "curl https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash"
+RUN chmod +x $HOME/.nvm/nvm.sh
 RUN su - nginx -c "echo '[ -s $HOME/.nvm/nvm.sh ] && . $HOME/.nvm/nvm.sh # This loads NVM' > .profile"
-
 
 RUN mkdir /home/nginx/.composer && chown -R nginx:nginx /home/nginx/.composer
 
