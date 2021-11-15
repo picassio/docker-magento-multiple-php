@@ -36,8 +36,8 @@ RUN su - nginx -c "echo '[ -s /home/nginx/.nvm/nvm.sh ] && . /home/nginx/.nvm/nv
 
 RUN pecl channel-update pecl.php.net
 RUN export DEBIAN_FRONTEND=noninteractive\ 
-		&& apt-get install libmcrypt-dev php7.2-mcrypt -y
-# RUN pecl install mcrypt
+		&& apt-get install libmcrypt-dev -y
+RUN pecl install mcrypt
 RUN pecl install -f xdebug-2.9.8
 
 RUN mkdir /home/nginx/.composer && chown -R nginx:nginx /home/nginx/.composer
