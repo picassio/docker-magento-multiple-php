@@ -357,7 +357,7 @@ function initDefaultArgs()
     YES_NO_PROMPT=$"[y/n]: "
     YES_CAPS=$(echo ${YES_STRING}|tr [:lower:] [:upper:])
     NO_CAPS=$(echo ${NO_STRING}|tr [:lower:] [:upper:])
-    DATABASE_NAME="magento"_${BACKDATE}
+    DATABASE_NAME="magento"_"$(date +"%Y_%m_%d")"
 }
 
 
