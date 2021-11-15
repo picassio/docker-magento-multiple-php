@@ -34,6 +34,7 @@ RUN su - nginx -c "curl https://raw.githubusercontent.com/nvm-sh/nvm/master/inst
 RUN chmod +x /home/nginx/.nvm/nvm.sh
 RUN su - nginx -c "echo '[ -s /home/nginx/.nvm/nvm.sh ] && . /home/nginx/.nvm/nvm.sh # This loads NVM' > .profile"
 
+RUN pecl channel-update pecl.php.net
 RUN pecl install mcrypt
 RUN pecl install -f xdebug-2.9.8
 
