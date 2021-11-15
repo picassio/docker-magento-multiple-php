@@ -462,7 +462,7 @@ function main()
     downloadMagentoVersion
 
     getMysqlInformation
-    # installMagentoVersion
+    installMagentoVersion
 
     printSuccessMessage
     exit 0
