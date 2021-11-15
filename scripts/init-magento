@@ -426,11 +426,11 @@ function main()
 
     createSourceCodeFolder
     createMagentoDomain
+    createDomainDatabase
 
     checkComposerAuth
     downloadMagentoVersion
 
-    createDomainDatabase
     # installMagentoVersion
 
     printSuccessMessage
