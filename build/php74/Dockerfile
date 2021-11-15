@@ -22,6 +22,7 @@ RUN dpkg-reconfigure -f noninteractive tzdata
 
 RUN curl https://getcomposer.org/download/1.10.19/composer.phar --output /usr/bin/composer && chmod +x /usr/bin/composer
 
+RUN mkdir /home/nginx/.composer && chown -R nginx:nginx /home/nginx/.composer
 
 ENTRYPOINT ["/tini", "--"]
 CMD ["/usr/sbin/php-fpm7.4", "-F", "-O", "--fpm-config", "/etc/php/7.4/fpm/php-fpm.conf"]
