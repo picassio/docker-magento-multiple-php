@@ -440,11 +440,9 @@ function installMagentoVersion()
 
 function printSuccessMessage()
 {
-    _success "You have successful init fresh Magento ${EDITION} version ${VERSION} for $VHOST_DOMAIN!"
     echo "################################################################"
     echo ""
     echo " >> Domain               : ${VHOST_DOMAIN}"
-    echo " >> Application          : ${APP_TYPE}"
     echo " >> PHP version          : ${APP_PHP}"
     echo " >> Document Root        : /home/public_html/${VHOST_DOMAIN}/"
     echo " >> Nginx Config File    : ${NGINX_SITES_CONF_D_FILE}"
