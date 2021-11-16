@@ -281,13 +281,13 @@ function processArgs()
 
 function initDefaultArgs()
 {
-    IMPORT_DIR="./databases/import"
-    SCRIPTS_DIR="./scripts"
-    DES_DIR="./databases/export"
+    IMPORT_DIR="$(pwd)/databases/import"
+    SCRIPTS_DIR="$(pwd)/scripts"
+    DES_DIR="$(pwd)/databases/export"
     TODAY="$(date +"%Y-%m-%d")"
     BACKDATE="$(date +"%Y-%m-%d")"
     DATABASE_PATTERN="^([[:alnum:]]([[:alnum:]_]{0,61}[[:alnum:]]))$"
-    SOURCE_DIR="./sources"
+    SOURCE_DIR="$(pwd)/sources"
 
     YES_STRING=$"y"
     NO_STRING=$"n"
@@ -335,10 +335,6 @@ function validateArgs()
 
 function sanitizeArgs()
 {
-    # remove trailing /
-    if [[ ! -z "$VHOST_ROOT_DIR" ]]; then
-        VHOST_ROOT_DIR="${VHOST_ROOT_DIR%/}"
-    fi
     if [[ ! -z "$VHOST_DOMAIN" ]] && [[ "$VHOST_DOMAIN" == http* ]]; then
         VHOST_DOMAIN=$(getPureDomain)
     fi

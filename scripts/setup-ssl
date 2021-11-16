@@ -206,15 +206,12 @@ Version $VERSION
 ./scripts/$(basename "$0") [ARG]...
 
     Options:
-        --php-version             PHP version used for application (php70|php71|php72|php73|php74).
         --domain                  Domain name (eg: test.com).
-        --mangeto-version         Magento Version (eg: 2.3.4).
-        --magento-edition         Magento Edition. (community|enterprise)
         -h, --help                Display this help and exit.
 
     Examples:
       Install Magento community edition version 2.3.4 with PHP version 7.2 for domain test-magento.com:
-        ./scripts/$(basename "$0") list
+        ./scripts/$(basename "$0") --domain
 "
     _printPoweredBy
     exit 1
@@ -245,15 +242,182 @@ function checkCmdDependencies()
     done;
 }
 
+function processArgs()
+{
+    for arg in "$@"
+    do
+        case $arg in
+            --domain=*)
+                VHOST_DOMAIN="${arg#*=}"
+            ;;            
+            --debug)
+                DEBUG=1
+                set -o xtrace
+            ;;
+            -h|--help)
+                _printUsage
+            ;;
+            *)
+                _printUsage
+            ;;
+        esac
+    done
+        
+    validateArgs
+    sanitizeArgs
+}
+
+function validateArgs()
+{
+    ERROR_COUNT=0
+    if [[ -z "$VHOST_DOMAIN" ]]; then
+        _error "--domain=... parameter is missing."
+        ERROR_COUNT=$((ERROR_COUNT + 1))
+    fi
+
+    [[ "$ERROR_COUNT" -gt 0 ]] && exit 1
+}
+
+function sanitizeArgs()
+{
+    if [[ ! -z "$VHOST_DOMAIN" ]] && [[ "$VHOST_DOMAIN" == http* ]]; then
+        VHOST_DOMAIN=$(getPureDomain)
+    fi
+}
+
+function initDefaultArgs()
+{
+    SSL_DIR="$(pwd)/conf/nginx/ssl"
+
+    YES_STRING=$"y"
+    NO_STRING=$"n"
+    YES_NO_PROMPT=$"[y/n]: "
+    YES_CAPS=$(echo ${YES_STRING}|tr [:lower:] [:upper:])
+    NO_CAPS=$(echo ${NO_STRING}|tr [:lower:] [:upper:])
+    DATABASE_NAME="magento"_"$(date +%s)"
+
+    NGINX_SITES_CONF_D="$(pwd)/conf/nginx/conf.d"
+    NGINX_SITES_CONF_D_SSL_FILE="${NGINX_SITES_CONF_D}/${VHOST_DOMAIN}-ssl.conf"
+}
+
 function checkSslCommand()
 {
     if [[ ! hash mkcert &> /dev/null ]]; then
             echo -n "Missing mkcert command
 
     You need to install mkcert with this command below if you are using Ubuntu:
-    apt install libnss3-tools
+    apt-get install libnss3-tools -y
     wget https://github.com/FiloSottile/mkcert/releases/download/v1.4.3/mkcert-v1.4.3-linux-amd64 -O /usr/local/bin/mkcert
     chmod +x /usr/local/bin/mkcert
+    mkcert -install
 "
     fi
 }
+
+function createCertificate()
+{
+    _arrow "Create $VHOST_DOMAIN certificate"
+    mkcert -key-file $VHOST_DOMAIN.key -cert-file $VHOST_DOMAIN.crt $VHOST_DOMAIN || _die "Cannot create certificate"
+    _arrow "Moving certificate to the right folder"
+    mv $VHOST_DOMAIN.key $VHOST_DOMAIN.crt ${SSL_DIR}/
+    _success "$VHOST_DOMAIN certificate created"
+}
+
+function prepareSslVhostContent()
+{
+    echo "server {
+    server_name ${VHOST_DOMAIN};
+
+    listen 443 ssl;
+
+    ssl_certificate /etc/nginx/ssl/$VHOST_DOMAIN.crt;
+    ssl_certificate_key /etc/nginx/ssl/$VHOST_DOMAIN.key;
+
+    client_max_body_size 100M;
+    location / {
+    proxy_pass http://127.0.0.1:80;
+    proxy_set_header Host \$http_host;
+    proxy_set_header X-Forwarded-Host \$http_host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header Ssl-Offloaded "1";
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-Port 443;
+
+    proxy_buffer_size          128k;
+    proxy_buffers              4 256k;
+    proxy_busy_buffers_size    256k;
+
+    proxy_read_timeout 600;
+    proxy_connect_timeout 600;
+    proxy_send_timeout  600;
+    }
+
+    error_page 404 /404.html;
+    location = /40x.html {
+    }
+
+    error_page 500 502 503 504 /50x.html;
+    location = /50x.html {
+    }
+}" > "$NGINX_SITES_CONF_D_FILE" || _die "Couldn't write to file: ${NGINX_SITES_CONF_D_FILE}"
+
+    _arrow "${NGINX_SITES_CONF_D_FILE} file has been created."
+}
+
+
+function reloadNginx()
+{
+    local _nginxTest=$(docker-compose exec nginx nginx -t)
+    if [[ $? -eq 0 ]]; then
+        docker-compose exec nginx nginx -s reload || _die "Nginx couldn't be reloaded."
+    else
+        echo "$_nginxTest"
+    fi
+}
+
+function printSuccessMessage()
+{
+    _success "Virtual host for Nginx has been successfully created!"
+
+    echo "################################################################"
+    echo ""
+    echo " >> Domain               : ${VHOST_DOMAIN}"
+    echo " >> Nginx Config File    : ${NGINX_SITES_CONF_D_SSL_FILE}"
+    echo ""
+    echo "################################################################"
+
+}
+
+################################################################################
+# Main
+################################################################################
+export LC_CTYPE=C
+export LANG=C
+
+DEBUG=0
+_debug set -x
+VERSION="1.2.0"
+
+function main()
+{
+    # _checkRootUser
+    checkCmdDependencies
+    checkSslCommand
+
+    [[ $# -lt 1 ]] && _printUsage
+
+    initDefaultArgs
+    processArgs "$@"
+
+    createCertificate
+    prepareSslVhostContent
+    reloadNginx
+
+    printSuccessMessage
+    exit 0
+}
+
+main "$@"
+
+_debug set +x

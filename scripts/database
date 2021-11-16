@@ -381,8 +381,8 @@ function validateArgs()
 
 function initDefaultArgs()
 {
-    IMPORT_DIR="./databases/import"
-    DES_DIR="./databases/export"
+    IMPORT_DIR="$(pwd)/databases/import"
+    DES_DIR="$(pwd)/databases/export"
     TODAY="$(date +"%Y-%m-%d")"
     BACKDATE="$(date +"%Y-%m-%d")"
     DATABASE_PATTERN="^([[:alnum:]]([[:alnum:]_]{0,61}[[:alnum:]]))$"

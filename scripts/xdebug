@@ -323,7 +323,7 @@ function initDefaultArgs()
     YES_CAPS=$(echo ${YES_STRING}|tr [:lower:] [:upper:])
     NO_CAPS=$(echo ${NO_STRING}|tr [:lower:] [:upper:])
 
-    PHP_INI_LOCATION="./conf/php/${APP_PHP}/php.ini"
+    PHP_INI_LOCATION="$(pwd)/conf/php/${APP_PHP}/php.ini"
 
     XDEBUG_STATUS=
 }
@@ -371,7 +371,7 @@ function disableXdebug()
 function checkPhpContainerRunning()
 {
     _arrow "Check ${APP_PHP} is running?"
-    if [[ $(./scripts/list-services | grep ${APP_PHP}) ]]; then
+    if [[ $($(pwd)/scripts/list-services | grep ${APP_PHP}) ]]; then
         _success "${APP_PHP} is running"
     else
         _error "${APP_PHP} is not running" && exit 1
