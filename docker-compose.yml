@@ -126,8 +126,6 @@ services:
           - elasticseach-data:/usr/share/elasticsearch/data
       ports:
           - 9200:9200
-      networks:
-          - elastic
 
   kibana:
       image: kibana:7.14.1
@@ -138,7 +136,7 @@ services:
           - elasticseach
       ports:
           - 5601:5601
-          
+
   rabbitmq:
       image: rabbitmq:3-management-alpine
       volumes:
