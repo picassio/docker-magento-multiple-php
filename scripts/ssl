@@ -302,9 +302,8 @@ function initDefaultArgs()
 
 function checkSslCommand()
 {
-    if [[ ! hash mkcert &> /dev/null ]]; then
+    if [[ ! type mkcert &> /dev/null ]]; then
             echo -n "Missing mkcert command
-
     You need to install mkcert with this command below if you are using Ubuntu:
     apt-get install libnss3-tools -y
     wget https://github.com/FiloSottile/mkcert/releases/download/v1.4.3/mkcert-v1.4.3-linux-amd64 -O /usr/local/bin/mkcert
