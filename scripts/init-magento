@@ -473,7 +473,7 @@ VERSION="1"
 function main()
 {
     # _checkRootUser
-    verifyCurrentDirIsDockercomposeDir
+    # verifyCurrentDirIsDockercomposeDir
     checkCmdDependencies
     
     [[ $# -lt 1 ]] && _printUsage
