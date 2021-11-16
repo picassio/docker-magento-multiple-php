@@ -100,8 +100,63 @@ services:
     ports:
       - 1025:1025
       - 8025:8025
-    
+
+  redis:
+      image: "redis:6.0-alpine"
+      ports:
+        - "127.0.0.1:6379:6379"
+      sysctls:
+        - "net.core.somaxconn=65535"
+      volumes:
+        - "redis_data:/data"
+
+  elasticseach:
+      image: elasticsearch:7.14.1
+      environment:
+          - discovery.type=single-node
+          - node.name=elasticseach_01
+          - cluster.name=es-docker-cluster
+          - bootstrap.memory_lock=true
+          - "ES_JAVA_OPTS=-Xms1024m -Xmx1024m"
+      ulimits:
+          memlock:
+              soft: -1
+              hard: -1
+      volumes:
+          - elasticseach-data-01:/usr/share/elasticsearch/data
+      ports:
+          - 9200:9200
+      networks:
+          - elastic
+
+  kibana:
+      image: kibana:7.14.1
+      environment:
+          SERVER_NAME: kibana
+          ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
+      depends_on:
+          - elasticseach-01
+      ports:
+          - 5601:5601
+      networks:
+          - elastic
+
+  rabbitmq:
+      image: rabbitmq:3-management-alpine
+      volumes:
+          - ./data/rabbitmq/etc/:/etc/rabbitmq/
+          - ./data/rabbitmq/data/:/var/lib/rabbitmq/
+          - ./data/rabbitmq/logs/:/var/log/rabbitmq/
+      environment:
+          RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE}
+          RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+          RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+      ports:
+          - 5672:5672
+          - 15672:15672
 
 volumes: 
   composer_cache:
   composer_cache_file:
+  elasticseach-data-01:
+  redis_data:
