@@ -297,11 +297,11 @@ function sanitizeArgs()
 }
 
 function checkDomain() {
-    $VHOST_DOMAIN="^([[:alnum:]]([[:alnum:]\-]{0,61}[[:alnum:]])?\.)+[[:alpha:]]{2,6}$"
+    PATTERN="^([[:alnum:]]([[:alnum:]\-]{0,61}[[:alnum:]])?\.)+[[:alpha:]]{2,6}$"
     if [[ "$VHOST_DOMAIN" =~ $PATTERN ]]; then
         VHOST_DOMAIN=`echo $VHOST_DOMAIN | tr '[A-Z]' '[a-z]'`
     else
-        _error "invalid domain name"
+        _error "Invalid domain name"
         exit 1
     fi
 }
