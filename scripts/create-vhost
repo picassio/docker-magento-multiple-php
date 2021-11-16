@@ -240,6 +240,7 @@ function processArgs()
 
     validateArgs
     sanitizeArgs
+    checkDomain
 }
 
 function initDefaultArgs()
@@ -292,6 +293,16 @@ function sanitizeArgs()
     fi
     if [[ ! -z "$VHOST_DOMAIN" ]] && [[ "$VHOST_DOMAIN" == http* ]]; then
         VHOST_DOMAIN=$(getPureDomain)
+    fi
+}
+
+function checkDomain() {
+    $VHOST_DOMAIN="^([[:alnum:]]([[:alnum:]\-]{0,61}[[:alnum:]])?\.)+[[:alpha:]]{2,6}$"
+    if [[ "$VHOST_DOMAIN" =~ $PATTERN ]]; then
+        VHOST_DOMAIN=`echo $VHOST_DOMAIN | tr '[A-Z]' '[a-z]'`
+    else
+        _error "invalid domain name"
+        exit 1
     fi
 }
 
