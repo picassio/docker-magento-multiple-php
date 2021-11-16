@@ -340,6 +340,14 @@ function sanitizeArgs()
     fi
 }
 
+function verifyCurrentDirIsDockercomposeDir()
+{
+    if [[ ! -f $($(pwd)/.root_dir) ]]; then 
+        _error "Please change your current folder to docker-compose root folder (root folder is the folder contain docker-compose.yml file)."
+        exit 1
+    fi
+}
+
 function getMysqlInformation()
 {
     containerNameDB=$(docker inspect -f '{{.Name}}' $(docker-compose ps -q mysql) | cut -c2-)
@@ -465,6 +473,7 @@ VERSION="1"
 function main()
 {
     # _checkRootUser
+    verifyCurrentDirIsDockercomposeDir
     checkCmdDependencies
     
     [[ $# -lt 1 ]] && _printUsage
