@@ -314,7 +314,7 @@ docker-compose up -d php73
 * Copy file env.php, config.php vào đúng thư mục, chỉnh sửa lại thông tin kết nối db. Password root mysql có được khai báo trong file .env
 ```bash
                 'host' => 'mysql',
-                'dbname' => 'magento_1636960360',
+                'dbname' => 'magento_db',
                 'username' => 'root',
                 'password' => 'magentosmartosc123',
 ```
