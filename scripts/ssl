@@ -309,9 +309,8 @@ function checkSslCommand()
 {
     if ! command_exists mkcert; then
         _error "Missing mkcert command"
-        _warming "You need to install mkcert with this command below if you are using Ubuntu:"
-        echo -n "
-    apt-get install libnss3-tools -y
+        _warning "You need to install mkcert with this command below if you are using Ubuntu:"
+        echo -n "    apt-get install libnss3-tools -y
     wget https://github.com/FiloSottile/mkcert/releases/download/v1.4.3/mkcert-v1.4.3-linux-amd64 -O /usr/local/bin/mkcert
     chmod +x /usr/local/bin/mkcert
     mkcert -install
