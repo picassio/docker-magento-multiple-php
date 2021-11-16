@@ -114,7 +114,7 @@ services:
       image: elasticsearch:7.14.1
       environment:
           - discovery.type=single-node
-          - node.name=elasticseach_01
+          - node.name=elasticseach
           - cluster.name=es-docker-cluster
           - bootstrap.memory_lock=true
           - "ES_JAVA_OPTS=-Xms1024m -Xmx1024m"
@@ -123,7 +123,7 @@ services:
               soft: -1
               hard: -1
       volumes:
-          - elasticseach-data-01:/usr/share/elasticsearch/data
+          - elasticseach-data:/usr/share/elasticsearch/data
       ports:
           - 9200:9200
       networks:
@@ -135,7 +135,7 @@ services:
           SERVER_NAME: kibana
           ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
       depends_on:
-          - elasticseach-01
+          - elasticseach
       ports:
           - 5601:5601
       networks:
@@ -158,5 +158,5 @@ services:
 volumes: 
   composer_cache:
   composer_cache_file:
-  elasticseach-data-01:
+  elasticseach-data:
   redis_data:
