@@ -1,7 +1,7 @@
 #!/bin/bash
 echo "Fixing all source code folder filesystem ownerships..."
 
-if [[ -f $(pwd)/.root_dir) ]]; then 
+if [[ -f "$(pwd)/.root_dir" ]]; then 
     chown -R 1000:1000 $(pwd)/sources/*
     echo "Filesystem ownerships fixed."
     exit 0
