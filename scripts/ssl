@@ -211,7 +211,7 @@ Version $VERSION
 
     Examples:
       Install Magento community edition version 2.3.4 with PHP version 7.2 for domain test-magento.com:
-        ./scripts/$(basename "$0") --domain
+        ./scripts/$(basename "$0") --domain=test-magento.com
 "
     _printPoweredBy
     exit 1

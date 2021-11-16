@@ -1,4 +1,25 @@
-
+# MỤC LỤC
+- [MỤC LỤC](#mục-lục)
+- [GIỚI THIỆU](#giới-thiệu)
+  - [Yêu cầu hệ thống](#yêu-cầu-hệ-thống)
+    - [Giới thiệu hệ thống](#giới-thiệu-hệ-thống)
+      - [Cấu trúc thư mục hệ thống](#cấu-trúc-thư-mục-hệ-thống)
+      - [Các services được cấu hình sẵn trong hệ thống](#các-services-được-cấu-hình-sẵn-trong-hệ-thống)
+      - [Các command của hệ thống](#các-command-của-hệ-thống)
+- [HƯỚNG DẪN SỬ DỤNG](#hướng-dẫn-sử-dụng)
+  - [Các lệnh docker/docker-compose cơ bản](#các-lệnh-dockerdocker-compose-cơ-bản)
+  - [Hướng dẫn sử dụng hệ thống](#hướng-dẫn-sử-dụng-hệ-thống)
+  - [Một số ví dụ](#một-số-ví-dụ)
+    - [Khởi tạo và chạy nginx, php72, mysql](#khởi-tạo-và-chạy-nginx-php72-mysql)
+    - [Khởi tạo thêm php72](#khởi-tạo-thêm-php72)
+    - [Bật Xdebug cho php72](#bật-xdebug-cho-php72)
+    - [Tạo database với tên yoyoyo](#tạo-database-với-tên-yoyoyo)
+    - [Import file backup vào database yoyoyo](#import-file-backup-vào-database-yoyoyo)
+    - [Export (backup) database tên yoyoyo](#export-backup-database-tên-yoyoyo)
+    - [Drop database với tên yoyoyo](#drop-database-với-tên-yoyoyo)
+    - [Tự động tải và cài đặt Magento](#tự-động-tải-và-cài-đặt-magento)
+    - [Bật SSL cho domain](#bật-ssl-cho-domain)
+    - [Các bước chạy 1 site magento dự án clone từ git02 về](#các-bước-chạy-1-site-magento-dự-án-clone-từ-git02-về)
 # GIỚI THIỆU
 Combo docker-compose cho Magento với các tính năng như:
 
@@ -225,4 +246,81 @@ Version 1
 
 ```bash
 docker-compose up -d nginx php72 mysql
+```
+### Khởi tạo thêm php72
+```bash
+docker-compose up -d nginx php73 mysql
+```
+### Bật Xdebug cho php72
+```bash
+./scripts/xdebug enable --php-version=php72
+```
+### Tạo database với tên yoyoyo
+```bash
+./scripts/database.sh create --database-name=yoyoyo
+```
+### Import file backup vào database yoyoyo
+* File backup cần import vào cần có tên dạng .sql. Ví dụ: backup-test.sql
+* File backup cần import vào cần để trong thư mục ./databases/import
+```bash
+./scripts/database.sh import --source=backup-test.sql --target=yoyoyo
+```
+### Export (backup) database tên yoyoyo
+```bash
+./scripts/database.sh export --database-name=yoyoyo
+```
+### Drop database với tên yoyoyo
+```bash
+./scripts/database.sh drop --database-name=yoyoyo
+```
+### Tự động tải và cài đặt Magento
+* Tự động tải và cài đặt Magento bản community version 2.3.4, sử dụng domain test.com, chạy với php7.2 
+```bash
+./scripts/init-magento  --php-version=php72 --domain=test.com --mangeto-version=2.3.4 --magento-edition=community
+```
+### Bật SSL cho domain
+* Bật SSL cho domain test.com
+* Sau khi bật cần chỉnh lại databse của mangeto, phần URL sang dùng https
+```bash
+./scripts/ssl --domain=test-magento.com
+```
+### Các bước chạy 1 site magento dự án clone từ git02 về
+* Mọi command thực hiện cần đứng ở thư mục chứa file docker-compose.yml
+* Chọn domain cần sử dụng cho dự án, ví dụ magento-test.com, tạo thư mục chứa source code 
+```bash
+mkdir -p ./sources/magento-test.com
+* Clone source code từ git về thư mục vừa tạo
+```bash
+git clone http://gitrepo.com ./sources/magento-test.com
+```
+* Tạo database cho website, ví dụ: magento_db
+```bash
+./scripts/database.sh create --database-name=magento_db
+```
+* Copy file backup DB của website vào thư mục ./databases/import
+* Chạy command import DB, ví dụ
+```bash
+./scripts/database.sh import --source=backup-test.sql --target=magento_db
+```
+* Chọn phiên bản php cần chạy. Trong trường hợp chưa khởi tạo, khởi tạo trên hệ thống ví dụ php version cần sử dụng là php7.3
+```bash
+docker-compose up -d php73
+```
+* Tạo Vhost cho nginx container service
+* Lúc này root dir thay vì ./sources/magento-test.com sẽ chỉ cần để tên thư mục source code trong thư mục ./sources/ là magento-test.com. Trong trường hợp source code của Magento ở trong ./sources/magento-test.com/src thì --root-dir=magento-test.com/src
+```bash
+./scripts/create-vhost --domain=magento-test.com --app=magento2 --root-dir=magento-test.com --php-version=php73
+```
+* Copy file env.php, config.php vào đúng thư mục, chỉnh sửa lại thông tin kết nối db. Password root mysql có được khai báo trong file .env
+```bash
+                'host' => 'mysql',
+                'dbname' => 'magento_1636960360',
+                'username' => 'root',
+                'password' => 'magentosmartosc123',
+```
+* Truy cập vào container php73 để chạy các command build
+```bash
+./scripts/shell php73
+cd magento-test.com
+# Chạy command build j đó của bạn, lưu ý ko chạy sudo
 ```
