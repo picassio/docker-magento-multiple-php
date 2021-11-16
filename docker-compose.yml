@@ -138,9 +138,7 @@ services:
           - elasticseach
       ports:
           - 5601:5601
-      networks:
-          - elastic
-
+          
   rabbitmq:
       image: rabbitmq:3-management-alpine
       volumes:
