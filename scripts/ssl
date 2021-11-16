@@ -375,7 +375,7 @@ function prepareSslVhostContent()
     error_page 500 502 503 504 /50x.html;
     location = /50x.html {
     }
-}" > "$NGINX_SITES_CONGINX_SITES_CONF_D_SSL_FILENF_D_FILE" || _die "Couldn't write to file: ${NGINX_SITES_CONF_D_SSL_FILE}"
+}" > "$NGINX_SITES_CONF_D_SSL_FILE" || _die "Couldn't write to file: ${NGINX_SITES_CONF_D_SSL_FILE}"
 
     _arrow "${NGINX_SITES_CONF_D_SSL_FILE} file has been created."
 }
