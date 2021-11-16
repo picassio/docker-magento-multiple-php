@@ -315,6 +315,7 @@ function checkSslCommand()
     chmod +x /usr/local/bin/mkcert
     mkcert -install
 "
+        exit 1
     fi
 }
 
