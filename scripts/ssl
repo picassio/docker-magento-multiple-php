@@ -300,9 +300,14 @@ function initDefaultArgs()
     NGINX_SITES_CONF_D_SSL_FILE="${NGINX_SITES_CONF_D}/${VHOST_DOMAIN}-ssl.conf"
 }
 
+function command_exists () 
+{
+    type "$1" &> /dev/null
+}
+
 function checkSslCommand()
 {
-    if [[ ! type mkcert &> /dev/null ]]; then
+    if ! command_exists mkcert; then
             echo -n "Missing mkcert command
     You need to install mkcert with this command below if you are using Ubuntu:
     apt-get install libnss3-tools -y
