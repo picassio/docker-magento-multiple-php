@@ -1,8 +1,9 @@
 /sources/*
 !/sources/.keepme
-/conf/nginx/ssl/
 /conf/nginx/conf.d/*
 !/conf/nginx/conf.d/.keepme
+/conf/nginx/ssl/*
+!/conf/nginx/ssl/.keepme
 /logs/nginx/*
 !/logs/.keepme
 !/logs/nginx/.keepme
