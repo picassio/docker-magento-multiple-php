@@ -1,0 +1,8 @@
+#!/bin/bash
+
+containerNameDB=$(docker inspect -f '{{.Name}}' $(docker-compose ps -q mysql) | cut -c2-)
+
+mysqRootPass=$(docker inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}'  $containerNameDB | grep MYSQL_ROOT_PASSWORD)
+rootPass="${mysqRootPass/MYSQL_ROOT_PASSWORD=/$replace}"
+
+docker-compose exec mysql mysql -uroot -p${rootPass}
