@@ -1,9 +1,10 @@
 #!/bin/bash
-echo "Fixing all source code folder filesystem ownerships..."
+echo "Fixing all source code folder file ownerships..."
 
 if [[ -f "$(pwd)/.root_dir" ]]; then 
-    chown -R 1000:1000 $(pwd)/sources/*
-    echo "Filesystem ownerships fixed."
+    echo "you maybe need to enter your user password to use sudo command to change file owner"
+    sudo chown -R 1000:1000 $(pwd)/sources/*
+    echo "Files ownerships fixed."
     exit 0
 else
     echo "Please change your current folder to docker-compose root folder (root folder is the folder contain docker-compose.yml file)."
