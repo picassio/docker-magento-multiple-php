@@ -328,6 +328,16 @@ function createCertificate()
     _success "$VHOST_DOMAIN certificate created"
 }
 
+function checkDomainExist () 
+{
+   if [[ -f ${NGINX_SITES_CONF_D}/$VHOST_DOMAIN.conf ]]; then 
+        _success "Domain exists"
+    else
+        _error "Domain not exist, Do you set it up on docker-compose system?"
+        exit 1
+    fi
+}
+
 function prepareSslVhostContent()
 {
     echo "server {
@@ -415,6 +425,7 @@ function main()
     initDefaultArgs
     processArgs "$@"
 
+    checkDomainExist
     createCertificate
     prepareSslVhostContent
     reloadNginx
