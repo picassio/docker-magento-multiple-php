@@ -111,7 +111,7 @@ services:
         - "redis_data:/data"
 
   elasticseach:
-      image: elasticsearch:7.14.1
+      image: elasticsearch:${ELASTIC_SEARCH_VERSION}
       environment:
           - discovery.type=single-node
           - node.name=elasticseach
@@ -128,7 +128,7 @@ services:
           - 9200:9200
 
   kibana:
-      image: kibana:7.14.1
+      image: kibana:${ELASTIC_SEARCH_VERSION}
       environment:
           SERVER_NAME: kibana
           ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
