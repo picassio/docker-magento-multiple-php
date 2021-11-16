@@ -422,8 +422,8 @@ function main()
 
     [[ $# -lt 1 ]] && _printUsage
 
-    initDefaultArgs
     processArgs "$@"
+    initDefaultArgs
 
     checkDomainExist
     createCertificate
