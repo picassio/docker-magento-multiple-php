@@ -1,3 +1,6 @@
 #!/bin/bash
-[ -z "$1" ] && echo "Please specify a PHP container to go into (ex. php74)" && exit
+if [ -z "$1" ]; then
+    echo "Please specify a PHP container to go into (ex. php74). 
+EG: ./scripts/shell php72"
+    exit 1
 docker-compose exec --user nginx "$@" bash
