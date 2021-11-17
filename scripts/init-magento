@@ -362,6 +362,25 @@ function getMysqlInformation()
     rootPass="${mysqRootPass/MYSQL_ROOT_PASSWORD=/$replace}"
 }
 
+function validateMagentoVersion()
+{
+    if [[ $MAGENTO_VERSION == 2.4* ]]; then 
+        if [[ $APP_PHP != "php74-c2" ]]; then
+            _error "PHP should run with PHP version 7.4 composer2, --php-version=php74-c2"
+            exit 1
+        elif [[ ! $($SCRIPTS_DIR/list-services | grep elasticsearch) ]]; then
+            _error "Elasticsearch service should be started, please start elasticsearch"
+            exit 1
+        fi
+    if [[ $MAGENTO_VERSION == 2.3.7* ]]; then 
+        if [[ $APP_PHP != "php74-c2" ]]; then
+            _error "PHP should run with PHP version 7.4 composer2, --php-version=php74-c2"
+            exit 1
+        fi
+    fi
+        
+}
+
 function createSourceCodeFolder()
 {
     if [[ -d ${SOURCE_DIR}/$VHOST_DOMAIN ]]; then
@@ -481,6 +500,8 @@ function main()
     processArgs "$@"
     initDefaultArgs
 
+    validateMagentoVersion
+    
     createSourceCodeFolder
     createMagentoDomain
     createDomainDatabase
