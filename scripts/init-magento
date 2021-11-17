@@ -300,7 +300,7 @@ function initDefaultArgs()
     NGINX_SITES_CONF_D_FILE="${NGINX_SITES_CONF_D}/${VHOST_DOMAIN}.conf"
 
     ADMIN_USER="admin"
-    ADMIN_PASSWORD="smartosc123"
+    ADMIN_PASSWORD="admin"
 
     MYSQL_HOST="mysql"
 }
