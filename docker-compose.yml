@@ -154,5 +154,5 @@ services:
 volumes: 
   composer_cache:
   composer_cache_file:
-  elasticseach-data:
+  elasticsearch-data:
   redis_data:
