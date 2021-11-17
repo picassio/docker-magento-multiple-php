@@ -40,6 +40,9 @@ RUN export DEBIAN_FRONTEND=noninteractive\
 RUN pecl install mcrypt
 RUN pecl install -f xdebug-2.9.8
 
+RUN curl -L https://github.com/mailhog/mhsendmail/releases/download/v0.2.0/mhsendmail_linux_amd64 --output /usr/local/bin/mhsendmail \
+	&& chmod +x /usr/local/bin/mhsendmail
+
 RUN mkdir /home/nginx/.composer && chown -R nginx:nginx /home/nginx/.composer
 
 
