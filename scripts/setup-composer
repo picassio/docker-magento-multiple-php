@@ -268,6 +268,13 @@ function validateArgs()
     [[ "$ERROR_COUNT" -gt 0 ]] && exit 1
 }
 
+function validateBaseServices()
+{
+    if [[ ! $($SCRIPTS_DIR/list-services | grep $APP_PHP) ]]; then
+        _error "$APP_PHP service should be started, please start $APP_PHP"
+        exit 1
+    fi
+}
 
 function checkComposerAuth()
 {
@@ -291,6 +298,8 @@ function checkComposerAuth()
         _arrow "Configure magento repo auth"
         $(docker-compose exec -T --user nginx ${APP_PHP} composer config --global http-basic.repo.magento.com ${PUBLIC_KEY} ${PRIVATE_KEY}) || _die "Cannot configure magento auth"
         _success "Configure magento repo auth done"
+    else
+        _warning "Composer auth for Magento has already setup. No need to do anything"
     fi
 
 }
