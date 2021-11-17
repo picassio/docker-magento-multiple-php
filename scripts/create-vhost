@@ -277,7 +277,7 @@ function validateArgs()
         _error "--php-version=... parameter is missing."
         ERROR_COUNT=$((ERROR_COUNT + 1))
     fi
-    if [[ ! -z "$APP_PHP" && "$APP_PHP" != @(php70|php71|php72|php73|php74) ]]; then
+    if [[ ! -z "$APP_PHP" && "$APP_PHP" != @(php70|php71|php72|php73|php74|php74-c2) ]]; then
         _error "Please enter valid application php --php-version=... parameter(php70|php71|php72|php73|php74|php74-c2)."
         ERROR_COUNT=$((ERROR_COUNT + 1))
     fi
