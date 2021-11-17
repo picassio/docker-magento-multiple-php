@@ -123,7 +123,7 @@ services:
               soft: -1
               hard: -1
       volumes:
-          - elasticseach-data:/usr/share/elasticsearch/data
+          - elasticsearch-data:/usr/share/elasticsearch/data
       ports:
           - 9200:9200
 
@@ -133,7 +133,7 @@ services:
           SERVER_NAME: kibana
           ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
       depends_on:
-          - elasticseach
+          - elasticsearch
       ports:
           - 5601:5601
 
