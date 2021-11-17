@@ -110,7 +110,7 @@ services:
       volumes:
         - "redis_data:/data"
 
-  elasticseach:
+  elasticsearch:
       image: elasticsearch:${ELASTIC_SEARCH_VERSION}
       environment:
           - discovery.type=single-node
