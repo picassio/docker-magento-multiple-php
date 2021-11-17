@@ -33,6 +33,7 @@ Combo docker-compose cho Magento với các tính năng như:
 * Bật tắt Xdebug ứng với từng phiên bản PHP.
 * Tự động add các domain sử dụng vào /etc/hosts.
 * Email catch all local, tránh tình trạng gửi email ra ngoài internet (tất nhiên thì vẫn phải nhớ check xem config SMTP đừng có để configure của prod =)))
+* Hỗ trợ nvm, grunt.
 
 Hiện tại mới test trên Ubuntu, các hệ điều hành khác mọi người vui lòng tự mò =).
 

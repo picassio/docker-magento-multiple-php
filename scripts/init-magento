@@ -381,6 +381,22 @@ function validateMagentoVersion()
         
 }
 
+function validateBaseServices()
+{
+    if [[ ! $($SCRIPTS_DIR/list-services | grep nginx) ]]; then
+        _error "nginx service should be started, please start Nginx"
+        exit 1
+    fi
+    if [[ ! $($SCRIPTS_DIR/list-services | grep mysql) ]]; then
+        _error "Mysql service should be started, please start Mysql"
+        exit 1
+    fi
+    if [[ ! $($SCRIPTS_DIR/list-services | grep $APP_PHP) ]]; then
+        _error "$APP_PHP service should be started, please start $APP_PHP"
+        exit 1
+    fi
+}
+
 function createSourceCodeFolder()
 {
     if [[ -d ${SOURCE_DIR}/$VHOST_DOMAIN ]]; then
@@ -501,6 +517,7 @@ function main()
     initDefaultArgs
 
     validateMagentoVersion
+    validateBaseServices
 
     createSourceCodeFolder
     createMagentoDomain
