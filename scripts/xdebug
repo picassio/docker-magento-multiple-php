@@ -210,7 +210,7 @@ Version $VERSION
         disable                   Disable Xdebug.
         status                    List all Xdebug status.
     Args:
-        --php-version             PHP version used for Xdebug (php70|php71|php72|php73|php74).
+        --php-version             PHP version used for Xdebug (php70|php71|php72|php73|php74|php74-c2).
         -h, --help                Display this help and exit.
 
     Examples:
@@ -335,6 +335,9 @@ function validateArgs()
         _error "--php-version=... parameter is missing."
         ERROR_COUNT=$((ERROR_COUNT + 1))
     fi
+    if [[ ! -z "$APP_PHP" && "$APP_PHP" != @(php70|php71|php72|php73|php74) ]]; then
+        _error "Please enter valid application php --php-version=... parameter(php70|php71|php72|php73|php74|php74-c2)."
+        ERROR_COUNT=$((ERROR_COUNT + 1))
 
     [[ "$ERROR_COUNT" -gt 0 ]] && exit 1
 }

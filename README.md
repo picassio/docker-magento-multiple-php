@@ -6,9 +6,11 @@
       - [Cấu trúc thư mục hệ thống](#cấu-trúc-thư-mục-hệ-thống)
       - [Các services được cấu hình sẵn trong hệ thống](#các-services-được-cấu-hình-sẵn-trong-hệ-thống)
       - [Các command của hệ thống](#các-command-của-hệ-thống)
+      - [Hệ thống email catch all](#hệ-thống-email-catch-all)
 - [HƯỚNG DẪN SỬ DỤNG](#hướng-dẫn-sử-dụng)
   - [Các lệnh docker/docker-compose cơ bản](#các-lệnh-dockerdocker-compose-cơ-bản)
   - [Hướng dẫn sử dụng hệ thống](#hướng-dẫn-sử-dụng-hệ-thống)
+  - [Bắt đầu sử dụng](#bắt-đầu-sử-dụng)
   - [Một số ví dụ](#một-số-ví-dụ)
     - [Khởi tạo và chạy nginx, php72, mysql](#khởi-tạo-và-chạy-nginx-php72-mysql)
     - [Khởi tạo thêm php72](#khởi-tạo-thêm-php72)
@@ -142,6 +144,7 @@ sudo usermod -aG docker $USER
 | php71 | service php version php 7.1 |
 | php72 | service php version php 7.2 |
 | php73 | service php version php 7.3 |
+| php74-c2 | service php version php 7.4 sử dụng composer2|
 | php74 | service php version php 7.4 |
 | mysql | service mysql, default sử dụng version 8.0 |
 | mailhog | service email catch all |
@@ -160,10 +163,21 @@ sudo usermod -aG docker $USER
 | list-services | Command sử dụng để list các services mà docker-compose đã khởi tạo và đang chạy |
 | mysql | Command sử dụng để tương tác với mysql shell trong mysql container |
 | setup-composer | Composer sử dụng để setup auth.json default cho repo của Magento trong trường hợp cần thiết |
-| shell | Command sử dụng để truy cập vào các container php, nginx, mysql |
+| shell | Command sử dụng để truy cập vào các container php với user dùng để chạy website, không dùng user root |
 | ssl | Command sử dụng để tạo Virtual host SSL cho các domain được lựa chọn |
 | xdebug | Command sử dụng để bật/tắt xdebug của 1 service php được lựa chọn |
 
+#### Hệ thống email catch all
+
+* Hệ thống có được cấu hình thêm sử dụng email catch all dùng Mailhog để có thể test mail trên local mà không cần cấu hình SMTP với các thông tin public.
+* Mặc định hệ thống nếu không cấu hình SMTP, các service PHP đều sẽ gửi email thông qua Mailhog, do đó khi start hệ thống cần start thêm service Mailhog
+* Trường hợp Mailhog đã được start, có thể kiểm tra email đã được gửi thông qua Mailhog bằng cách truy cập đường dẫn sau trên trình duyệt: [http://localhost:8025](http://localhost:8025)
+* Trường hợp muốn cấu hình SMTP sử dụng Mailhog cho Magento, có thể sử dụng thông tin kết nối sau: 
+
+|   |   |
+|---|---|
+| SMTP Server | mailhog |
+| SMTP Port | 1025 |
 # HƯỚNG DẪN SỬ DỤNG
 ## Các lệnh docker/docker-compose cơ bản
 * Xài docker thì cũng nên biết 1 số lệnh cơ bản sau:
@@ -195,6 +209,7 @@ docker-composer restart
 # Chui vô 1 services để chạy command - Ví dụ tính chui vô container service php72 để chạy composer
 docker-compose exec php72 bash
 ```
+* Các services nội bộ có thể kết nối với nhau thông qua tên của services. Ví dụ có thể điền Mysql host thay vì localhost là mysql. Hoặc kết nối tới các services elasticsearch, redis thay vì localhost thì để là elasticsearch và redis, các port kết nối vẫn là port mặc định v.v.
 
 ## Hướng dẫn sử dụng hệ thống
 
@@ -238,6 +253,23 @@ Version 1
 
 
 ################################################################################
+```
+## Bắt đầu sử dụng
+```bash
+# Clone về 1 thư mục
+git clone https://git02.smartosc.com/tuanlh/docker-magento.git ~/docker-mangento
+# Chuyển đến thư mục
+cd ~/docker-mangento
+# Tạo file .env
+cp env-example .env
+# Chỉnh sửa thông tin file .env nếu cần thiết
+# Khởi tạo hệ thống theo như cầu, ví dụ cần chạy nginx, php72, mysql, mailhog
+docker-compose up -d nginx php72 mysql mailhog
+# Khởi tạo thêm service nếu cần thêm, ví dụ hệ thống cần chạy thêm elasticsearch, redis
+docker-compose up -d redis elasticsearch
+# List các services đang chạy
+./scripts/list-services
+
 ```
 
 ## Một số ví dụ
@@ -316,7 +348,7 @@ docker-compose up -d php73
                 'host' => 'mysql',
                 'dbname' => 'magento_db',
                 'username' => 'root',
-                'password' => 'magentosmartosc123',
+                'password' => 'root',
 ```
 * Truy cập vào container php73 để chạy các command build
 ```bash

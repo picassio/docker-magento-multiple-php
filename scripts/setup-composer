@@ -192,7 +192,7 @@ Nginx Virtual Host Creator
 Version $VERSION
 
     Options:
-        --php-version               PHP version need to setup composer (php70|php71|php72|php73|php74).
+        --php-version               PHP version need to setup composer (php70|php71|php72|php73|php74|php74-c2).
         -d, --debug                 Run command in debug mode.
         -h, --help                  Display this help and exit.
 
@@ -261,7 +261,7 @@ function validateArgs()
         ERROR_COUNT=$((ERROR_COUNT + 1))
     fi
     if [[ ! -z "$APP_PHP" && "$APP_PHP" != @(php70|php71|php72|php73|php74) ]]; then
-        _error "Please enter valid application php --php-version=... parameter(php70|php71|php72|php73|php74)."
+        _error "Please enter valid application php --php-version=... parameter(php70|php71|php72|php73|php74|php74-c2)."
         ERROR_COUNT=$((ERROR_COUNT + 1))
     fi
 

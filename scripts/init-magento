@@ -206,7 +206,7 @@ Version $VERSION
 ./scripts/$(basename "$0") [ARG]...
 
     Options:
-        --php-version             PHP version used for application (php70|php71|php72|php73|php74).
+        --php-version             PHP version used for application (php70|php71|php72|php73|php74|php74-c2).
         --domain                  Domain name (eg: test.com).
         --mangeto-version         Magento Version (eg: 2.3.4).
         --magento-edition         Magento Edition. (community|enterprise)
@@ -314,7 +314,7 @@ function validateArgs()
         ERROR_COUNT=$((ERROR_COUNT + 1))
     fi
     if [[ ! -z "$APP_PHP" && "$APP_PHP" != @(php70|php71|php72|php73|php74) ]]; then
-        _error "Please enter valid application php --php-version=... parameter(php70|php71|php72|php73|php74)."
+        _error "Please enter valid application php --php-version=... parameter(php70|php71|php72|php73|php74|php74-c2)."
         ERROR_COUNT=$((ERROR_COUNT + 1))
     fi
     if [[ -z "$MAGENTO_VERSION" ]]; then
