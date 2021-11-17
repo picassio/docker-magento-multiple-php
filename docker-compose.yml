@@ -86,7 +86,7 @@ services:
     hostname: php74
     volumes:
       - ./sources:/home/public_html
-      - composer_cache:/home/nginx/.composer
+      - composer_cache2:/home/nginx/.composer
       - ./conf/php/php74-c2/magento.conf:/etc/php/7.4/fpm/pool.d/www.conf
       - ./conf/php/php74-c2/php.ini:/etc/php/7.4/fpm/php.ini
       - ./conf/php/php74-c2/php.ini:/etc/php/7.4/cli/php.ini
@@ -165,6 +165,7 @@ services:
 
 volumes: 
   composer_cache:
+  composer_cache2:
   composer_cache_file:
   elasticsearch-data:
   redis_data:
