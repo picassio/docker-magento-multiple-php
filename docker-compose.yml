@@ -79,6 +79,18 @@ services:
       - ./conf/php/php74/php.ini:/etc/php/7.4/fpm/php.ini
       - ./conf/php/php74/php.ini:/etc/php/7.4/cli/php.ini
 
+  php74-c2:
+    build:
+      context: ./build/php74-c2
+    image: php7.4-c2-mage:v1.0
+    hostname: php74
+    volumes:
+      - ./sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
+      - ./conf/php/php74-c2/magento.conf:/etc/php/7.4/fpm/pool.d/www.conf
+      - ./conf/php/php74-c2/php.ini:/etc/php/7.4/fpm/php.ini
+      - ./conf/php/php74-c2/php.ini:/etc/php/7.4/cli/php.ini
+
   mysql:
     hostname: mysql
     image: mysql:${MYSQL_VERSION}
