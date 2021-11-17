@@ -34,6 +34,7 @@ Combo docker-compose cho Magento với các tính năng như:
 * Tự động add các domain sử dụng vào /etc/hosts.
 * Email catch all local, tránh tình trạng gửi email ra ngoài internet (tất nhiên thì vẫn phải nhớ check xem config SMTP đừng có để configure của prod =)))
 * Hỗ trợ nvm, grunt.
+* Log nginx được lưu riêng trong thư mục logs/nginx
 
 Hiện tại mới test trên Ubuntu, các hệ điều hành khác mọi người vui lòng tự mò =).
 
@@ -191,6 +192,9 @@ docker stats
 
 # Khởi tạo toàn bộ các services (containers) được khai báo trong file docker-compose.yml
 docker-compose up -d
+
+# Check log của 1 container nào đó (ngoài php, nginx), ví dụ logs của elasticsearch
+docker-compose log elasticsearch
 
 # Khởi tạo và chạy một số services (container) được lựa chọn, chứ không khởi động toàn bộ services (container) được khai báo trong docker-compose.yml - Ví dụ chỉ khởi tạo và chạy nginx, php72, mysql
 docker-compose up -d nginx php72 mysql
