@@ -372,7 +372,7 @@ function validateMagentoVersion()
             _error "Elasticsearch service should be started, please start elasticsearch"
             exit 1
         fi
-    if [[ $MAGENTO_VERSION == 2.3.7* ]]; then 
+    elif [[ $MAGENTO_VERSION == 2.3.7* ]]; then 
         if [[ $APP_PHP != "php74-c2" ]]; then
             _error "PHP should run with PHP version 7.4 composer2, --php-version=php74-c2"
             exit 1
@@ -501,7 +501,7 @@ function main()
     initDefaultArgs
 
     validateMagentoVersion
-    
+
     createSourceCodeFolder
     createMagentoDomain
     createDomainDatabase
