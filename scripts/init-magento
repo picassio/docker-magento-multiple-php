@@ -458,23 +458,48 @@ function downloadMagentoVersion()
 function installMagentoVersion()
 {
     _arrow "Install Magento ${EDITION} version ${VERSION} for $VHOST_DOMAIN"
-    docker-compose exec --user nginx ${APP_PHP} php -d memory_limit=-1 /home/public_html/${VHOST_DOMAIN}/bin/magento setup:install \
-        --db-host="$MYSQL_HOST" \
-        --db-name="${DATABASE_NAME}" \
-        --db-user="root" \
-        --db-password="$rootPass" \
-        --base-url=http://"$VHOST_DOMAIN"/ \
-        --admin-firstname="admin" \
-        --admin-lastname="admin" \
-        --admin-email="admin@localhost.com" \
-        --admin-user="$ADMIN_USER" \
-        --admin-password="$ADMIN_PASSWORD" \
-        --backend-frontname="admin" \
-        --language="en_US" \
-        --currency="USD" \
-        --timezone="America/Chicago" \
-        --use-rewrites=1 || _die "Cannot Install Magento"
-    _success "Install Magento ${EDITION} version ${VERSION} for $VHOST_DOMAIN successful!"
+
+    if [[ $MAGENTO_VERSION == 2.4* ]]; then 
+        docker-compose exec --user nginx ${APP_PHP} php -d memory_limit=-1 /home/public_html/${VHOST_DOMAIN}/bin/magento setup:install \
+            --db-host="$MYSQL_HOST" \
+            --db-name="${DATABASE_NAME}" \
+            --db-user="root" \
+            --db-password="$rootPass" \
+            --base-url=http://"$VHOST_DOMAIN"/ \
+            --admin-firstname="admin" \
+            --admin-lastname="admin" \
+            --admin-email="admin@localhost.com" \
+            --admin-user="$ADMIN_USER" \
+            --admin-password="$ADMIN_PASSWORD" \
+            --backend-frontname="admin" \
+            --language="en_US" \
+            --search-engine=elasticsearch7 \
+            --elasticsearch-host="elasticsearch" \
+            --elasticsearch-port="9200" \
+            --elasticsearch-index-prefix="${VHOST_DOMAIN}" \
+            --currency="USD" \
+            --timezone="America/Chicago" \
+            --use-rewrites=1 || _die "Cannot Install Magento"
+        _success "Install Magento ${EDITION} version ${VERSION} for $VHOST_DOMAIN successful!"
+    else 
+        docker-compose exec --user nginx ${APP_PHP} php -d memory_limit=-1 /home/public_html/${VHOST_DOMAIN}/bin/magento setup:install \
+            --db-host="$MYSQL_HOST" \
+            --db-name="${DATABASE_NAME}" \
+            --db-user="root" \
+            --db-password="$rootPass" \
+            --base-url=http://"$VHOST_DOMAIN"/ \
+            --admin-firstname="admin" \
+            --admin-lastname="admin" \
+            --admin-email="admin@localhost.com" \
+            --admin-user="$ADMIN_USER" \
+            --admin-password="$ADMIN_PASSWORD" \
+            --backend-frontname="admin" \
+            --language="en_US" \
+            --currency="USD" \
+            --timezone="America/Chicago" \
+            --use-rewrites=1 || _die "Cannot Install Magento"
+        _success "Install Magento ${EDITION} version ${VERSION} for $VHOST_DOMAIN successful!"
+    fi
 }
 
 function printSuccessMessage()
