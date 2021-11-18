@@ -364,7 +364,7 @@ function getMysqlInformation()
 
 function validateMagentoVersion()
 {
-    if [[ $MAGENTO_VERSION == @(2.4.2*|2.4.3*|2.4.4*|2.4.5*) ]]; then 
+    if [[ $MAGENTO_VERSION == 2.4* ]] && [[ $MAGENTO_VERSION != @(2.4.0*|2.4.1*) ]]; then 
         if [[ $APP_PHP != "php74-c2" ]]; then
             _error "PHP should run with PHP version 7.4 composer2, --php-version=php74-c2"
             exit 1
