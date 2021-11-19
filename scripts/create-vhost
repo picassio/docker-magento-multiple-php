@@ -284,8 +284,8 @@ function validateArgs()
         _error "Please enter valid application name for --app=... parameter(magento1|magento2|wordpress|laravel|default)."
         ERROR_COUNT=$((ERROR_COUNT + 1))
     fi
-    if [[ ! -z "$VHOST_ROOT_DIR" ]]; then
-        _error "--root-dir =...parameter is missing."
+    if [[ -z "$VHOST_ROOT_DIR" ]]; then
+        _error "--root-dir=...parameter is missing."
         ERROR_COUNT=$((ERROR_COUNT + 1))
     fi
     if [[ ! -d "$NGINX_SITES_CONF_D" ]]; then
