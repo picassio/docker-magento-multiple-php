@@ -399,8 +399,8 @@ function validateBaseServices()
 
 function createSourceCodeFolder()
 {
-    if [[ -d ${SOURCE_DIR}/$VHOST_DOMAIN ]]; then
-        _error "Folder exists"
+    if [[ -d ${SOURCE_DIR}/$VHOST_DOMAIN ]] && [[ "$(ls -A  ${SOURCE_DIR}/$VHOST_DOMAIN)" ]]; then
+        _error "${SOURCE_DIR}/$VHOST_DOMAIN folder is not empty"
         exit 1
     else
         _arrow "Create source code folder"
