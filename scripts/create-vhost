@@ -161,6 +161,19 @@ function _checkRootUser()
     fi
 }
 
+function askYesOrNo {
+    REPLY=""
+    while [ -z "$REPLY" ] ; do
+        read -ep "$1 $YES_NO_PROMPT" -n1 REPLY
+        REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
+        case $REPLY in
+            $YES_CAPS ) return 0 ;;
+            $NO_CAPS ) return 1 ;;
+            * ) REPLY=""
+        esac
+    done
+}
+
 function _printPoweredBy()
 {
     local mp_ascii
@@ -248,6 +261,12 @@ function initDefaultArgs()
     VHOST_ROOT_DIR=
     NGINX_SITES_CONF_D_FILE=
     NGINX_SITES_CONF_D="$(pwd)/conf/nginx/conf.d"
+
+    YES_STRING=$"y"
+    NO_STRING=$"n"
+    YES_NO_PROMPT=$"[y/n]: "
+    YES_CAPS=$(echo ${YES_STRING}|tr [:lower:] [:upper:])
+    NO_CAPS=$(echo ${NO_STRING}|tr [:lower:] [:upper:])
 }
 
 function validateArgs()
@@ -265,8 +284,8 @@ function validateArgs()
         _error "Please enter valid application name for --app=... parameter(magento1|magento2|wordpress|laravel|default)."
         ERROR_COUNT=$((ERROR_COUNT + 1))
     fi
-    if [[ ! -d "$(pwd)/sources/$VHOST_ROOT_DIR" ]]; then
-        _error "--root-dir =...parameter is not valid."
+    if [[ ! -z "$VHOST_ROOT_DIR" ]]; then
+        _error "--root-dir =...parameter is missing."
         ERROR_COUNT=$((ERROR_COUNT + 1))
     fi
     if [[ ! -d "$NGINX_SITES_CONF_D" ]]; then
@@ -293,6 +312,22 @@ function sanitizeArgs()
     fi
     if [[ ! -z "$VHOST_DOMAIN" ]] && [[ "$VHOST_DOMAIN" == http* ]]; then
         VHOST_DOMAIN=$(getPureDomain)
+    fi
+}
+
+function checkRootDir()
+{
+
+    if [[ ! -d "$(pwd)/sources/$VHOST_ROOT_DIR" ]]; then
+        _warning "$(pwd)/sources/$VHOST_ROOT_DIR is not exist yet!"
+        if askYesOrNo $"Do you want to create it?"; then
+            _arrow "Creating $(pwd)/sources/$VHOST_ROOT_DIR"
+            mkdir $(pwd)/sources/$VHOST_ROOT_DIR
+            _success "$(pwd)/sources/$VHOST_ROOT_DIR created!"
+        else
+            _error "Please check your source path or manual create it!"
+            exit 1
+        fi
     fi
 }
 
@@ -829,6 +864,7 @@ function main()
     initDefaultArgs
     processArgs "$@"
 
+    checkRootDir
     createVirtualHost
 
     printSuccessMessage
