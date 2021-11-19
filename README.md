@@ -39,7 +39,7 @@ Combo docker-compose cho Magento với các tính năng như:
 Hiện tại mới test trên Ubuntu, các hệ điều hành khác mọi người vui lòng tự mò =).
 
 ## Yêu cầu hệ thống
-* Hệ thống cần có cài đặt docker và docker-compose. Hướng dẫn cài đặt có thể tham khảo Google hoặc:
+* Hệ thống cần có cài đặt docker và docker-compose (docker-compose nhớ cài bản mới nhất cho chắc chắn =))). Hướng dẫn cài đặt có thể tham khảo Google hoặc:
 
 [Hướng dẫn cài đặt docker trên Ubuntu](https://docs.docker.com/engine/install/ubuntu/)
 
