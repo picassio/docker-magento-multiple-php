@@ -190,6 +190,12 @@ docker-compose ps
 # Xem thông tin tài nguyên mà các container đang sử dụng
 docker stats
 
+# List tất cả các serices được khai báo trong file docker-compose.yml
+docker-compose ps --services
+
+# List tất cả các server được khai báo trong file docker-compose.yml đang ở trạng thái running
+docker-compose ps --services --filter "status=running"
+
 # Khởi tạo toàn bộ các services (containers) được khai báo trong file docker-compose.yml
 docker-compose up -d
 
