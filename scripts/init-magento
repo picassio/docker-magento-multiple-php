@@ -214,7 +214,7 @@ Version $VERSION
 
     Examples:
       Install Magento community edition version 2.3.4 with PHP version 7.2 for domain test-magento.com:
-        ./scripts/$(basename "$0") --domain=test-magento.com --mangeto-version=2.3.4 --magento-edition=community --php-version=7.2
+        ./scripts/$(basename "$0") --domain=test-magento.com --mangeto-version=2.3.4 --magento-edition=community --php-version=php72
 "
     _printPoweredBy
     exit 1
@@ -319,6 +319,10 @@ function validateArgs()
     fi
     if [[ -z "$MAGENTO_VERSION" ]]; then
         _error "--mangeto-version=... parameter is missing."
+        ERROR_COUNT=$((ERROR_COUNT + 1))
+    fi
+    if [[ -z "$APP_PHP" ]]; then
+        _error "--php-version=... parameter is missing."
         ERROR_COUNT=$((ERROR_COUNT + 1))
     fi
     if [[ -z "$MAGENTO_EDITION" ]]; then
