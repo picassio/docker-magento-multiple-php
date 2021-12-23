@@ -352,7 +352,6 @@ function restartPhpContainer()
 
 function enableXdebug()
 {
-    _arrow "Check Xdebug status"
     statusXdebug
     if [[ $XDEBUG_STATUS == 1 ]]; then
         _warning "Xdebug enabled, no need to do anything" && exit 1
@@ -370,7 +369,6 @@ function enableXdebug()
 
 function disableXdebug()
 {
-    _arrow "Check Xdebug status"
     statusXdebug
     if [[ $XDEBUG_STATUS == 0 ]]; then
         _warning "Xdebug disabled, no need to do anything" && exit 1
