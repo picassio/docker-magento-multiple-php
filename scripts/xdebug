@@ -356,7 +356,12 @@ function enableXdebug()
         _warning "Xdebug enabled, no need to do anything" && exit 1
     fi
     _arrow "Enable Xdebug for ${APP_PHP}"
-    sed -i 's/;extension=xdebug.so/extension=xdebug.so/g' $PHP_INI_LOCATION || _die "Cannot change Xdebug setting"
+
+    if [[ APP_PHP == php74 ]] || [[ APP_PHP == php74-c2 ]]; then
+        sed -i 's/;zend_extension=xdebug/zend_extension=xdebug/g' $PHP_INI_LOCATION || _die "Cannot change Xdebug setting"
+    else 
+        sed -i 's/;extension=xdebug.so/extension=xdebug.so/g' $PHP_INI_LOCATION || _die "Cannot change Xdebug setting"
+    fi
     _success "Xdebug enabled"
     restartPhpContainer
 }
@@ -367,7 +372,11 @@ function disableXdebug()
         _warning "Xdebug disabled, no need to do anything" && exit 1
     fi
     _arrow "Disable Xdebug for ${APP_PHP}"
-    sed -i 's/extension=xdebug.so/;extension=xdebug.so/g' $PHP_INI_LOCATION || _die "Cannot change Xdebug setting"
+    if [[ APP_PHP == php74 ]] || [[ APP_PHP == php74-c2 ]]; then
+        sed -i 's/zend_extension=xdebug/;zend_extension=xdebug/g' $PHP_INI_LOCATION || _die "Cannot change Xdebug setting"
+    else 
+        sed -i 's/extension=xdebug.so/;extension=xdebug.so/g' $PHP_INI_LOCATION || _die "Cannot change Xdebug setting"
+    fi
     _success "Xdebug disabled"
     restartPhpContainer
 }
