@@ -297,7 +297,7 @@ docker-compose down -v --remove-orphans
 ## Một số ví dụ
 
 ### Khởi tạo và chạy nginx, php72, mysql, mailhog
-
+Default hệ thống sẽ gửi mail thông qua mailhog, do đó khi tạo bất cứ 1 stack mới nào cần start thêm mailhog.
 ```bash
 docker-compose up -d nginx php72 mysql mailhog
 ```
