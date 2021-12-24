@@ -289,7 +289,7 @@ Trong trường hợp bạn muốn xoá toàn bộ dữ liệu (do rảnh quá, 
 
 - Các thư mục chứa source code trong: ./data/
 - Các file nginx config trong: ./conf/nginx/conf.d/
-- Stop và xoá các container cũng như các docker volume cũ, để xoá volume có thể chạy lệnh:
+- Stop và xoá các container cũng như các docker volume cũ, để stop container vaf xoá container/volume có thể chạy lệnh:
 ```bash
 docker-compose down -v --remove-orphans
 ```
