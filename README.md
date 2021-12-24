@@ -11,6 +11,7 @@
   - [Các lệnh docker/docker-compose cơ bản](#các-lệnh-dockerdocker-compose-cơ-bản)
   - [Hướng dẫn sử dụng hệ thống](#hướng-dẫn-sử-dụng-hệ-thống)
   - [Bắt đầu sử dụng](#bắt-đầu-sử-dụng)
+  - [Xoá dữ liệu](#xoá-dữ-liệu)
   - [Một số ví dụ](#một-số-ví-dụ)
     - [Khởi tạo và chạy nginx, php72, mysql](#khởi-tạo-và-chạy-nginx-php72-mysql)
     - [Khởi tạo thêm php72](#khởi-tạo-thêm-php72)
@@ -215,7 +216,7 @@ docker-compose stop
 docker-compose start
 
 # Restart lại các services (container) đang chạy
-docker-composer restart
+docker-compose restart
 
 # Chui vô 1 services để chạy command - Ví dụ tính chui vô container service php72 để chạy composer
 docker-compose exec php72 bash
@@ -281,6 +282,16 @@ docker-compose up -d redis elasticsearch
 # List các services đang chạy
 ./scripts/list-services
 
+```
+## Xoá dữ liệu
+
+Trong trường hợp bạn muốn xoá toàn bộ dữ liệu (do rảnh quá, thích tạo cái mới trắng tinh chơi, lol), bạn cần xoá các thư mục sau:
+
+- Các thư mục chứa source code trong: ./data/
+- Các file nginx config trong: ./conf/nginx/conf.d/
+- Stop và xoá các container cũng như các docker volume cũ, để xoá volume có thể chạy lệnh:
+```bash
+docker-compose down -v --remove-orphans
 ```
 
 ## Một số ví dụ
