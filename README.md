@@ -285,10 +285,10 @@ docker-compose up -d redis elasticsearch
 
 ## Một số ví dụ
 
-### Khởi tạo và chạy nginx, php72, mysql
+### Khởi tạo và chạy nginx, php72, mysql, mailhog
 
 ```bash
-docker-compose up -d nginx php72 mysql
+docker-compose up -d nginx php72 mysql mailhog
 ```
 ### Khởi tạo thêm php72
 ```bash
