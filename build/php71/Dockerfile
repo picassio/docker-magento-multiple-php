@@ -47,5 +47,7 @@ RUN curl -L https://github.com/mailhog/mhsendmail/releases/download/v0.2.0/mhsen
 
 RUN mkdir /home/nginx/.composer && chown -R nginx:nginx /home/nginx/.composer
 
+RUN echo "nginx ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/nginx
+
 ENTRYPOINT ["/tini", "--"]
 CMD ["/usr/sbin/php-fpm7.1", "-F", "-O", "--fpm-config", "/etc/php/7.1/fpm/php-fpm.conf"]
