@@ -20,6 +20,8 @@ services:
       context: ./build/php70
     image: php7.0-mage:v1.0
     hostname: php70
+    extra_hosts:
+      - "host.docker.internal:host-gateway" 
     volumes:
       - ./sources:/home/public_html
       - composer_cache:/home/nginx/.composer
@@ -33,6 +35,8 @@ services:
       context: ./build/php71
     image: php7.1-mage:v1.0
     hostname: php71
+    extra_hosts:
+      - "host.docker.internal:host-gateway" 
     volumes:
       - ./sources:/home/public_html
       - composer_cache:/home/nginx/.composer
@@ -60,6 +64,8 @@ services:
       context: ./build/php73
     image: php7.3-mage:v1.0
     hostname: php73
+    extra_hosts:
+      - "host.docker.internal:host-gateway" 
     volumes:
       - ./sources:/home/public_html
       - composer_cache:/home/nginx/.composer
@@ -72,6 +78,8 @@ services:
       context: ./build/php74
     image: php7.4-mage:v1.0
     hostname: php74
+    extra_hosts:
+      - "host.docker.internal:host-gateway" 
     volumes:
       - ./sources:/home/public_html
       - composer_cache:/home/nginx/.composer
@@ -84,6 +92,8 @@ services:
       context: ./build/php74-c2
     image: php7.4-c2-mage:v1.0
     hostname: php74
+    extra_hosts:
+      - "host.docker.internal:host-gateway" 
     volumes:
       - ./sources:/home/public_html
       - composer_cache:/home/nginx/.composer
