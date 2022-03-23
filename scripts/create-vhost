@@ -315,6 +315,23 @@ function sanitizeArgs()
     fi
 }
 
+function checkAppStackContainerRunning()
+{
+    _arrow "Check Nginx is running?"
+    if [[ $($(pwd)/scripts/list-services | grep Nginx) ]]; then
+        _success "Nginx is running"
+    else
+        _error "Nginx is not running" && exit 1
+    fi
+    
+    _arrow "Check ${APP_PHP} is running?"
+    if [[ $($(pwd)/scripts/list-services | grep ${APP_PHP}) ]]; then
+        _success "${APP_PHP} is running"
+    else
+        _error "${APP_PHP} is not running" && exit 1
+    fi
+}
+
 function checkRootDir()
 {
 
@@ -864,6 +881,8 @@ function main()
     initDefaultArgs
     processArgs "$@"
 
+    checkAppStackContainerRunning
+    
     checkRootDir
     createVirtualHost
 
