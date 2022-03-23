@@ -40,7 +40,7 @@ Combo docker-compose cho Magento với các tính năng như:
 Hiện tại mới test trên Ubuntu, các hệ điều hành khác mọi người vui lòng tự mò =).
 
 ## Yêu cầu hệ thống
-* Hệ thống cần có cài đặt docker và docker-compose (docker-compose nhớ cài bản mới nhất cho chắc chắn =))). Hướng dẫn cài đặt có thể tham khảo Google hoặc:
+* Hệ thống cần có cài đặt docker và docker-compose (docker-compose cần cài bản mới nhất thông qua hướng dẫn sau, lưu ý không cài đặt docker-compose thông qua python pip - đây là phiên bản cũ ). Hướng dẫn cài đặt có thể tham khảo Google hoặc:
 
 [Hướng dẫn cài đặt docker trên Ubuntu](https://docs.docker.com/engine/install/ubuntu/)
 
@@ -220,6 +220,9 @@ docker-compose restart
 
 # Chui vô 1 services để chạy command - Ví dụ tính chui vô container service php72 để chạy composer
 docker-compose exec php72 bash
+
+# Restart lại container php sau khi thay đổi giá trị nào đó trong php.ini, ví dụ cần restart container php72
+docker-compose restart php72
 ```
 * Các services nội bộ có thể kết nối với nhau thông qua tên của services. Ví dụ có thể điền Mysql host thay vì localhost là mysql. Hoặc kết nối tới các services elasticsearch, redis thay vì localhost thì để là elasticsearch và redis, các port kết nối vẫn là port mặc định v.v.
 
@@ -309,23 +312,27 @@ docker-compose up -d nginx php73 mysql
 ```bash
 ./scripts/xdebug enable --php-version=php72
 ```
+
+* Lưu ý: Để sử dụng Xdebug với PHP Storm, cần cấu hình thêm Map path trong PHP Storm setting. Mục Absolute path onn the server là path của website trong docker container:
+![PHPSTORM XDEBUG](./images/xdebug-phpstorm-01.png "PHP Storm path map for Xdebug")
+
 ### Tạo database với tên yoyoyo
 ```bash
-./scripts/database.sh create --database-name=yoyoyo
+./scripts/database create --database-name=yoyoyo
 ```
 ### Import file backup vào database yoyoyo
 * File backup cần import vào cần có tên dạng .sql. Ví dụ: backup-test.sql
 * File backup cần import vào cần để trong thư mục ./databases/import
 ```bash
-./scripts/database.sh import --source=backup-test.sql --target=yoyoyo
+./scripts/database import --source=backup-test.sql --target=yoyoyo
 ```
 ### Export (backup) database tên yoyoyo
 ```bash
-./scripts/database.sh export --database-name=yoyoyo
+./scripts/database export --database-name=yoyoyo
 ```
 ### Drop database với tên yoyoyo
 ```bash
-./scripts/database.sh drop --database-name=yoyoyo
+./scripts/database drop --database-name=yoyoyo
 ```
 ### Tự động tải và cài đặt Magento
 * Tự động tải và cài đặt Magento bản community version 2.3.4, sử dụng domain test.com, chạy với php7.2 
@@ -349,12 +356,12 @@ git clone http://gitrepo.com ./sources/magento-test.com
 ```
 * Tạo database cho website, ví dụ: magento_db
 ```bash
-./scripts/database.sh create --database-name=magento_db
+./scripts/database create --database-name=magento_db
 ```
 * Copy file backup DB của website vào thư mục ./databases/import
 * Chạy command import DB, ví dụ
 ```bash
-./scripts/database.sh import --source=backup-test.sql --target=magento_db
+./scripts/database import --source=backup-test.sql --target=magento_db
 ```
 * Chọn phiên bản php cần chạy. Trong trường hợp chưa khởi tạo, khởi tạo trên hệ thống ví dụ php version cần sử dụng là php7.3
 ```bash
