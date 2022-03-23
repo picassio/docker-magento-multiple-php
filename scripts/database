@@ -447,6 +447,18 @@ function checkDatabaseFileName()
     fi
 }
 
+
+function checkMysqlContainerRunning()
+{
+
+    _arrow "Check Mysql container is running?"
+    if [[ $($(pwd)/scripts/list-services | grep mysql) ]]; then
+        _success "Mysql container is running"
+    else
+        _error "Mysql container is not running, please start it!" && exit 1
+    fi
+}
+
 function checkDatabaseName()
 {
     if [[ ${DATABASE_NAME} =~ $DATABASE_PATTERN ]]; then
@@ -581,6 +593,8 @@ function main()
     [[ $# -lt 1 ]] && _printUsage
     initDefaultArgs
     processArgs "$@"
+
+    checkMysqlContainerRunning
 
     getMysqlInformation
 
