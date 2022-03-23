@@ -26,7 +26,7 @@
 # GIỚI THIỆU
 Combo docker-compose cho Magento với các tính năng như:
 
-* Chạy được đồng thời nhiều phiên bản PHP.
+* Chạy được đồng thời nhiều phiên bản PHP, bạn không cần phải tạo tạo nhiều stack docker-compose khác nhau cho nhiều project, mà chỉ cần dùng 1 stack docker-compose duy nhất.
 * Tự động tạo Virtual host cho nginx, hỗ trợ Magento 1, Magento 2, Laravel, Wordpress.
 * Hỗ trợ SSL
 * Tự động tải, cài đặt Magento fresh các phiên bản theo yêu cầu.
