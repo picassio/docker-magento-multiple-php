@@ -36,8 +36,6 @@ RUN su - nginx -c "curl https://raw.githubusercontent.com/nvm-sh/nvm/master/inst
 RUN chmod +x /home/nginx/.nvm/nvm.sh
 RUN su - nginx -c "echo '[ -s /home/nginx/.nvm/nvm.sh ] && . /home/nginx/.nvm/nvm.sh # This loads NVM' > .profile"
 
-# Fix Perl: https://stackoverflow.com/a/41429187
-# RUN sed -i "$ s|\-n||g" /usr/bin/pecl
 RUN pecl channel-update pecl.php.net
 RUN export DEBIAN_FRONTEND=noninteractive\ 
 		&& apt-get install libmcrypt-dev -y
