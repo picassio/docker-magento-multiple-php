@@ -163,6 +163,7 @@ sudo usermod -aG docker $USER
 | redis | service Redis  |
 | rabbitmq | service RabbitMQ  |
 | phpmyadmin | service phpmyadmin  |
+| phpredmin | service phpredmin  |
 
 #### Các command của hệ thống
 | Command | Tác dụng |
