@@ -240,6 +240,9 @@ docker-compose restart php72
 * Clone repo này vào một thư mục trên máy
 * Copy file env-example thành .env
 * Đổi thông tin cần thiết nếu có trong file .env trước khi chạy.
+* MySQL được mount port ra ngoài thông qua port 3308, trong trường hợp bạn muốn kết nối tới container mysql từ máy vật lý thông qua phần mêm như MySQL Workbench, bạn có thể connect với thông tin host: 127.0.0.1, port: 3308
+* phpmyadmin được mount port ra ngoài máy vật lý thông qua port 8080
+* phpredmin được mount port ra ngoài máy vật lý thông qua port 8081, và với thông tin User: admin, Password: admin
 
 **Lưu ý:**
 * Mọi command khi chạy trên hệ thống cần chạy trong thư mục chứa file docker-compose.yml
