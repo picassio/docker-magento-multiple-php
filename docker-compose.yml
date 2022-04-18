@@ -136,7 +136,7 @@ services:
         context: ./build/elasticsearch
         args: 
           ELASTICSEARCH_VERSION: ${ELASTICSEARCH_VERSION}
-      image: elasticsearch:${ELASTICSEARCH_VERSION}
+      image: elasticsearch-manual:${ELASTICSEARCH_VERSION}
       environment:
           - discovery.type=single-node
           - node.name=elasticseach
