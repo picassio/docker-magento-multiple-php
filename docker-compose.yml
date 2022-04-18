@@ -153,7 +153,7 @@ services:
           - 9200:9200
 
   kibana:
-      image: kibana:${ELASTIC_SEARCH_VERSION}
+      image: kibana:${ELASTICSEARCH_VERSION}
       environment:
           SERVER_NAME: kibana
           ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
