@@ -5,6 +5,7 @@ services:
       context: ./build/nginx
     image: nginx-mage:v1.0
     hostname: nginx
+    restart: always
     volumes:
       - ./conf/nginx/conf.d:/etc/nginx/conf.d
       - ./conf/nginx/ssl:/etc/nginx/ssl
@@ -131,7 +132,11 @@ services:
         - "redis_data:/data"
 
   elasticsearch:
-      image: elasticsearch:${ELASTIC_SEARCH_VERSION}
+      build:
+        context: ./build/elasticsearch
+        args: 
+          ELASTICSEARCH_VERSION: ${ELASTICSEARCH_VERSION}
+      image: elasticsearch:${ELASTICSEARCH_VERSION}
       environment:
           - discovery.type=single-node
           - node.name=elasticseach
