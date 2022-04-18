@@ -52,11 +52,11 @@ sudo usermod -aG docker $USER
 ```
 ### Giới thiệu hệ thống
 ```bash
-> tree                                                                                                                                                   docker-magento -> master
+❯ tree
 .
 ├── README.md
 ├── build
-│   ├── mailhog
+│   ├── elasticsearch
 │   │   └── Dockerfile
 │   ├── nginx
 │   │   ├── Dockerfile
@@ -70,7 +70,9 @@ sudo usermod -aG docker $USER
 │   │   └── Dockerfile
 │   ├── php73
 │   │   └── Dockerfile
-│   └── php74
+│   ├── php74
+│   │   └── Dockerfile
+│   └── php74-c2
 │       └── Dockerfile
 ├── conf
 │   ├── nginx
@@ -94,7 +96,11 @@ sudo usermod -aG docker $USER
 │       │   ├── 10-opcache.ini
 │       │   ├── magento.conf
 │       │   └── php.ini
-│       └── php74
+│       ├── php74
+│       │   ├── 10-opcache.ini
+│       │   ├── magento.conf
+│       │   └── php.ini
+│       └── php74-c2
 │           ├── 10-opcache.ini
 │           ├── magento.conf
 │           └── php.ini
@@ -107,7 +113,8 @@ sudo usermod -aG docker $USER
 ├── images
 │   ├── cert.png
 │   ├── cert02.png
-│   └── cert03.png
+│   ├── cert03.png
+│   └── xdebug-phpstorm-01.png
 ├── logs
 │   └── nginx
 ├── scripts
@@ -154,7 +161,8 @@ sudo usermod -aG docker $USER
 | elasticsearch | service Elastiscsearch |
 | kibana | service Kibana |
 | redis | service Redis  |
-| rabbitMQ | service RabbitMQ  |
+| rabbitmq | service RabbitMQ  |
+| phpmyadmin | service phpmyadmin  |
 
 #### Các command của hệ thống
 | Command | Tác dụng |
