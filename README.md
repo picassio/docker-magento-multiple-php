@@ -22,6 +22,7 @@
     - [Drop database với tên yoyoyo](#drop-database-với-tên-yoyoyo)
     - [Tự động tải và cài đặt Magento](#tự-động-tải-và-cài-đặt-magento)
     - [Bật SSL cho domain](#bật-ssl-cho-domain)
+    - [Sử dụng varnish cho domain](#sử-dụng-varnish-cho-domain)
     - [Các bước chạy 1 site magento dự án clone từ git02 về](#các-bước-chạy-1-site-magento-dự-án-clone-từ-git02-về)
 # GIỚI THIỆU
 Combo docker-compose cho Magento với các tính năng như:
@@ -56,79 +57,86 @@ sudo usermod -aG docker $USER
 .
 ├── README.md
 ├── build
-│   ├── elasticsearch
-│   │   └── Dockerfile
-│   ├── nginx
-│   │   ├── Dockerfile
-│   │   └── conf
-│   │       └── nginx.conf
-│   ├── php70
-│   │   └── Dockerfile
-│   ├── php71
-│   │   └── Dockerfile
-│   ├── php72
-│   │   └── Dockerfile
-│   ├── php73
-│   │   └── Dockerfile
-│   ├── php74
-│   │   └── Dockerfile
-│   └── php74-c2
-│       └── Dockerfile
+│   ├── elasticsearch
+│   │   └── Dockerfile
+│   ├── nginx
+│   │   ├── Dockerfile
+│   │   └── conf
+│   │       └── nginx.conf
+│   ├── php70
+│   │   └── Dockerfile
+│   ├── php71
+│   │   └── Dockerfile
+│   ├── php72
+│   │   └── Dockerfile
+│   ├── php73
+│   │   └── Dockerfile
+│   ├── php74
+│   │   └── Dockerfile
+│   ├── php74-c2
+│   │   └── Dockerfile
+│   └── varnish
+│       └── Dockerfile
 ├── conf
-│   ├── nginx
-│   │   ├── conf.d
-│   │   ├── nginx.conf
-│   │   └── ssl
-│   └── php
-│       ├── php70
-│       │   ├── 10-opcache.ini
-│       │   ├── magento.conf
-│       │   └── php.ini
-│       ├── php71
-│       │   ├── 10-opcache.ini
-│       │   ├── magento.conf
-│       │   └── php.ini
-│       ├── php72
-│       │   ├── 10-opcache.ini
-│       │   ├── magento.conf
-│       │   └── php.ini
-│       ├── php73
-│       │   ├── 10-opcache.ini
-│       │   ├── magento.conf
-│       │   └── php.ini
-│       ├── php74
-│       │   ├── 10-opcache.ini
-│       │   ├── magento.conf
-│       │   └── php.ini
-│       └── php74-c2
-│           ├── 10-opcache.ini
-│           ├── magento.conf
-│           └── php.ini
+│   ├── nginx
+│   │   ├── conf.d
+│   │   ├── nginx.conf
+│   │   └── ssl
+│   ├── php
+│   │   ├── php70
+│   │   │   ├── 10-opcache.ini
+│   │   │   ├── magento.conf
+│   │   │   └── php.ini
+│   │   ├── php71
+│   │   │   ├── 10-opcache.ini
+│   │   │   ├── magento.conf
+│   │   │   └── php.ini
+│   │   ├── php72
+│   │   │   ├── 10-opcache.ini
+│   │   │   ├── magento.conf
+│   │   │   └── php.ini
+│   │   ├── php73
+│   │   │   ├── 10-opcache.ini
+│   │   │   ├── magento.conf
+│   │   │   └── php.ini
+│   │   ├── php74
+│   │   │   ├── 10-opcache.ini
+│   │   │   ├── magento.conf
+│   │   │   └── php.ini
+│   │   └── php74-c2
+│   │       ├── 10-opcache.ini
+│   │       ├── magento.conf
+│   │       └── php.ini
+│   └── varnish
+│       └── default.vcl
 ├── data
 ├── databases
-│   ├── export
-│   └── import
+│   ├── export
+│   └── import
 ├── docker-compose.yml
 ├── env-example
 ├── images
-│   ├── cert.png
-│   ├── cert02.png
-│   ├── cert03.png
-│   └── xdebug-phpstorm-01.png
+│   ├── cert.png
+│   ├── cert02.png
+│   ├── cert03.png
+│   └── xdebug-phpstorm-01.png
 ├── logs
-│   └── nginx
+│   └── nginx
 ├── scripts
-│   ├── create-vhost
-│   ├── database
-│   ├── fixowner
-│   ├── init-magento
-│   ├── list-services
-│   ├── mysql
-│   ├── setup-composer
-│   ├── shell
-│   ├── ssl
-│   └── xdebug
+│   ├── create-vhost
+│   ├── database
+│   ├── fixowner
+│   ├── init-magento
+│   ├── list-services
+│   ├── mysql
+│   ├── setup-composer
+│   ├── shell
+│   ├── ssl
+│   ├── varnish
+│   └── xdebug
 └── sources
+
+32 directories, 48 files
 ```
 #### Cấu trúc thư mục hệ thống
 
@@ -164,6 +172,8 @@ sudo usermod -aG docker $USER
 | rabbitmq | service RabbitMQ  |
 | phpmyadmin | service phpmyadmin  |
 | phpredmin | service phpredmin  |
+| varnish | service varnish  |
+
 
 #### Các command của hệ thống
 | Command | Tác dụng |
@@ -178,6 +188,7 @@ sudo usermod -aG docker $USER
 | shell | Command sử dụng để truy cập vào các container php với user dùng để chạy website, không dùng user root |
 | ssl | Command sử dụng để tạo Virtual host SSL cho các domain được lựa chọn |
 | xdebug | Command sử dụng để bật/tắt xdebug của 1 service php được lựa chọn |
+| varnish | Command sử dụng để bật/tắt varnish của 1 domain được lựa chọn |
 
 #### Hệ thống email catch all
 
@@ -356,6 +367,18 @@ docker-compose up -d nginx php73 mysql
 * Sau khi bật cần chỉnh lại databse của mangeto, phần URL sang dùng https
 ```bash
 ./scripts/ssl --domain=test-magento.com
+```
+### Sử dụng varnish cho domain
+```bash
+# Bật varnish
+./scripts/varnish-test enable --domain=test.com
+
+# Tắt varnish
+./scripts/varnish-test disable --domain=test.com
+
+# Check varnish status
+./scripts/varnish-test status --domain=test.com
+
 ```
 ### Các bước chạy 1 site magento dự án clone từ git02 về
 * Mọi command thực hiện cần đứng ở thư mục chứa file docker-compose.yml

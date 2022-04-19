@@ -1,0 +1,557 @@
+#!/usr/bin/env bash
+#
+# Script to create virtual host for Nginx server
+#
+
+# UnComment it if bash is lower than 4.x version
+shopt -s extglob
+
+################################################################################
+# CORE FUNCTIONS - Do not edit
+################################################################################
+
+## Uncomment it for debugging purpose
+###set -o errexit
+#set -o pipefail
+#set -o nounset
+#set -o xtrace
+
+#
+# VARIABLES
+#
+_bold=$(tput bold)
+_underline=$(tput sgr 0 1)
+_reset=$(tput sgr0)
+
+_purple=$(tput setaf 171)
+_red=$(tput setaf 1)
+_green=$(tput setaf 76)
+_tan=$(tput setaf 3)
+_blue=$(tput setaf 38)
+
+#
+# HEADERS & LOGGING
+#
+function _debug()
+{
+    if [[ "$DEBUG" = 1 ]]; then
+        "$@"
+    fi
+}
+
+function _header()
+{
+    printf '\n%s%s==========  %s  ==========%s\n' "$_bold" "$_purple" "$@" "$_reset"
+}
+
+function _arrow()
+{
+    printf '➜ %s\n' "$@"
+}
+
+function _success()
+{
+    printf '%s✔ %s%s\n' "$_green" "$@" "$_reset"
+}
+
+function _error() {
+    printf '%s✖ %s%s\n' "$_red" "$@" "$_reset"
+}
+
+function _warning()
+{
+    printf '%s➜ %s%s\n' "$_tan" "$@" "$_reset"
+}
+
+function _underline()
+{
+    printf '%s%s%s%s\n' "$_underline" "$_bold" "$@" "$_reset"
+}
+
+function _bold()
+{
+    printf '%s%s%s\n' "$_bold" "$@" "$_reset"
+}
+
+function _note()
+{
+    printf '%s%s%sNote:%s %s%s%s\n' "$_underline" "$_bold" "$_blue" "$_reset" "$_blue" "$@" "$_reset"
+}
+
+function _die()
+{
+    _error "$@"
+    exit 1
+}
+
+function _safeExit()
+{
+    exit 0
+}
+
+#
+# UTILITY HELPER
+#
+function _seekConfirmation()
+{
+  printf '\n%s%s%s' "$_bold" "$@" "$_reset"
+  read -p " (y/n) " -n 1
+  printf '\n'
+}
+
+# Test whether the result of an 'ask' is a confirmation
+function _isConfirmed()
+{
+    if [[ "$REPLY" =~ ^[Yy]$ ]]; then
+        return 0
+    fi
+    return 1
+}
+
+
+function _typeExists()
+{
+    if type "$1" >/dev/null; then
+        return 0
+    fi
+    return 1
+}
+
+function _isOs()
+{
+    if [[ "${OSTYPE}" == $1* ]]; then
+      return 0
+    fi
+    return 1
+}
+
+function _isOsDebian()
+{
+    if [[ -f /etc/debian_version ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+function _isOsRedHat()
+{
+    if [[ -f /etc/redhat-release ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+function _isOsMac()
+{
+    if [[ "$(uname -s)" = "Darwin" ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+function _checkRootUser()
+{
+    #if [ "$(id -u)" != "0" ]; then
+    if [ "$(whoami)" != 'root' ]; then
+        _die "You cannot run $0 as non-root user. Please use sudo $0"
+    fi
+}
+
+
+function askYesOrNo {
+    REPLY=""
+    while [ -z "$REPLY" ] ; do
+        read -ep "$1 $YES_NO_PROMPT" -n1 REPLY
+        REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
+        case $REPLY in
+            $YES_CAPS ) return 0 ;;
+            $NO_CAPS ) return 1 ;;
+            * ) REPLY=""
+        esac
+    done
+}
+
+
+function _printPoweredBy()
+{
+    local mp_ascii
+    mp_ascii='
+                ____  __  __    _    ____ _____ ___  ____   ____
+               / ___||  \/  |  / \  |  _ \_   _/ _ \/ ___| / ___|
+               \___ \| |\/| | / _ \ | |_) || || | | \___ \| |
+                ___) | |  | |/ ___ \|  _ < | || |_| |___) | |___
+               |____/|_|  |_/_/   \_\_| \_\|_| \___/|____/ \____|
+
+'
+    cat <<EOF
+${_green}
+$mp_ascii
+
+################################################################################
+${_reset}
+EOF
+}
+
+################################################################################
+# SCRIPT FUNCTIONS
+################################################################################
+function _printUsage()
+{
+    echo -n "Docker Varnish tools
+Version $VERSION
+
+./scripts/$(basename "$0") [OPT] [ARG]...
+
+    Options:
+        enable                    Enable Xdebug.
+        disable                   Disable Xdebug.
+        status                    List all Xdebug status.
+    Args:
+        --domain                  Domain name (eg: test.com).
+        -h, --help                Display this help and exit.
+
+    Examples:
+      Disable Varnish for domain test.com
+        ./scripts/$(basename "$0") disable --domain=test.com
+      Enable Varnish for domain test.com
+        ./scripts/$(basename "$0") enable --domain=test.com
+      Status Varnish for domain test.com
+        ./scripts/$(basename "$0") enable --domain=test.com
+"
+    _printPoweredBy
+    exit 1
+}
+
+function checkCmdDependencies()
+{
+    local _dependencies=(
+      wget
+      cat
+      basename
+      mkdir
+      cp
+      mv
+      rm
+      chown
+      chmod
+      date
+      find
+      awk
+      docker-compose
+      docker
+    )
+
+    for cmd in "${_dependencies[@]}"
+    do
+        hash "${cmd}" &>/dev/null || _die "'${cmd}' command not found."
+    done;
+}
+
+function processArgs()
+{
+    # Parse Arguments
+
+    case $1 in      
+        enable)
+            COMMAND="$1"
+            for arg in "${@:2}"
+            do
+                case $arg in
+                    --domain=*)
+                        VHOST_DOMAIN="${arg#*=}"
+                    ;;  
+                    -h|--help)
+                        _printUsage
+                    ;;
+                    *)
+                        _printUsage
+                    ;;
+                esac
+            done
+        ;;      
+        disable)
+            COMMAND="$1"
+            for arg in "${@:2}"
+            do
+                case $arg in
+                    --domain=*)
+                        VHOST_DOMAIN="${arg#*=}"
+                    ;;  
+                    -h|--help)
+                        _printUsage
+                    ;;
+                    *)
+                        _printUsage
+                    ;;
+                esac
+            done
+        ;; 
+        status)
+            COMMAND="$1"
+            for arg in "${@:2}"
+            do
+                case $arg in
+                    --domain=*)
+                        VHOST_DOMAIN="${arg#*=}"
+                    ;;  
+                    -h|--help)
+                        _printUsage
+                    ;;
+                    *)
+                        _printUsage
+                    ;;
+                esac
+            done
+        ;; 
+        -h|--help)
+            _printUsage
+        ;;
+        *)
+            _printUsage
+        ;;
+    esac
+        
+    validateArgs
+}
+
+function initDefaultArgs()
+{
+    YES_STRING=$"y"
+    NO_STRING=$"n"
+    YES_NO_PROMPT=$"[y/n]: "
+    YES_CAPS=$(echo ${YES_STRING}|tr [:lower:] [:upper:])
+    NO_CAPS=$(echo ${NO_STRING}|tr [:lower:] [:upper:])
+
+    PHP_INI_LOCATION="$(pwd)/conf/php/${APP_PHP}/php.ini"
+
+    NGINX_SITES_CONF_D="$(pwd)/conf/nginx/conf.d"
+    FPC_STATUS=
+    NGINX_VARNISH_STATUS=
+}
+
+function validateArgs()
+{
+    ERROR_COUNT=0
+    if [[ -z "$VHOST_DOMAIN" ]]; then
+        _error "--domain=... parameter is missing."
+        ERROR_COUNT=$((ERROR_COUNT + 1))
+    fi
+
+    [[ "$ERROR_COUNT" -gt 0 ]] && exit 1
+}
+
+
+function checkDomainExist () 
+{
+   if [[ -f ${NGINX_SITES_CONF_D}/$VHOST_DOMAIN.conf ]]; then 
+        _success "Domain exists"
+    else
+        _error "Domain not exist, Did you set it up on docker-compose system?"
+        exit 1
+    fi
+}
+
+function checkDomainSslExist () 
+{
+   if [[ -f ${NGINX_SITES_CONF_D}/$VHOST_DOMAIN-ssl.conf ]]; then 
+        _success "Domain SSL exists"
+    else
+        _error "Domain SSL not exist, Did you enable SSL for this domain?"
+        exit 1
+    fi
+}
+
+function checkNginxContainerRunning()
+{
+    _arrow "Check Nginx container is running?"
+    if [[ $($(pwd)/scripts/list-services | grep nginx) ]]; then
+        _success "Nginx container is running"
+    else
+        _error "Nginx container is not running, please start it!" && exit 1
+    fi
+}
+
+function checkMysqlContainerRunning()
+{
+    _arrow "Check Mysql container is running?"
+    if [[ $($(pwd)/scripts/list-services | grep mysql) ]]; then
+        _success "Mysql container is running"
+    else
+        _error "Mysql container is not running, please start it!" && exit 1
+    fi
+}
+
+function checkPhpContainerRunning()
+{
+    _arrow "Check Nginx container is running?"
+    if [[ $($(pwd)/scripts/list-services | grep $DOMAIN_PHP_VERSION) ]]; then
+        _success "PHP $DOMAIN_PHP_VERSION container is running"
+    else
+        _error "PHP $DOMAIN_PHP_VERSION container is not running, please start it!" && exit 1
+    fi
+}
+
+function getDomainDocroot()
+{
+    _arrow "Get Vhost $VHOST_DOMAIN docroot"
+    DOC_ROOT=$(cat ${NGINX_SITES_CONF_D}/$VHOST_DOMAIN.conf | grep "/home/public_html/" | grep -v "fastcgi_param" | awk '{print $3}' | awk -F/ '{print $4}' | awk -F\; '{print $1}') || _die "Cannot get Vhost $VHOST_DOMAIN docroot"
+    _success "Get Vhost $VHOST_DOMAIN successfuly"
+}
+
+function getDomainPhpVersion()
+{
+    _arrow "Get $VHOST_DOMAIN php version"
+    DOMAIN_PHP_VERSION=$(cat ${NGINX_SITES_CONF_D}/$VHOST_DOMAIN.conf | grep 9001 | awk 'NR==1{print $2}' | awk -F\: '{print $1}')
+    _success "Get $VHOST_DOMAIN successfuly"
+}
+
+function checkDomainMagentoFullPageCacheStatus()
+{
+    FPC_STATUS=$(docker-compose exec --user nginx $DOMAIN_PHP_VERSION php /home/public_html/$DOC_ROOT/bin/magento config:show system/full_page_cache/caching_application 2>&1)
+    # Remove /r
+    FPC_STATUS=${FPC_STATUS%$'\r'}
+    if [[ "$FPC_STATUS" == "2" ]]; then
+        _success "Your $VHOST_DOMAIN Magento is configured Varnish as default Full page cache"
+    else 
+        _error "Domain $VHOST_DOMAIN do not use Varnish as default Full page cache"
+    fi
+}
+
+function checkNginxSSLVhostVarnishProxyPass()
+{
+    if [[ -n $(cat ${NGINX_SITES_CONF_D}/$VHOST_DOMAIN-ssl.conf | grep 'proxy_pass http://varnish:6081') ]]; then
+        _success "Your Nginx SSL $VHOST_DOMAIN is configured proxy pass to Varnish backend"
+        NGINX_VARNISH_STATUS=1
+    else
+        _error "Your Nginx SSL $VHOST_DOMAIN is not configured proxy pass to Varnish backend"
+        NGINX_VARNISH_STATUS=0
+    fi
+}
+
+function enableVarnish()
+{
+
+    checkDomainMagentoFullPageCacheStatus
+    if [[ "$FPC_STATUS" != "2" ]]; then
+        _arrow "Configuring Varnish as default full page cache for $VHOST_DOMAIN"
+        docker-compose exec --user nginx $DOMAIN_PHP_VERSION php /home/public_html/$DOC_ROOT/bin/magento config:set system/full_page_cache/caching_application 2 || _die "Configure Varnish as default full page cache for $VHOST_DOMAIN failed"
+        _arrow "Configure $VHOST_DOMAIN Magento env.php with varnish config"
+        docker-compose exec --user nginx $DOMAIN_PHP_VERSION php /home/public_html/$DOC_ROOT/bin/magento setup:config:set --http-cache-hosts=varnish:6081 || _die "Cannot configure $VHOST_DOMAIN Magento env.php with varnish config"
+        _success "Configure Varnish as default full page cache for $VHOST_DOMAIN successful"
+        _arrow "Flush $VHOST_DOMAIN Magento cache"
+        docker-compose exec --user nginx $DOMAIN_PHP_VERSION php /home/public_html/$DOC_ROOT/bin/magento cache:flush || _die "Cannot flush $VHOST_DOMAIN Magento cache"
+        _success "Flush $VHOST_DOMAIN Magento cache successful"
+    fi
+
+    checkNginxSSLVhostVarnishProxyPass
+    if [[ $NGINX_VARNISH_STATUS -eq 0 ]]; then 
+        _arrow "Enable varnish for domain $VHOST_DOMAIN"
+        sed -i 's/proxy_pass http:\/\/127.0.0.1:80;/proxy_pass http:\/\/varnish:6081;/g' ${NGINX_SITES_CONF_D}/$VHOST_DOMAIN-ssl.conf || _die "Cannot enable Varnish on Nginx configure file"
+        reloadNginx
+    fi
+
+    _success "Enable varnish for domain $VHOST_DOMAIN successfuly, you need to change your Magento base_url to use https if you did not change yet"
+}
+
+function disableVarnish()
+{
+    checkDomainMagentoFullPageCacheStatus
+    if [[ "$FPC_STATUS" == "2" ]]; then
+        _arrow "Disable Varnish as default full page cache, Enable Build-in cache for $VHOST_DOMAIN"
+        docker-compose exec --user nginx $DOMAIN_PHP_VERSION php /home/public_html/$DOC_ROOT/bin/magento config:set system/full_page_cache/caching_application 1 || _die "Cannot disable Varnish as default full page cache, Enable Build-in cache for $VHOST_DOMAIN"
+        _arrow "Disable Varnish as default full page cache, Enable Build-in cache for $VHOST_DOMAIN successful"
+        _arrow "You need to manual remove varnish config line on your $VHOST_DOMAIN Magento env.php"
+        _arrow "Flush $VHOST_DOMAIN Magento cache"
+        docker-compose exec --user nginx $DOMAIN_PHP_VERSION php /home/public_html/$DOC_ROOT/bin/magento cache:flush || _die "Cannot flush $VHOST_DOMAIN Magento cache"
+        _success "Flush $VHOST_DOMAIN Magento cache successful"
+    fi
+
+    checkNginxSSLVhostVarnishProxyPass
+    if [[ $NGINX_VARNISH_STATUS -eq 1 ]]; then 
+        _arrow "Disable varnish for domain $VHOST_DOMAIN"
+        sed -i 's/proxy_pass http:\/\/varnish:6081;/proxy_pass http:\/\/127.0.0.1:80;/g' ${NGINX_SITES_CONF_D}/$VHOST_DOMAIN-ssl.conf || _die "Cannot disable Varnish on Nginx configure file"
+        reloadNginx
+    fi
+    
+    _success "Disable varnish for domain $VHOST_DOMAIN successfuly"
+}
+
+function statusVarnish()
+{
+    _arrow "Get Varnish status for domain $VHOST_DOMAIN"
+    checkDomainMagentoFullPageCacheStatus
+    checkNginxSSLVhostVarnishProxyPass
+}
+
+function reloadNginx()
+{
+    local _nginxTest=$(docker-compose exec nginx nginx -t)
+    _arrow "Reload nginx"
+    if [[ $? -eq 0 ]]; then
+        docker-compose exec nginx nginx -s reload || _die "Nginx couldn't be reloaded."
+        _success "Nginx reloaded"
+    else
+        echo "$_nginxTest"
+    fi
+}
+
+function doAction()
+{
+    case $COMMAND in      
+        enable)
+            enableVarnish
+        ;;      
+        disable)
+            disableVarnish
+        ;;
+        status)
+            statusVarnish
+        ;;
+    esac
+}
+
+function printSuccessMessage()
+{
+    _success "Your Action has done!"
+}
+
+################################################################################
+# Main
+################################################################################
+export LC_CTYPE=C
+export LANG=C
+
+DEBUG=0
+_debug set -x
+VERSION="1"
+
+function main()
+{
+    # _checkRootUser
+    checkCmdDependencies
+    
+
+    [[ $# -lt 1 ]] && _printUsage
+
+    processArgs "$@"
+
+    initDefaultArgs
+    checkNginxContainerRunning
+    checkDomainExist
+    checkDomainSslExist
+    getDomainDocroot
+    getDomainPhpVersion
+    checkPhpContainerRunning
+    checkMysqlContainerRunning
+
+    doAction
+    printSuccessMessage
+    exit 0
+}
+
+main "$@"
+
+_debug set +x
