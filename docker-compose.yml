@@ -92,7 +92,7 @@ services:
     build:
       context: ./build/php74-c2
     image: php7.4-c2-mage:v1.0
-    hostname: php74
+    hostname: php74-c2
     extra_hosts:
       - "host.docker.internal:host-gateway" 
     volumes:
@@ -101,6 +101,20 @@ services:
       - ./conf/php/php74-c2/magento.conf:/etc/php/7.4/fpm/pool.d/www.conf
       - ./conf/php/php74-c2/php.ini:/etc/php/7.4/fpm/php.ini
       - ./conf/php/php74-c2/php.ini:/etc/php/7.4/cli/php.ini
+
+  php81-c2:
+    build:
+      context: ./build/php74-c2
+    image: php8.1-c2-mage:v1.0
+    hostname: php81-c2
+    extra_hosts:
+      - "host.docker.internal:host-gateway" 
+    volumes:
+      - ./sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
+      - ./conf/php/php81-c2/magento.conf:/etc/php/8.1/fpm/pool.d/www.conf
+      - ./conf/php/php81-c2/php.ini:/etc/php/8.1/fpm/php.ini
+      - ./conf/php/php81-c2/php.ini:/etc/php/8.1/cli/php.ini
 
   mysql:
     hostname: mysql
