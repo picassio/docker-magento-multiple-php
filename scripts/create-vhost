@@ -208,7 +208,7 @@ Version $VERSION
         --domain                    Domain Name.
         --root-dir                  Application Root Directory.
         --app                       Application Name (magento1|magento2|wordpress|laravel|default).
-        --php-version               PHP version used for application (php70|php71|php72|php73|php74|php74-c2).
+        --php-version               PHP version used for application (php70|php71|php72|php73|php74|php74-c2|php81-c2).
         -d, --debug                 Run command in debug mode.
         -h, --help                  Display this help and exit.
 
@@ -296,8 +296,8 @@ function validateArgs()
         _error "--php-version=... parameter is missing."
         ERROR_COUNT=$((ERROR_COUNT + 1))
     fi
-    if [[ ! -z "$APP_PHP" && "$APP_PHP" != @(php70|php71|php72|php73|php74|php74-c2) ]]; then
-        _error "Please enter valid application php --php-version=... parameter(php70|php71|php72|php73|php74|php74-c2)."
+    if [[ ! -z "$APP_PHP" && "$APP_PHP" != @(php70|php71|php72|php73|php74|php74-c2|php81-c2) ]]; then
+        _error "Please enter valid application php --php-version=... parameter(php70|php71|php72|php73|php74|php74-c2|php81-c2)."
         ERROR_COUNT=$((ERROR_COUNT + 1))
     fi
 

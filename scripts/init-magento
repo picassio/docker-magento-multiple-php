@@ -206,7 +206,7 @@ Version $VERSION
 ./scripts/$(basename "$0") [ARG]...
 
     Options:
-        --php-version             PHP version used for application (php70|php71|php72|php73|php74|php74-c2).
+        --php-version             PHP version used for application (php70|php71|php72|php73|php74|php74-c2|php81-c2).
         --domain                  Domain name (eg: test.com).
         --mangeto-version         Magento Version (eg: 2.3.4).
         --magento-edition         Magento Edition. (community|enterprise)
@@ -313,8 +313,8 @@ function validateArgs()
         _error "--domain=... parameter is missing."
         ERROR_COUNT=$((ERROR_COUNT + 1))
     fi
-    if [[ ! -z "$APP_PHP" && "$APP_PHP" != @(php70|php71|php72|php73|php74|php74-c2) ]]; then
-        _error "Please enter valid application php --php-version=... parameter(php70|php71|php72|php73|php74|php74-c2)."
+    if [[ ! -z "$APP_PHP" && "$APP_PHP" != @(php70|php71|php72|php73|php74|php74-c2|php81-c2) ]]; then
+        _error "Please enter valid application php --php-version=... parameter(php70|php71|php72|php73|php74|php74-c2|php81-c2)."
         ERROR_COUNT=$((ERROR_COUNT + 1))
     fi
     if [[ -z "$MAGENTO_VERSION" ]]; then
@@ -368,7 +368,7 @@ function getMysqlInformation()
 
 function validateMagentoVersion()
 {
-    if [[ $MAGENTO_VERSION == 2.4* ]] && [[ $MAGENTO_VERSION != @(2.4.0*|2.4.1*) ]]; then 
+    if [[ $MAGENTO_VERSION == 2.4* ]] && [[ $MAGENTO_VERSION != @(2.4.0*|2.4.1*|2.4.2*|2.4.3*) ]]; then 
         if [[ $APP_PHP != "php74-c2" ]]; then
             _error "PHP should run with PHP version 7.4 composer2, --php-version=php74-c2"
             exit 1
@@ -379,6 +379,14 @@ function validateMagentoVersion()
     elif [[ $MAGENTO_VERSION == 2.3.7* ]]; then 
         if [[ $APP_PHP != "php74-c2" ]]; then
             _error "PHP should run with PHP version 7.4 composer2, --php-version=php74-c2"
+            exit 1
+        fi
+    elif [[ $MAGENTO_VERSION == 2.4* ]] && [[ $MAGENTO_VERSION != @(2.4.4*|2.4.5*) ]]; then 
+        if [[ $APP_PHP != "php81-c2" ]]; then
+            _error "PHP should run with PHP version 8.1 composer2, --php-version=php81-c2"
+            exit 1
+        elif [[ ! $($SCRIPTS_DIR/list-services | grep elasticsearch) ]]; then
+            _error "Elasticsearch service should be started, please start elasticsearch"
             exit 1
         fi
     fi
