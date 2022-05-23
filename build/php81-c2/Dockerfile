@@ -15,7 +15,7 @@ RUN export DEBIAN_FRONTEND=noninteractive && apt-get update -y
 RUN export DEBIAN_FRONTEND=noninteractive && apt-get install -y software-properties-common
 RUN export DEBIAN_FRONTEND=noninteractive && LC_ALL=C.UTF-8 add-apt-repository ppa:ondrej/php && apt-get update -y
 RUN export DEBIAN_FRONTEND=noninteractive &&\
-	apt-get -y install php8.1 php8.1-dev php8.1-apcu php8.1-fpm php8.1-common php8.1-gd php8.1-intl php8.1-soap php8.1-opcache php8.1-xml php8.1-mysql php8.1-mbstring php8.1-bcmath php8.1-json php8.1-curl php8.1-zip
+	apt-get -y install php8.1 php8.1-dev php8.1-apcu php8.1-fpm php8.1-common php8.1-gd php8.1-intl php8.1-soap php8.1-opcache php8.1-xml php8.1-mysql php8.1-mbstring php8.1-bcmath php8.1-curl php8.1-zip
 
 RUN update-alternatives --set php /usr/bin/php8.1
 RUN export DEBIAN_FRONTEND=noninteractive && apt-get install -y curl git sudo apt-utils vim zip unzip

@@ -104,7 +104,7 @@ services:
 
   php81-c2:
     build:
-      context: ./build/php74-c2
+      context: ./build/php81-c2
     image: php8.1-c2-mage:v1.0
     hostname: php81-c2
     extra_hosts:
