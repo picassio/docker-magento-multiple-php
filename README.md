@@ -75,6 +75,8 @@ sudo usermod -aG docker $USER
 │   │   └── Dockerfile
 │   ├── php74-c2
 │   │   └── Dockerfile
+│   ├── php81-c2
+│   │   └── Dockerfile
 │   └── varnish
 │       └── Dockerfile
 ├── conf
@@ -103,7 +105,11 @@ sudo usermod -aG docker $USER
 │   │   │   ├── 10-opcache.ini
 │   │   │   ├── magento.conf
 │   │   │   └── php.ini
-│   │   └── php74-c2
+│   │   ├── php74-c2
+│   │   │   ├── 10-opcache.ini
+│   │   │   ├── magento.conf
+│   │   │   └── php.ini
+│   │   └── php81-c2
 │   │       ├── 10-opcache.ini
 │   │       ├── magento.conf
 │   │       └── php.ini
@@ -163,6 +169,7 @@ sudo usermod -aG docker $USER
 | php72 | service php version php 7.2 |
 | php73 | service php version php 7.3 |
 | php74-c2 | service php version php 7.4 sử dụng composer2|
+| php81-c2 | service php version php 8.1 sử dụng composer2|
 | php74 | service php version php 7.4 |
 | mysql | service mysql, default sử dụng version 8.0 |
 | mailhog | service email catch all |
