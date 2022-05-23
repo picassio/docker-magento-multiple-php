@@ -369,19 +369,14 @@ function getMysqlInformation()
 function validateMagentoVersion()
 {
     if [[ $MAGENTO_VERSION = @(2.4.0*|2.4.1*|2.4.2*|2.4.3*) ]]; then 
-        if [[ $APP_PHP != "php74-c2" ]]; then
-            _error "PHP should run with PHP version 7.4 composer2, --php-version=php74-c2"
+        if [[ $APP_PHP != "php74" ]]; then
+            _error "PHP should run with PHP version 7.4 composer1, --php-version=php74"
             exit 1
         elif [[ ! $($SCRIPTS_DIR/list-services | grep elasticsearch) ]]; then
             _error "Elasticsearch service should be started, please start elasticsearch"
             exit 1
         fi
-    elif [[ $MAGENTO_VERSION == 2.3.7* ]]; then 
-        if [[ $APP_PHP != "php74-c2" ]]; then
-            _error "PHP should run with PHP version 7.4 composer2, --php-version=php74-c2"
-            exit 1
-        fi
-    elif [[ $MAGENTO_VERSION = @(2.4.4*|2.4.5*) ]]; then 
+    elif [[ $MAGENTO_VERSION == 2.4* ]] && [[ $MAGENTO_VERSION != @(2.4.0*|2.4.1*|2.4.2*|2.4.3*) ]]; then 
         if [[ $APP_PHP != "php81-c2" ]]; then
             _error "PHP should run with PHP version 8.1 composer2, --php-version=php81-c2"
             exit 1
@@ -390,7 +385,6 @@ function validateMagentoVersion()
             exit 1
         fi
     fi
-        
 }
 
 function validateBaseServices()
