@@ -39,7 +39,7 @@ RUN su - nginx -c "echo '[ -s /home/nginx/.nvm/nvm.sh ] && . /home/nginx/.nvm/nv
 RUN pecl channel-update pecl.php.net
 RUN export DEBIAN_FRONTEND=noninteractive\ 
 		&& apt-get install libmcrypt-dev -y
-RUN pecl install mcrypt
+
 RUN pecl install -f xdebug-2.9.8
 
 RUN curl -L https://github.com/mailhog/mhsendmail/releases/download/v0.2.0/mhsendmail_linux_amd64 --output /usr/local/bin/mhsendmail \
