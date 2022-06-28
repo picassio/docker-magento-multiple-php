@@ -17,7 +17,12 @@ RUN export DEBIAN_FRONTEND=noninteractive && LC_ALL=C.UTF-8 add-apt-repository p
 RUN export DEBIAN_FRONTEND=noninteractive &&\
 	apt-get -y install php7.0 php7.0-dev php7.0-apcu php7.0-fpm php7.0-common php7.0-gd php7.0-intl php7.0-soap php7.0-opcache php7.0-xml php7.0-mysql php7.0-mbstring php7.0-bcmath php7.0-json php7.0-curl php7.0-zip
 
-RUN update-alternatives --set php /usr/bin/php7.0
+RUN update-alternatives --set php /usr/bin/php7.0 \
+	&& update-alternatives --set phar /usr/bin/phar7.0 \
+	&& update-alternatives --set phar.phar /usr/bin/phar.phar7.0 \
+	&& update-alternatives --set phpize /usr/bin/phpize7.0 \
+	&& update-alternatives --set php-config /usr/bin/php-config7.0
+	
 RUN export DEBIAN_FRONTEND=noninteractive && apt-get install -y curl git sudo apt-utils vim zip unzip
 RUN dpkg-reconfigure -f noninteractive tzdata
 
