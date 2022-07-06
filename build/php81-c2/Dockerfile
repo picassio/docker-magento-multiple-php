@@ -47,7 +47,7 @@ RUN pecl channel-update pecl.php.net
 RUN export DEBIAN_FRONTEND=noninteractive\ 
  		&& apt-get install libmcrypt-dev -y
 RUN pecl install mcrypt
-RUN pecl install -f xdebug-2.9.8
+RUN pecl install -f xdebug-3.1.5
 
 RUN curl -L https://github.com/mailhog/mhsendmail/releases/download/v0.2.0/mhsendmail_linux_amd64 --output /usr/local/bin/mhsendmail \
 	&& chmod +x /usr/local/bin/mhsendmail
