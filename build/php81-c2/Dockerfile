@@ -43,11 +43,11 @@ RUN su - nginx -c "echo '[ -s /home/nginx/.nvm/nvm.sh ] && . /home/nginx/.nvm/nv
 RUN unlink /etc/php/8.1/cli/conf.d/20-xdebug.ini \
 	&& unlink /etc/php/8.1/fpm/conf.d/20-xdebug.ini
 
-# RUN pecl channel-update pecl.php.net
-# RUN export DEBIAN_FRONTEND=noninteractive\ 
-# 		&& apt-get install libmcrypt-dev -y
-#RUN pecl install mcrypt
-#RUN pecl install -f xdebug-2.9.8
+RUN pecl channel-update pecl.php.net
+RUN export DEBIAN_FRONTEND=noninteractive\ 
+ 		&& apt-get install libmcrypt-dev -y
+RUN pecl install mcrypt
+RUN pecl install -f xdebug-2.9.8
 
 RUN curl -L https://github.com/mailhog/mhsendmail/releases/download/v0.2.0/mhsendmail_linux_amd64 --output /usr/local/bin/mhsendmail \
 	&& chmod +x /usr/local/bin/mhsendmail
