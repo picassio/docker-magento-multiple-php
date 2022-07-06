@@ -261,6 +261,10 @@ docker-compose restart php72
 * MySQL được mount port ra ngoài thông qua port 3308, trong trường hợp bạn muốn kết nối tới container mysql từ máy vật lý thông qua phần mêm như MySQL Workbench, bạn có thể connect với thông tin host: 127.0.0.1, port: 3308
 * phpmyadmin được mount port ra ngoài máy vật lý thông qua port 8080
 * phpredmin được mount port ra ngoài máy vật lý thông qua port 8081, và với thông tin User: admin, Password: admin
+* Trường hợp sau một thời gian sử dụng, bạn có build lại image mà bị lỗi, bạn có thể sử dụng câu lệnh build sau để bỏ qua docker cache được lưu trước đó, ví dụ bạn cần build image php81-c2
+```bash
+docker-compose build --no-cache php81-c2
+```
 
 **Lưu ý:**
 * Mọi command khi chạy trên hệ thống cần chạy trong thư mục chứa file docker-compose.yml
