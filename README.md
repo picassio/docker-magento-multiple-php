@@ -45,7 +45,11 @@ Hiện tại mới test trên Ubuntu, các hệ điều hành khác mọi ngư�
 
 [Hướng dẫn cài đặt docker trên Ubuntu](https://docs.docker.com/engine/install/ubuntu/)
 
-[Hướng dẫn cài đặt docker-compose trên Ubuntu](https://docs.docker.com/compose/install/)
+```bash
+# Hướng dẫn cài đặt docker-compose trên Ubuntu
+sudo curl -L https://github.com/docker/compose/releases/download/1.28.5/docker-compose-Linux-x86_64 -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
+```
 
 * Cài xong docker thì nhơ chạy lệnh này để add user máy mình đang chạy được quyền chạy docker mà không cần gõ sudo, gõ xong thì nhớ logout rồi login lại:
 ```bash
