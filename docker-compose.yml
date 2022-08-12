@@ -180,9 +180,7 @@ services:
   rabbitmq:
       image: rabbitmq:3-management-alpine
       volumes:
-          - ./data/rabbitmq/etc/:/etc/rabbitmq/
-          - ./data/rabbitmq/data/:/var/lib/rabbitmq/
-          - ./data/rabbitmq/logs/:/var/log/rabbitmq/
+          - rabbitmq-data:/var/lib/rabbitmq/
       environment:
           RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE}
           RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
@@ -224,3 +222,4 @@ volumes:
   composer_cache_file:
   elasticsearch-data:
   redis_data:
+  rabbitmq-data:
