@@ -208,7 +208,7 @@ Version $VERSION
     Options:
         --php-version             PHP version used for application (php70|php71|php72|php73|php74|php74-c2|php81-c2).
         --domain                  Domain name (eg: test.com).
-        --mangeto-version         Magento Version (eg: 2.3.4).
+        --magento-version         Magento Version (eg: 2.3.4).
         --magento-edition         Magento Edition. (community|enterprise)
         -h, --help                Display this help and exit.
 
