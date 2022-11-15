@@ -310,7 +310,7 @@ Version 1
 ## Bắt đầu sử dụng
 ```bash
 # Clone về 1 thư mục
-git clone https://git02.smartosc.com/tuanlh/docker-magento.git ~/docker-mangento
+git clone https://github.com/picassio/docker-magento-multiple-php.git ~/docker-mangento
 # Chuyển đến thư mục
 cd ~/docker-mangento
 # Tạo file .env
