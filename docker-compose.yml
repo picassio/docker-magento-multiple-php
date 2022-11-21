@@ -5,7 +5,6 @@ services:
       context: ./build/nginx
     image: nginx-mage:v1.0
     hostname: nginx
-    restart: always
     volumes:
       - ./conf/nginx/conf.d:/etc/nginx/conf.d
       - ./conf/nginx/ssl:/etc/nginx/ssl
