@@ -499,7 +499,7 @@ function importMysqlDatabase()
     then
         _success "Database existed"
         _arrow "Import database"
-        docker-compose exec -T mysql mysql -u root -p${rootPass} ${DATABASE_IMPORT_TARGET_NAME} < ${IMPORT_DIR}/${DATABASE_IMPORT_SOURCE_NAME}
+        docker-compose exec -T mysql mysql -u root -p${rootPass} ${DATABASE_IMPORT_TARGET_NAME} < ${IMPORT_DIR}/${DATABASE_IMPORT_SOURCE_NAME} 2>&1 | grep -v "Using a password"
         _success "Database name ${DATABASE_IMPORT_TARGET_NAME} imported"
     else 
         _error "Database ${DATABASE_IMPORT_TARGET_NAME} not exists. Please create it!!"
