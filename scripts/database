@@ -477,7 +477,7 @@ function listMysqlDatabase()
 function exportMysqlDatabase()
 {
     _arrow "Check database exist"
-    if [[ $(docker-compose exec mysql mysql -u root -p${rootPass} -e "show databases like '${DATABASE_NAME}'" 2>&1 | grep -v "Using a password" | grep -v '|' | grep ${DATABASE_NAME}) == ${DATABASE_NAME} ]]; then
+    if [[ $(docker-compose exec mysql mysql -u root -p${rootPass} -e "show databases like '${DATABASE_NAME}'" 2>&1 | grep -v "Using a password" | grep -v "\|" | grep ${DATABASE_NAME}) == ${DATABASE_NAME} ]]; then
         _success "Database existed"
         _arrow "Export database"
         docker-compose exec -T mysql /usr/bin/mysqldump -u root --password=${rootPass} ${DATABASE_NAME} > ${DES_DIR}/${DATABASE_NAME}-${BACKDATE}.sql
@@ -495,7 +495,7 @@ function importMysqlDatabase()
     _arrow "Check database source"
     checkDatabaseFileName
     _arrow "Check database ${DATABASE_IMPORT_TARGET_NAME} exist?"
-    if [[ $(docker-compose exec mysql mysql -u root -p${rootPass} -e "show databases like '${DATABASE_NAME}'" 2>&1 | grep -v "Using a password" | grep -v '|' | grep ${DATABASE_NAME}) == ${DATABASE_NAME} ]]
+    if [[ $(docker-compose exec mysql mysql -u root -p${rootPass} -e "show databases like '${DATABASE_NAME}'" 2>&1 | grep -v "Using a password" | grep -v "\|" | grep ${DATABASE_NAME}) == ${DATABASE_NAME} ]]
     then
         _success "Database existed"
         _arrow "Import database"
@@ -513,7 +513,7 @@ function createMysqlDatabase()
     _arrow "Check database name"
     checkDatabaseName
     _arrow "Check database ${DATABASE_NAME} exist?"
-    if [[ $(docker-compose exec mysql mysql -u root -p${rootPass} -e "show databases like '${DATABASE_NAME}'" 2>&1 | grep -v "Using a password" | grep -v '|' | grep ${DATABASE_NAME}) == ${DATABASE_NAME} ]]
+    if [[ $(docker-compose exec mysql mysql -u root -p${rootPass} -e "show databases like '${DATABASE_NAME}'" 2>&1 | grep -v "Using a password" | grep -v "\|" | grep ${DATABASE_NAME}) == ${DATABASE_NAME} ]]
     then
         _error "Database existed, please choose other name!"
         exit 1
@@ -530,7 +530,7 @@ function dropMysqlDatabase()
     _arrow "Check database name"
     checkDatabaseName
     _arrow "Check database ${DATABASE_NAME} exist?"
-    if [[ $(docker-compose exec mysql mysql -u root -p${rootPass} -e "show databases like '${DATABASE_NAME}'" 2>&1 | grep -v "Using a password" | grep -v '|' | grep ${DATABASE_NAME}) == ${DATABASE_NAME} ]]
+    if [[ $(docker-compose exec mysql mysql -u root -p${rootPass} -e "show databases like '${DATABASE_NAME}'" 2>&1 | grep -v "Using a password" | grep -v "\|" | grep ${DATABASE_NAME}) == ${DATABASE_NAME} ]]
     then
         _success "Database existed" 
     else 
