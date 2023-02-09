@@ -9,6 +9,7 @@
 !/logs/nginx/.keepme
 /data/*
 !/data/.keepme
+!/data/mysql/.keepme
 /databases/*
 !/databases/.keepme
 /databases/import/*
