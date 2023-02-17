@@ -214,7 +214,7 @@ Version $VERSION
 
     Examples:
       Install Magento community edition version 2.3.4 with PHP version 7.2 for domain test-magento.com:
-        ./scripts/$(basename "$0") --domain=test-magento.com --mangeto-version=2.3.4 --magento-edition=community --php-version=php72
+        ./scripts/$(basename "$0") --domain=test-magento.com --magento-version=2.3.4 --magento-edition=community --php-version=php72
 "
     _printPoweredBy
     exit 1
@@ -253,7 +253,7 @@ function processArgs()
             --domain=*)
                 VHOST_DOMAIN="${arg#*=}"
             ;;
-            --mangeto-version=*)
+            --magento-version=*)
                 MAGENTO_VERSION="${arg#*=}"
             ;;
             --magento-edition=*)
