@@ -61,18 +61,26 @@ RUN echo "nginx ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/nginx
 ENV NEW_RELIC_AGENT_VERSION ${NEW_RELIC_AGENT_VERSION}
 ENV NEW_RELIC_LICENSE_KEY ${NEW_RELIC_LICENSE_KEY}
 ENV NEW_RELIC_APPNAME ${NEW_RELIC_APPNAME}
+ENV NR_INSTALL_SILENT 1
 
-RUN curl -L https://download.newrelic.com/php_agent/archive/${NEW_RELIC_AGENT_VERSION}/newrelic-php5-${NEW_RELIC_AGENT_VERSION}-linux.tar.gz | tar -C /tmp -zx \
-    && export NR_INSTALL_USE_CP_NOT_LN=1 \
-    && export NR_INSTALL_SILENT=1 \
-    && /tmp/newrelic-php5-${NEW_RELIC_AGENT_VERSION}-linux/newrelic-install install \
-    && rm -rf /tmp/newrelic-php5-* /tmp/nrinstall*
+RUN echo 'deb http://apt.newrelic.com/debian/ newrelic non-free' | sudo tee /etc/apt/sources.list.d/newrelic.list \
+	&& wget -O- https://download.newrelic.com/548C16BF.gpg | sudo apt-key add - \
+	&& apt-get update \
+	&& apt-get install -y newrelic-php5 \
+	&& NR_INSTALL_SILENT=1 newrelic-install install \
+	&& rm -rf /var/lib/apt/lists/*
 
 RUN sed -i -e "s/REPLACE_WITH_REAL_KEY/${NEW_RELIC_LICENSE_KEY}/" \
     -e "s/newrelic.appname[[:space:]]=[[:space:]].*/newrelic.appname=\"${NEW_RELIC_APPNAME}\"/" \
     -e '$anewrelic.distributed_tracing_enabled=true' \
     -e '$anewrelic.daemon.address="newrelic:31339"' \
     /etc/php/7.3/fpm/conf.d/newrelic.ini
+
+RUN sed -i -e "s/REPLACE_WITH_REAL_KEY/${NEW_RELIC_LICENSE_KEY}/" \
+    -e "s/newrelic.appname[[:space:]]=[[:space:]].*/newrelic.appname=\"${NEW_RELIC_APPNAME}\"/" \
+    -e '$anewrelic.distributed_tracing_enabled=true' \
+    -e '$anewrelic.daemon.address="newrelic:31339"' \
+    /etc/php/7.3/cli/conf.d/newrelic.ini
 
 ENTRYPOINT ["/tini", "--"]
 CMD ["/usr/sbin/php-fpm7.3", "-F", "-O", "--fpm-config", "/etc/php/7.3/fpm/php-fpm.conf"]
