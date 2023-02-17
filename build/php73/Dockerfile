@@ -63,8 +63,6 @@ ENV NEW_RELIC_LICENSE_KEY ${NEW_RELIC_LICENSE_KEY}
 ENV NEW_RELIC_APPNAME ${NEW_RELIC_APPNAME}
 ENV NR_INSTALL_SILENT 1
 
-RUN 
-
 RUN echo 'deb http://apt.newrelic.com/debian/ newrelic non-free' | sudo tee /etc/apt/sources.list.d/newrelic.list \
 	&& wget -O- https://download.newrelic.com/548C16BF.gpg | sudo apt-key add - \
 	&& apt-get update \
