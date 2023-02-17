@@ -29,6 +29,9 @@ services:
       - ./conf/php/php70/php.ini:/etc/php/7.0/fpm/php.ini
       - ./conf/php/php70/php.ini:/etc/php/7.0/cli/php.ini
 
+  newrelic:
+    image: newrelic/php-daemon
+    hostname: newrelic
 
   php71:
     build:
