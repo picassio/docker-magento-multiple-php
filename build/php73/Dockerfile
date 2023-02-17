@@ -61,13 +61,14 @@ RUN echo "nginx ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/nginx
 ENV NEW_RELIC_AGENT_VERSION ${NEW_RELIC_AGENT_VERSION}
 ENV NEW_RELIC_LICENSE_KEY ${NEW_RELIC_LICENSE_KEY}
 ENV NEW_RELIC_APPNAME ${NEW_RELIC_APPNAME}
-ENV NR_INSTALL_SILENT 1
 
 RUN echo 'deb http://apt.newrelic.com/debian/ newrelic non-free' | sudo tee /etc/apt/sources.list.d/newrelic.list \
 	&& wget -O- https://download.newrelic.com/548C16BF.gpg | sudo apt-key add - \
 	&& apt-get update \
 	&& apt-get install -y newrelic-php5 \
-	&& NR_INSTALL_SILENT=1 newrelic-install install \
+    && export NR_INSTALL_USE_CP_NOT_LN=1 \
+    && export NR_INSTALL_SILENT=1 \
+	&& newrelic-install install \
 	&& rm -rf /var/lib/apt/lists/*
 
 RUN sed -i -e "s/REPLACE_WITH_REAL_KEY/${NEW_RELIC_LICENSE_KEY}/" \
