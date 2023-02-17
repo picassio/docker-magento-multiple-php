@@ -62,14 +62,24 @@ ENV NEW_RELIC_AGENT_VERSION ${NEW_RELIC_AGENT_VERSION}
 ENV NEW_RELIC_LICENSE_KEY ${NEW_RELIC_LICENSE_KEY}
 ENV NEW_RELIC_APPNAME ${NEW_RELIC_APPNAME}
 
-RUN echo 'deb http://apt.newrelic.com/debian/ newrelic non-free' | sudo tee /etc/apt/sources.list.d/newrelic.list \
-	&& wget -O- https://download.newrelic.com/548C16BF.gpg | sudo apt-key add - \
-	&& apt-get update \
-	&& apt-get install -y newrelic-php5 \
+# RUN echo 'deb http://apt.newrelic.com/debian/ newrelic non-free' | sudo tee /etc/apt/sources.list.d/newrelic.list \
+# 	&& wget -O- https://download.newrelic.com/548C16BF.gpg | sudo apt-key add - \
+# 	&& apt-get update \
+# 	&& apt-get install -y newrelic-php5 \
+#     && export NR_INSTALL_USE_CP_NOT_LN=1 \
+#     && export NR_INSTALL_SILENT=1 \
+# 	&& newrelic-install install \
+# 	&& rm -rf /var/lib/apt/lists/*
+
+RUN \
+	export NR_VERSION=$(curl -sS https://download.newrelic.com/php_agent/release/ | sed -n "s/.*>\(.*linux\).tar.gz<.*/\1/p") && \
+	curl -L http://download.newrelic.com/php_agent/release/${NR_VERSION}.tar.gz | tar -C /tmp -zx
+RUN \
+	export NR_VERSION=$(curl -sS https://download.newrelic.com/php_agent/release/ | sed -n "s/.*>\(.*linux\).tar.gz<.*/\1/p") && \	
     && export NR_INSTALL_USE_CP_NOT_LN=1 \
     && export NR_INSTALL_SILENT=1 \
-	&& newrelic-install install \
-	&& rm -rf /var/lib/apt/lists/*
+    && /tmp/newrelic-php5-*/newrelic-install install \
+    && rm -rf /tmp/newrelic-php5-* /tmp/nrinstall*
 
 RUN sed -i -e "s/REPLACE_WITH_REAL_KEY/${NEW_RELIC_LICENSE_KEY}/" \
     -e "s/newrelic.appname[[:space:]]=[[:space:]].*/newrelic.appname=\"${NEW_RELIC_APPNAME}\"/" \
