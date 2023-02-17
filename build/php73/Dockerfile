@@ -93,11 +93,8 @@ RUN \
 #     -e '$anewrelic.daemon.address="newrelic:31339"' \
 #     /etc/php/7.3/cli/conf.d/newrelic.ini
 
-USER root
+COPY --chmod=755 ./start.sh /usr/bin/start.sh
 
-ADD --chmod=755 ./entrypoint.sh /usr/bin/entrypoint.sh
-ADD --chmod=755 ./start.sh /usr/bin/start.sh
+ENTRYPOINT ["/tini", "--"]
 
-ENTRYPOINT ["/usr/bin/entrypoint.sh"]
-
-CMD ["start.sh"]
+CMD ["/usr/bin/start.sh"]
