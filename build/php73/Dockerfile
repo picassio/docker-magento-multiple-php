@@ -27,7 +27,7 @@ RUN update-alternatives --set php /usr/bin/php7.3 \
 	&& update-alternatives --set phpize /usr/bin/phpize7.3 \
 	&& update-alternatives --set php-config /usr/bin/php-config7.3
 	
-RUN export DEBIAN_FRONTEND=noninteractive && apt-get install -y curl git sudo apt-utils vim zip unzip
+RUN export DEBIAN_FRONTEND=noninteractive && apt-get install -y curl git sudo apt-utils vim zip unzip wget
 RUN dpkg-reconfigure -f noninteractive tzdata
 
 RUN curl https://getcomposer.org/download/1.10.19/composer.phar --output /usr/bin/composer && chmod +x /usr/bin/composer
@@ -62,6 +62,8 @@ ENV NEW_RELIC_AGENT_VERSION ${NEW_RELIC_AGENT_VERSION}
 ENV NEW_RELIC_LICENSE_KEY ${NEW_RELIC_LICENSE_KEY}
 ENV NEW_RELIC_APPNAME ${NEW_RELIC_APPNAME}
 ENV NR_INSTALL_SILENT 1
+
+RUN 
 
 RUN echo 'deb http://apt.newrelic.com/debian/ newrelic non-free' | sudo tee /etc/apt/sources.list.d/newrelic.list \
 	&& wget -O- https://download.newrelic.com/548C16BF.gpg | sudo apt-key add - \
