@@ -75,7 +75,7 @@ RUN \
 	export NR_VERSION=$(curl -sS https://download.newrelic.com/php_agent/release/ | sed -n "s/.*>\(.*linux\).tar.gz<.*/\1/p") && \
 	curl -L http://download.newrelic.com/php_agent/release/${NR_VERSION}.tar.gz | tar -C /tmp -zx
 RUN \
-	export NR_VERSION=$(curl -sS https://download.newrelic.com/php_agent/release/ | sed -n "s/.*>\(.*linux\).tar.gz<.*/\1/p") && \	
+	export NR_VERSION=$(curl -sS https://download.newrelic.com/php_agent/release/ | sed -n "s/.*>\(.*linux\).tar.gz<.*/\1/p") \	
     && export NR_INSTALL_USE_CP_NOT_LN=1 \
     && export NR_INSTALL_SILENT=1 \
     && /tmp/newrelic-php5-*/newrelic-install install \
