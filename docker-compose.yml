@@ -65,6 +65,11 @@ services:
   php73:
     build:
       context: ./build/php73
+      args: 
+        ELASTICSEARCH_VERSION: ${ELASTICSEARCH_VERSION}
+        NEW_RELIC_AGENT_VERSION: ${NEW_RELIC_AGENT_VERSION}
+        NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
+        NEW_RELIC_APPNAME: ${NEW_RELIC_APPNAME}
     image: php7.3-mage:v1.0
     hostname: php73
     extra_hosts:
