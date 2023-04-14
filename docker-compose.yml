@@ -65,14 +65,9 @@ services:
   php73:
     build:
       context: ./build/php73
-      # args: 
-      #   NEW_RELIC_AGENT_VERSION: ${NEW_RELIC_AGENT_VERSION}
-      #   NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
-      #   NEW_RELIC_APPNAME: ${NEW_RELIC_APPNAME}
     image: php7.3-mage:v1.0
     hostname: php73
     environment:
-      NEW_RELIC_AGENT_VERSION: ${NEW_RELIC_AGENT_VERSION}
       NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
       NEW_RELIC_APPNAME: ${NEW_RELIC_APPNAME}
     extra_hosts:
@@ -118,7 +113,6 @@ services:
     image: php8.1-c2-mage:v1.0
     hostname: php81-c2
     environment:
-      NEW_RELIC_AGENT_VERSION: ${NEW_RELIC_AGENT_VERSION}
       NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY}
       NEW_RELIC_APPNAME: ${NEW_RELIC_APPNAME}
     extra_hosts:
