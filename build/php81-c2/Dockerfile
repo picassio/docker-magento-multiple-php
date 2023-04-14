@@ -56,5 +56,22 @@ RUN mkdir /home/nginx/.composer && chown -R nginx:nginx /home/nginx/.composer
 
 RUN echo "nginx ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/nginx
 
+RUN \
+	export NR_VERSION=$(curl -sS https://download.newrelic.com/php_agent/release/ | sed -n "s/.*>\(.*linux\).tar.gz<.*/\1/p") && \
+	curl -L http://download.newrelic.com/php_agent/release/${NR_VERSION}.tar.gz | tar -C /tmp -zx
+RUN \
+	export NR_VERSION=$(curl -sS https://download.newrelic.com/php_agent/release/ | sed -n "s/.*>\(.*linux\).tar.gz<.*/\1/p") \	
+    && export NR_INSTALL_USE_CP_NOT_LN=1 \
+    && export NR_INSTALL_SILENT=1 \
+    && /tmp/newrelic-php5-*/newrelic-install install \
+    && rm -rf /tmp/newrelic-php5-* /tmp/nrinstall*
+
+
+
+COPY ./start.sh /usr/bin/start.sh
+
+RUN chmod +x /usr/bin/start.sh
+
 ENTRYPOINT ["/tini", "--"]
-CMD ["/usr/sbin/php-fpm8.1", "-F", "-O", "--fpm-config", "/etc/php/8.1/fpm/php-fpm.conf"]
+
+CMD ["/usr/bin/start.sh"]
