@@ -2,7 +2,7 @@
 # ARG NEW_RELIC_LICENSE_KEY
 # ARG NEW_RELIC_APPNAME
 
-FROM ubuntu:bionic
+FROM ubuntu:focal
 
 ENV TINI_VERSION v0.19.0
 ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /tini
