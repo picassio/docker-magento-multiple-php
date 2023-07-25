@@ -434,13 +434,11 @@ function checkComposerAuth()
         PRIVATE_KEY="$(docker-compose exec -T --user nginx ${APP_PHP} composer config --global $MAGENTO_PASSWORD_PROP 2>/dev/null)"
 
     if [ -z "$PUBLIC_KEY" ] || [ -z "$PRIVATE_KEY" ]; then
-        exec < /dev/tty
         echo
         echo "Composer authentication required (repo.magento.com public and private keys):"
         read -r -p "    Username: " PUBLIC_KEY
         read -r -p "    Password: " PRIVATE_KEY
         echo
-        exec <&-
         if [ -z "$PUBLIC_KEY" ] || [ -z "$PRIVATE_KEY" ]; then
             _error "Please setup Composer auth for repo.magento.com to continue."
         fi
