@@ -455,8 +455,6 @@ function downloadMagentoVersion()
 {
     VERSION=${MAGENTO_VERSION}
     EDITION=${MAGENTO_EDITION}
-    _arrow "Setup composer auth"
-    checkComposerAuth
     _arrow "Download Magento ${EDITION} version ${VERSION}"
     docker-compose exec --user nginx ${APP_PHP} php -d memory_limit=-1 /usr/bin/composer create-project --repository=https://repo.magento.com/ magento/project-"${EDITION}"-edition="${VERSION}" /home/public_html/${VHOST_DOMAIN}/ || _die "Cannot download source code"
     _success "Download Magento ${EDITION} version ${VERSION} done"
@@ -555,7 +553,7 @@ function main()
     createMagentoDomain
     createDomainDatabase
 
-    # checkComposerAuth
+    checkComposerAuth
     downloadMagentoVersion
 
     getMysqlInformation
