@@ -10,7 +10,7 @@
 /data/*
 !/data/.keepme
 !/data/mysql/.keepme
-!/data/mysql
+/data/mysql/*
 /databases/*
 !/databases/.keepme
 /databases/import/*
