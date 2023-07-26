@@ -480,7 +480,7 @@ function exportMysqlDatabase()
     if [[ $(docker-compose exec mysql mysql -u root -p${rootPass} --skip-column-names -e "show databases like '${DATABASE_NAME}'" 2>&1 | grep -v "Using a password" | grep -o "${DATABASE_NAME}") == ${DATABASE_NAME} ]]; then
         _success "Database existed"
         _arrow "Export database"
-        docker-compose exec -T mysql /usr/bin/mysqldump -u root --password=${rootPass} ${DATABASE_NAME} > ${DES_DIR}/${DATABASE_NAME}-${BACKDATE}.sql
+        docker-compose exec -T mysql /usr/bin/mysqldump -u root --password=${rootPass} ${DATABASE_NAME} > ${DES_DIR}/${DATABASE_NAME}-${BACKDATE}.sql  2>&1 | grep -v "Using a password"
         _success "Your database exported"
         echo "  >> Export file location:    ${DES_DIR}/${DATABASE_NAME}-${BACKDATE}.sql"
     else
