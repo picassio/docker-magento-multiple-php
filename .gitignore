@@ -19,3 +19,5 @@
 !/databases/export
 !/databases/import/.keepme
 !/databases/export/.keepme
+.DS_Store
+gitInfo.md
