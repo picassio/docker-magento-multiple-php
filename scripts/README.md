@@ -2,6 +2,20 @@
 
 Management scripts for Docker-based Magento development environment with multiple PHP versions.
 
+## ⚠️ Development Use Only
+
+**IMPORTANT**: These scripts are designed for **local development environments only**. They use insecure default credentials and display sensitive information in terminal output. **DO NOT use in production environments.**
+
+Default credentials:
+- Admin User: `admin`
+- Admin Password: `Admin123`
+
+For production use, you must:
+1. Change all default passwords
+2. Implement proper secret management
+3. Add authentication and authorization
+4. Remove password display from output
+
 ## Directory Structure
 
 ```
