@@ -218,17 +218,12 @@ isServiceRunning() {
 }
 
 # Get MySQL container information
+# Sets global variable: rootPass
 getMysqlInformation() {
     local containerNameDB
     containerNameDB=$(docker inspect -f '{{.Name}}' "$(docker-compose ps -q mysql)" | cut -c2-)
 
-    local mysqlUser mysqlPass mysqRootPass
-    mysqlUser=$(docker inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}' "$containerNameDB" | grep MYSQL_USER)
-    user="${mysqlUser/MYSQL_USER=/}"
-
-    mysqlPass=$(docker inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}' "$containerNameDB" | grep MYSQL_PASSWORD)
-    pass="${mysqlPass/MYSQL_PASSWORD=/}"
-
+    local mysqRootPass
     mysqRootPass=$(docker inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}' "$containerNameDB" | grep MYSQL_ROOT_PASSWORD)
     rootPass="${mysqRootPass/MYSQL_ROOT_PASSWORD=/}"
 }

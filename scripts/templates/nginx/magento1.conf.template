@@ -1,0 +1,63 @@
+server {
+    listen 80;
+    server_name __DOMAIN__;
+    root /home/public_html/__ROOT_DIR__;
+
+    access_log /var/log/nginx/__DOMAIN__.access.log;
+    error_log /var/log/nginx/__DOMAIN__.error.log;
+
+    location / {
+        index index.html index.php;
+        try_files $uri $uri/ @handler;
+        expires 30d;
+    }
+
+    # Static files
+    location ~ \.(js|css|png|jpg|gif|swf|ico|pdf|mov|fla|zip|rar)$ {
+        try_files $uri =404;
+    }
+
+    # Protected locations
+    location /app/                { deny all; }
+    location /includes/           { deny all; }
+    location /lib/                { deny all; }
+    location /media/downloadable/ { deny all; }
+    location /pkginfo/            { deny all; }
+    location /report/config.xml   { deny all; }
+    location /var/                { deny all; }
+
+    # Hidden files
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    location @handler {
+        rewrite / /index.php;
+    }
+
+    location ~ \.php/ {
+        rewrite ^(.*\.php)/ $1 last;
+    }
+
+    location ~ \.php$ {
+        if (!-e $request_filename) { rewrite / /index.php last; }
+
+        fastcgi_pass   __PHP_VERSION__:9001;
+        fastcgi_index  index.php;
+        fastcgi_param  SCRIPT_FILENAME  $document_root$fastcgi_script_name;
+
+        fastcgi_param PHP_VALUE  "display_startup_errors=on";
+        fastcgi_param PHP_VALUE  "display_errors=on";
+        fastcgi_param PHP_VALUE  "html_errors=on";
+        fastcgi_param PHP_VALUE  "log_errors=on";
+        fastcgi_param PHP_VALUE  "error_log=/home/public_html/__ROOT_DIR__/var/log/system.log";
+        fastcgi_param PHP_VALUE  "xdebug.show_exception_trace=0";
+
+        fastcgi_param  MAGE_IS_DEVELOPER_MODE true;
+
+        include        fastcgi_params;
+        fastcgi_read_timeout 300;
+    }
+}
