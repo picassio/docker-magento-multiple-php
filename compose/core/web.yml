@@ -1,0 +1,16 @@
+# Core Web Server - Nginx
+services:
+  nginx:
+    build:
+      context: ../../build/nginx
+    image: nginx-mage:v1.0
+    hostname: nginx
+    volumes:
+      - ../../conf/nginx/conf.d:/etc/nginx/conf.d
+      - ../../conf/nginx/ssl:/etc/nginx/ssl
+      - ../../logs/nginx:/var/log/nginx
+      - ../../sources:/home/public_html
+      - ../../conf/nginx/nginx.conf:/etc/nginx/nginx.conf
+    ports:
+      - 80:80
+      - 443:443

@@ -1,0 +1,399 @@
+#!/usr/bin/env bash
+#
+# Docker Compose Service Manager
+# Intelligently manage which services to start/stop
+#
+
+set -e
+
+# Get script directory and project root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Source common library
+source "${SCRIPT_DIR}/lib/common.sh"
+
+################################################################################
+# CONSTANTS
+################################################################################
+
+readonly VERSION="1.0.0"
+readonly COMPOSE_DIR="${PROJECT_ROOT}/compose"
+readonly DOCKER_COMPOSE_FILE="${PROJECT_ROOT}/docker-compose.yml"
+readonly DOCKER_COMPOSE_GENERATED="${PROJECT_ROOT}/.docker-compose.generated.yml"
+
+################################################################################
+# AVAILABLE SERVICES
+################################################################################
+
+declare -A SERVICE_GROUPS=(
+    ["core"]="Core services (nginx, mysql, mailhog)"
+    ["php-modern"]="Modern PHP (8.2, 8.1-c2, 7.4-c2)"
+    ["php-standard"]="Standard PHP (7.4, 7.3, 7.2)"
+    ["php82"]="PHP 8.2 only"
+    ["elasticsearch"]="Elasticsearch + Kibana (for Magento 2.4+)"
+    ["cache"]="Redis + Varnish"
+    ["queue"]="RabbitMQ"
+    ["admin"]="phpMyAdmin + phpRedmin"
+)
+
+declare -A PRESETS=(
+    ["magento-2.3"]="Magento 2.3.x stack (PHP 7.2-7.4)"
+    ["magento-2.4"]="Magento 2.4.x stack (PHP 7.4-8.2 + Elasticsearch)"
+    ["minimal"]="Minimal setup (PHP 8.2 only)"
+)
+
+################################################################################
+# FUNCTIONS
+################################################################################
+
+printUsage() {
+    cat <<EOF
+Docker Compose Service Manager
+Version $VERSION
+
+Intelligent service orchestration for Docker Magento development environment.
+
+Usage:
+    ./scripts/$(basename "$0") [COMMAND] [OPTIONS]
+
+Commands:
+    preset <name>           Use a preset configuration
+    start [services...]     Start specific service groups
+    stop                    Stop all services
+    status                  Show current configuration
+    list                    List available services and presets
+    interactive             Interactive service selection
+    generate                Generate docker-compose.yml without starting
+    reset                   Reset to original docker-compose.yml
+
+Presets:
+$(for preset in "${!PRESETS[@]}"; do
+    printf "    %-20s %s\n" "$preset" "${PRESETS[$preset]}"
+done | sort)
+
+Service Groups:
+$(for group in "${!SERVICE_GROUPS[@]}"; do
+    printf "    %-20s %s\n" "$group" "${SERVICE_GROUPS[$group]}"
+done | sort)
+
+Examples:
+    # Use Magento 2.4 preset
+    ./scripts/$(basename "$0") preset magento-2.4
+
+    # Custom selection
+    ./scripts/$(basename "$0") start core php-modern elasticsearch
+
+    # Interactive mode
+    ./scripts/$(basename "$0") interactive
+
+    # Show what's configured
+    ./scripts/$(basename "$0") status
+
+    # Generate compose file without starting
+    ./scripts/$(basename "$0") generate core php82
+
+Options:
+    -h, --help              Display this help
+    -v, --verbose           Verbose output
+    -d, --detach            Run in background (default)
+
+EOF
+    _printPoweredBy
+    exit 0
+}
+
+# List available services and presets
+listAvailable() {
+    _header "Available Presets"
+    echo ""
+    for preset in "${!PRESETS[@]}"; do
+        printf "  📦 %-20s %s\n" "$preset" "${PRESETS[$preset]}"
+    done | sort
+
+    echo ""
+    _header "Available Service Groups"
+    echo ""
+    for group in "${!SERVICE_GROUPS[@]}"; do
+        printf "  🔧 %-20s %s\n" "$group" "${SERVICE_GROUPS[$group]}"
+    done | sort
+
+    echo ""
+    _note "Use './scripts/$(basename "$0") preset <name>' to start a preset"
+    _note "Use './scripts/$(basename "$0") start <groups...>' to start custom groups"
+}
+
+# Show current configuration
+showStatus() {
+    _header "Current Docker Compose Configuration"
+    echo ""
+
+    if [[ -f "$DOCKER_COMPOSE_FILE" ]]; then
+        if grep -q "^include:" "$DOCKER_COMPOSE_FILE" 2>/dev/null; then
+            _success "Using modular configuration"
+            echo ""
+            echo "Included services:"
+            grep "^  -" "$DOCKER_COMPOSE_FILE" | sed 's/^  - /  ✓ /'
+        else
+            _warning "Using legacy monolithic docker-compose.yml"
+            _note "Run './scripts/$(basename "$0") preset magento-2.4' to migrate"
+        fi
+    else
+        _error "No docker-compose.yml found"
+    fi
+
+    echo ""
+    _header "Running Services"
+    echo ""
+    docker-compose ps --services 2>/dev/null || _warning "No services running"
+}
+
+# Generate docker-compose.yml from service groups
+generateCompose() {
+    local services=("$@")
+    local includes=()
+
+    # Always include core and volumes
+    includes+=("${COMPOSE_DIR}/core/web.yml")
+    includes+=("${COMPOSE_DIR}/core/database.yml")
+    includes+=("${COMPOSE_DIR}/core/mail.yml")
+
+    # Process requested services
+    for service in "${services[@]}"; do
+        case "$service" in
+            core)
+                # Already included above
+                ;;
+            php-modern)
+                includes+=("${COMPOSE_DIR}/php/modern.yml")
+                ;;
+            php-standard)
+                includes+=("${COMPOSE_DIR}/php/standard.yml")
+                ;;
+            php82)
+                includes+=("${COMPOSE_DIR}/php/php82.yml")
+                ;;
+            elasticsearch)
+                includes+=("${COMPOSE_DIR}/optional/elasticsearch.yml")
+                ;;
+            cache)
+                includes+=("${COMPOSE_DIR}/optional/cache.yml")
+                ;;
+            queue)
+                includes+=("${COMPOSE_DIR}/optional/queue.yml")
+                ;;
+            admin)
+                includes+=("${COMPOSE_DIR}/optional/admin.yml")
+                ;;
+            *)
+                _warning "Unknown service group: $service"
+                ;;
+        esac
+    done
+
+    # Always include volumes at the end
+    includes+=("${COMPOSE_DIR}/volumes.yml")
+
+    # Generate docker-compose.yml
+    _arrow "Generating docker-compose.yml..."
+
+    cat > "$DOCKER_COMPOSE_FILE" <<EOF
+# Auto-generated by services script
+# DO NOT EDIT MANUALLY - Use './scripts/services' to modify
+
+include:
+EOF
+
+    # Add includes with relative paths
+    for include in "${includes[@]}"; do
+        local rel_path=$(realpath --relative-to="$PROJECT_ROOT" "$include")
+        echo "  - $rel_path" >> "$DOCKER_COMPOSE_FILE"
+    done
+
+    _success "docker-compose.yml generated"
+}
+
+# Use a preset configuration
+usePreset() {
+    local preset="$1"
+
+    case "$preset" in
+        magento-2.3)
+            _arrow "Using Magento 2.3 preset..."
+            cp "${COMPOSE_DIR}/presets/magento-2.3.yml" "$DOCKER_COMPOSE_FILE"
+            ;;
+        magento-2.4)
+            _arrow "Using Magento 2.4 preset..."
+            cp "${COMPOSE_DIR}/presets/magento-2.4.yml" "$DOCKER_COMPOSE_FILE"
+            ;;
+        minimal)
+            _arrow "Using minimal preset..."
+            cp "${COMPOSE_DIR}/presets/minimal.yml" "$DOCKER_COMPOSE_FILE"
+            ;;
+        *)
+            _error "Unknown preset: $preset"
+            _note "Available presets: ${!PRESETS[*]}"
+            exit 1
+            ;;
+    esac
+
+    _success "Preset '$preset' activated"
+}
+
+# Interactive service selection
+interactiveSelect() {
+    _header "Interactive Service Selection"
+    echo ""
+
+    # Ask about PHP versions
+    echo "Which PHP versions do you need?"
+    echo "  1) Modern (8.2, 8.1-c2, 7.4-c2) - For Magento 2.4+"
+    echo "  2) Standard (7.4, 7.3, 7.2) - For Magento 2.3"
+    echo "  3) PHP 8.2 only - Minimal"
+    echo ""
+    read -r -p "Choice [1]: " php_choice
+    php_choice=${php_choice:-1}
+
+    local services=("core")
+    case "$php_choice" in
+        1) services+=("php-modern") ;;
+        2) services+=("php-standard") ;;
+        3) services+=("php82") ;;
+    esac
+
+    # Ask about Elasticsearch
+    echo ""
+    read -r -p "Include Elasticsearch? (required for Magento 2.4+) [Y/n]: " es_choice
+    if [[ ! "$es_choice" =~ ^[Nn]$ ]]; then
+        services+=("elasticsearch")
+    fi
+
+    # Ask about Cache
+    echo ""
+    read -r -p "Include Redis + Varnish cache? [Y/n]: " cache_choice
+    if [[ ! "$cache_choice" =~ ^[Nn]$ ]]; then
+        services+=("cache")
+    fi
+
+    # Ask about Queue
+    echo ""
+    read -r -p "Include RabbitMQ queue? (for Enterprise) [y/N]: " queue_choice
+    if [[ "$queue_choice" =~ ^[Yy]$ ]]; then
+        services+=("queue")
+    fi
+
+    # Ask about Admin tools
+    echo ""
+    read -r -p "Include admin tools (phpMyAdmin, phpRedmin)? [y/N]: " admin_choice
+    if [[ "$admin_choice" =~ ^[Yy]$ ]]; then
+        services+=("admin")
+    fi
+
+    echo ""
+    _arrow "Selected services: ${services[*]}"
+    echo ""
+
+    generateCompose "${services[@]}"
+}
+
+# Start services
+startServices() {
+    if [[ ! -f "$DOCKER_COMPOSE_FILE" ]]; then
+        _error "No docker-compose.yml found"
+        _note "Run './scripts/$(basename "$0") preset magento-2.4' or use interactive mode"
+        exit 1
+    fi
+
+    _arrow "Starting services..."
+    docker-compose up -d || {
+        _error "Failed to start services"
+        exit 1
+    }
+
+    _success "Services started successfully"
+    echo ""
+    docker-compose ps
+}
+
+# Stop all services
+stopServices() {
+    _arrow "Stopping all services..."
+    docker-compose down || {
+        _error "Failed to stop services"
+        exit 1
+    }
+    _success "All services stopped"
+}
+
+# Reset to original
+resetCompose() {
+    if [[ -f "${DOCKER_COMPOSE_FILE}.backup" ]]; then
+        _arrow "Restoring original docker-compose.yml..."
+        cp "${DOCKER_COMPOSE_FILE}.backup" "$DOCKER_COMPOSE_FILE"
+        _success "Restored to original configuration"
+    else
+        _warning "No backup found"
+    fi
+}
+
+################################################################################
+# MAIN
+################################################################################
+
+main() {
+    local command="${1:-}"
+
+    case "$command" in
+        preset)
+            shift
+            [[ -z "$1" ]] && _die "Preset name required. Use 'list' to see available presets."
+            usePreset "$1"
+            shift
+            startServices
+            ;;
+        start)
+            shift
+            if [[ $# -eq 0 ]]; then
+                startServices
+            else
+                generateCompose "$@"
+                startServices
+            fi
+            ;;
+        stop)
+            stopServices
+            ;;
+        status)
+            showStatus
+            ;;
+        list)
+            listAvailable
+            ;;
+        interactive)
+            interactiveSelect
+            read -r -p "Start services now? [Y/n]: " start_now
+            if [[ ! "$start_now" =~ ^[Nn]$ ]]; then
+                startServices
+            fi
+            ;;
+        generate)
+            shift
+            generateCompose "$@"
+            _success "Configuration generated. Use 'docker-compose up -d' to start."
+            ;;
+        reset)
+            resetCompose
+            ;;
+        -h|--help|help|"")
+            printUsage
+            ;;
+        *)
+            _error "Unknown command: $command"
+            printUsage
+            ;;
+    esac
+
+    exit 0
+}
+
+main "$@"

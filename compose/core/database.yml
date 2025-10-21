@@ -1,0 +1,16 @@
+# Core Database - MySQL
+services:
+  mysql:
+    hostname: mysql
+    image: mysql:${MYSQL_VERSION}
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - ../../data/mysql:/var/lib/mysql
+      - ../../conf/mysql/conf.d:/etc/mysql/conf.d
+    ports:
+      - 3308:3306

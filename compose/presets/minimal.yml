@@ -1,0 +1,7 @@
+# Preset: Minimal
+# Just PHP 8.2, MySQL, Nginx
+include:
+  - ../core/web.yml
+  - ../core/database.yml
+  - ../php/php82.yml
+  - ../volumes.yml

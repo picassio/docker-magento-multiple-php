@@ -1,0 +1,18 @@
+# Admin Tools - phpMyAdmin & phpRedmin
+services:
+  phpmyadmin:
+    image: phpmyadmin
+    restart: always
+    ports:
+      - 8080:80
+    environment:
+      - PMA_ARBITRARY=1
+
+  phpredmin:
+    image: sasanrose/phpredmin
+    environment:
+      - PHPREDMIN_DATABASE_REDIS_0_HOST=redis
+    ports:
+      - "8081:80"
+    depends_on:
+      - redis

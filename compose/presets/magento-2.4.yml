@@ -1,0 +1,10 @@
+# Preset: Magento 2.4.x
+# PHP 7.4-8.2 (Composer 2), Elasticsearch, MySQL, Nginx, Mailhog, Cache
+include:
+  - ../core/web.yml
+  - ../core/database.yml
+  - ../core/mail.yml
+  - ../php/modern.yml
+  - ../optional/elasticsearch.yml
+  - ../optional/cache.yml
+  - ../volumes.yml

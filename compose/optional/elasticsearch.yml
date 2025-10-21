@@ -1,0 +1,36 @@
+# Elasticsearch Stack - Required for Magento 2.4+
+services:
+  elasticsearch:
+    build:
+      context: ../../build/elasticsearch
+      args:
+        ELASTICSEARCH_VERSION: ${ELASTICSEARCH_VERSION}
+    image: elasticsearch-manual:${ELASTICSEARCH_VERSION}
+    environment:
+      - discovery.type=single-node
+      - node.name=elasticseach
+      - cluster.name=es-docker-cluster
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms1024m -Xmx1024m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    ports:
+      - 9200:9200
+
+  kibana:
+    image: kibana:${ELASTICSEARCH_VERSION}
+    environment:
+      SERVER_NAME: kibana
+      ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
+    depends_on:
+      - elasticsearch
+    ports:
+      - 5601:5601
+
+volumes:
+  elasticsearch-data:
+    external: true

@@ -1,0 +1,48 @@
+# Standard PHP Versions (7.2, 7.3, 7.4)
+# For Magento 2.3.x - 2.4.3
+services:
+  php74:
+    build:
+      context: ../../build/php74
+    image: php7.4-mage:v1.0
+    hostname: php74
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../../sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
+      - ../../conf/php/php74/magento.conf:/etc/php/7.4/fpm/pool.d/www.conf
+      - ../../conf/php/php74/php.ini:/etc/php/7.4/fpm/php.ini
+      - ../../conf/php/php74/php.ini:/etc/php/7.4/cli/php.ini
+
+  php73:
+    build:
+      context: ../../build/php73
+    image: php7.3-mage:v1.0
+    hostname: php73
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../../sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
+      - ../../conf/php/php73/magento.conf:/etc/php/7.3/fpm/pool.d/www.conf
+      - ../../conf/php/php73/php.ini:/etc/php/7.3/fpm/php.ini
+      - ../../conf/php/php73/php.ini:/etc/php/7.3/cli/php.ini
+
+  php72:
+    build:
+      context: ../../build/php72
+    image: php7.2-mage:v1.0
+    hostname: php72
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../../sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
+      - ../../conf/php/php72/magento.conf:/etc/php/7.2/fpm/pool.d/www.conf
+      - ../../conf/php/php72/php.ini:/etc/php/7.2/fpm/php.ini
+      - ../../conf/php/php72/php.ini:/etc/php/7.2/cli/php.ini
+
+volumes:
+  composer_cache:
+    external: true

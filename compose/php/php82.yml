@@ -1,0 +1,19 @@
+# PHP 8.2 - Latest Version
+services:
+  php82:
+    build:
+      context: ../../build/php82
+    image: php8.2-mage:v1.0
+    hostname: php82
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../../sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
+      - ../../conf/php/php82/magento.conf:/etc/php/8.2/fpm/pool.d/www.conf
+      - ../../conf/php/php82/php.ini:/etc/php/8.2/fpm/php.ini
+      - ../../conf/php/php82/php.ini:/etc/php/8.2/cli/php.ini
+
+volumes:
+  composer_cache:
+    external: true

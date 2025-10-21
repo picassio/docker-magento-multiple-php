@@ -1,0 +1,236 @@
+services:
+  nginx:
+    build:
+      context: ./build/nginx
+    image: nginx-mage:v1.0
+    hostname: nginx
+    volumes:
+      - ./conf/nginx/conf.d:/etc/nginx/conf.d
+      - ./conf/nginx/ssl:/etc/nginx/ssl
+      - ./logs/nginx:/var/log/nginx
+      - ./sources:/home/public_html
+      - ./conf/nginx/nginx.conf:/etc/nginx/nginx.conf
+    ports:
+      - 80:80
+      - 443:443
+
+  php70:
+    build:
+      context: ./build/php70
+    image: php7.0-mage:v1.0
+    hostname: php70
+    extra_hosts:
+      - "host.docker.internal:host-gateway" 
+    volumes:
+      - ./sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
+      - ./conf/php/php70/magento.conf:/etc/php/7.0/fpm/pool.d/www.conf
+      - ./conf/php/php70/php.ini:/etc/php/7.0/fpm/php.ini
+      - ./conf/php/php70/php.ini:/etc/php/7.0/cli/php.ini
+
+
+  php71:
+    build:
+      context: ./build/php71
+    image: php7.1-mage:v1.0
+    hostname: php71
+    extra_hosts:
+      - "host.docker.internal:host-gateway" 
+    volumes:
+      - ./sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
+      - ./conf/php/php71/magento.conf:/etc/php/7.1/fpm/pool.d/www.conf
+      - ./conf/php/php71/php.ini:/etc/php/7.1/fpm/php.ini
+      - ./conf/php/php71/php.ini:/etc/php/7.1/cli/php.ini
+
+
+  php72:
+    build:
+      context: ./build/php72
+    image: php7.2-mage:v1.0
+    hostname: php72
+    extra_hosts:
+      - "host.docker.internal:host-gateway" 
+    volumes:
+      - ./sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
+      - ./conf/php/php72/magento.conf:/etc/php/7.2/fpm/pool.d/www.conf
+      - ./conf/php/php72/php.ini:/etc/php/7.2/fpm/php.ini
+      - ./conf/php/php72/php.ini:/etc/php/7.2/cli/php.ini
+
+  php73:
+    build:
+      context: ./build/php73
+    image: php7.3-mage:v1.0
+    hostname: php73
+    extra_hosts:
+      - "host.docker.internal:host-gateway" 
+    volumes:
+      - ./sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
+      - ./conf/php/php73/magento.conf:/etc/php/7.3/fpm/pool.d/www.conf
+      - ./conf/php/php73/php.ini:/etc/php/7.3/fpm/php.ini
+      - ./conf/php/php73/php.ini:/etc/php/7.3/cli/php.ini
+
+  php74:
+    build:
+      context: ./build/php74
+    image: php7.4-mage:v1.0
+    hostname: php74
+    extra_hosts:
+      - "host.docker.internal:host-gateway" 
+    volumes:
+      - ./sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
+      - ./conf/php/php74/magento.conf:/etc/php/7.4/fpm/pool.d/www.conf
+      - ./conf/php/php74/php.ini:/etc/php/7.4/fpm/php.ini
+      - ./conf/php/php74/php.ini:/etc/php/7.4/cli/php.ini
+
+  php74-c2:
+    build:
+      context: ./build/php74-c2
+    image: php7.4-c2-mage:v1.0
+    hostname: php74-c2
+    extra_hosts:
+      - "host.docker.internal:host-gateway" 
+    volumes:
+      - ./sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
+      - ./conf/php/php74-c2/magento.conf:/etc/php/7.4/fpm/pool.d/www.conf
+      - ./conf/php/php74-c2/php.ini:/etc/php/7.4/fpm/php.ini
+      - ./conf/php/php74-c2/php.ini:/etc/php/7.4/cli/php.ini
+
+  php81-c2:
+    build:
+      context: ./build/php81-c2
+    image: php8.1-c2-mage:v1.0
+    hostname: php81-c2
+    extra_hosts:
+      - "host.docker.internal:host-gateway" 
+    volumes:
+      - ./sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
+      - ./conf/php/php81-c2/magento.conf:/etc/php/8.1/fpm/pool.d/www.conf
+      - ./conf/php/php81-c2/php.ini:/etc/php/8.1/fpm/php.ini
+      - ./conf/php/php81-c2/php.ini:/etc/php/8.1/cli/php.ini
+  php82:
+    build:
+      context: ./build/php82
+    image: php8.2-mage:v1.0
+    hostname: php82
+    extra_hosts:
+      - "host.docker.internal:host-gateway" 
+    volumes:
+      - ./sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
+      - ./conf/php/php82/magento.conf:/etc/php/8.2/fpm/pool.d/www.conf
+      - ./conf/php/php82/php.ini:/etc/php/8.2/fpm/php.ini
+      - ./conf/php/php82/php.ini:/etc/php/8.2/cli/php.ini      
+
+  mysql:
+    hostname: mysql
+    image: mysql:${MYSQL_VERSION}
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+      - ./conf/mysql/conf.d:/etc/mysql/conf.d
+    ports:
+      - 3308:3306
+
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+      - 1025:1025
+      - 8025:8025
+
+  redis:
+      image: "redis:6.0-alpine"
+      ports:
+        - "127.0.0.1:6379:6379"
+      sysctls:
+        - "net.core.somaxconn=65535"
+      volumes:
+        - "redis_data:/data"
+
+  elasticsearch:
+      build:
+        context: ./build/elasticsearch
+        args: 
+          ELASTICSEARCH_VERSION: ${ELASTICSEARCH_VERSION}
+      image: elasticsearch-manual:${ELASTICSEARCH_VERSION}
+      environment:
+          - discovery.type=single-node
+          - node.name=elasticseach
+          - cluster.name=es-docker-cluster
+          - bootstrap.memory_lock=true
+          - "ES_JAVA_OPTS=-Xms1024m -Xmx1024m"
+      ulimits:
+          memlock:
+              soft: -1
+              hard: -1
+      volumes:
+          - elasticsearch-data:/usr/share/elasticsearch/data
+      ports:
+          - 9200:9200
+
+  kibana:
+      image: kibana:${ELASTICSEARCH_VERSION}
+      environment:
+          SERVER_NAME: kibana
+          ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
+      depends_on:
+          - elasticsearch
+      ports:
+          - 5601:5601
+
+  rabbitmq:
+      image: rabbitmq:3-management-alpine
+      volumes:
+          - rabbitmq-data:/var/lib/rabbitmq/
+      environment:
+          RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE}
+          RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+          RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+      ports:
+          - 5672:5672
+          - 15672:15672
+  phpmyadmin:
+    image: phpmyadmin
+    restart: always
+    ports:
+      - 8080:80
+    environment:
+      - PMA_ARBITRARY=1
+
+  phpredmin:
+      image: sasanrose/phpredmin
+      environment:
+          - PHPREDMIN_DATABASE_REDIS_0_HOST=redis
+      ports:
+          - "8081:80"
+      depends_on:
+          - redis
+
+  varnish:
+    build:
+      context: ./build/varnish
+    image: varnish-6.0:v1
+    hostname: varnish
+    ports:
+      - 6081:6081
+    depends_on:
+      - nginx
+    volumes:
+      - ./conf/varnish/default.vcl:/etc/varnish/default.vcl
+
+volumes: 
+  composer_cache:
+  composer_cache_file:
+  elasticsearch-data:
+  redis_data:
+  rabbitmq-data:

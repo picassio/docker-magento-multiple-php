@@ -1,0 +1,8 @@
+# Preset: Magento 2.3.x
+# PHP 7.2-7.4, MySQL, Nginx, Mailhog
+include:
+  - ../core/web.yml
+  - ../core/database.yml
+  - ../core/mail.yml
+  - ../php/standard.yml
+  - ../volumes.yml

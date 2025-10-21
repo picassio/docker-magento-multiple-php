@@ -1,0 +1,7 @@
+# Shared Volumes
+# This file ensures all necessary volumes are created
+volumes:
+  composer_cache:
+  elasticsearch-data:
+  redis_data:
+  rabbitmq-data:

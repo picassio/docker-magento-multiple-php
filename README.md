@@ -206,6 +206,7 @@ sudo usermod -aG docker $USER
 | ssl | Command sử dụng để tạo Virtual host SSL cho các domain được lựa chọn |
 | xdebug | Command sử dụng để bật/tắt xdebug của 1 service php được lựa chọn |
 | varnish | Command sử dụng để bật/tắt varnish của 1 domain được lựa chọn |
+| services | Command quản lý services thông minh - khởi động services theo preset hoặc tùy chỉnh |
 
 #### Hệ thống email catch all
 
@@ -330,6 +331,133 @@ docker-compose up -d redis elasticsearch
 ./scripts/list-services
 
 ```
+
+## Quản lý Services với Service Manager (Khuyến nghị)
+
+Hệ thống cung cấp công cụ quản lý services thông minh `./scripts/services` giúp dễ dàng khởi động đúng services cần thiết mà không phải khởi tạo toàn bộ.
+
+### Docker Compose Modular
+
+Docker Compose configuration đã được chia thành các module nhỏ trong thư mục `compose/`:
+
+- **core/** - Services cơ bản (nginx, mysql, mailhog)
+- **php/** - Các phiên bản PHP (modern, standard, php82)
+- **optional/** - Services tùy chọn (elasticsearch, redis, varnish, rabbitmq, admin tools)
+- **presets/** - Cấu hình sẵn cho các trường hợp thông dụng
+
+### Sử dụng Presets (Cách nhanh nhất)
+
+```bash
+# Magento 2.4 stack (PHP 8.2/8.1/7.4-c2 + Elasticsearch + Redis + Varnish)
+./scripts/services preset magento-2.4
+
+# Magento 2.3 stack (PHP 7.4/7.3/7.2)
+./scripts/services preset magento-2.3
+
+# Minimal setup (Chỉ PHP 8.2)
+./scripts/services preset minimal
+```
+
+### Tùy chỉnh Services
+
+```bash
+# Core + PHP hiện đại + Elasticsearch
+./scripts/services start core php-modern elasticsearch
+
+# Core + PHP 8.2 + Cache + Admin tools
+./scripts/services start core php82 cache admin
+
+# Full stack
+./scripts/services start core php-modern elasticsearch cache queue admin
+```
+
+### Chế độ Interactive
+
+```bash
+./scripts/services interactive
+```
+
+Script sẽ hỏi từng bước:
+- PHP versions cần sử dụng (modern/standard/minimal)
+- Có cần Elasticsearch không? (cho Magento 2.4+)
+- Có cần Redis + Varnish không?
+- Có cần RabbitMQ không? (cho Enterprise)
+- Có cần Admin tools không? (phpMyAdmin, phpRedmin)
+
+### Service Groups có sẵn
+
+| Group | Mô tả |
+|-------|-------|
+| core | Services cơ bản (nginx, mysql, mailhog) |
+| php-modern | PHP hiện đại (8.2, 8.1-c2, 7.4-c2) cho Magento 2.4+ |
+| php-standard | PHP chuẩn (7.4, 7.3, 7.2) cho Magento 2.3 |
+| php82 | Chỉ PHP 8.2 (minimal) |
+| elasticsearch | Elasticsearch + Kibana |
+| cache | Redis + Varnish |
+| queue | RabbitMQ |
+| admin | phpMyAdmin + phpRedmin |
+
+### Các lệnh khác
+
+```bash
+# List services và presets có sẵn
+./scripts/services list
+
+# Xem cấu hình hiện tại
+./scripts/services status
+
+# Tạo docker-compose.yml mà không start
+./scripts/services generate core php82
+
+# Stop tất cả services
+./scripts/services stop
+
+# Reset về docker-compose.yml gốc
+./scripts/services reset
+```
+
+### Ví dụ thực tế
+
+**Scenario 1: Dev Magento 2.4.6**
+```bash
+./scripts/services preset magento-2.4
+# Khởi động: nginx, mysql, mailhog, php82, php81-c2, php74-c2, elasticsearch, kibana, redis, varnish
+```
+
+**Scenario 2: Quick test với PHP 8.2**
+```bash
+./scripts/services preset minimal
+# Khởi động: nginx, mysql, mailhog, php82 (tiết kiệm tài nguyên)
+```
+
+**Scenario 3: Custom - PHP 7.4 + Elasticsearch + Admin tools**
+```bash
+./scripts/services start core php-standard elasticsearch admin
+# Khởi động: nginx, mysql, mailhog, php74, php73, php72, elasticsearch, kibana, phpmyadmin, phpredmin
+```
+
+### So sánh với cách cũ
+
+**Cách cũ** (phải nhớ hết services):
+```bash
+docker-compose up -d nginx php82 php81-c2 php74-c2 mysql elasticsearch kibana redis varnish mailhog
+```
+
+**Cách mới** (đơn giản hơn):
+```bash
+./scripts/services preset magento-2.4
+```
+
+### Lợi ích
+
+- ✅ Không cần nhớ tên tất cả services
+- ✅ Khởi động đúng services cần thiết
+- ✅ Tiết kiệm tài nguyên (RAM, CPU)
+- ✅ Khởi động nhanh hơn
+- ✅ Dễ dàng chuyển đổi giữa các project
+
+Chi tiết: Xem [compose/README.md](compose/README.md) để biết thêm về cấu trúc modular.
+
 ## Xoá dữ liệu
 
 Trong trường hợp bạn muốn xoá toàn bộ dữ liệu (do rảnh quá, thích tạo cái mới trắng tinh chơi, lol), bạn cần xoá các thư mục sau:

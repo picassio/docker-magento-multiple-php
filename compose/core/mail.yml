@@ -1,0 +1,7 @@
+# Core Mail Service - Mailhog (Email Catcher)
+services:
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+      - 1025:1025
+      - 8025:8025
