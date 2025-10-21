@@ -1,7 +1,119 @@
-#!/bin/bash
-if [ -z "$1" ]; then
-    echo "Please specify a PHP container to go into (ex. php74). 
-EG: ./scripts/shell php72"
-    exit 1
-fi
-docker-compose exec --user nginx "$@" bash
+#!/usr/bin/env bash
+#
+# PHP Container Shell Access Script
+# Opens an interactive bash shell in a specified PHP container
+#
+
+set -e
+
+# Get the directory where the script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Source common library
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+################################################################################
+# SCRIPT FUNCTIONS
+################################################################################
+
+# Print usage information
+printUsage() {
+    cat <<EOF
+PHP Container Shell Access Script
+Version 1.0.0
+
+Opens an interactive bash shell within a specified PHP container as nginx user.
+
+Usage:
+    ./scripts/$(basename "$0") <php-container> [command]
+
+Arguments:
+    php-container    Name of the PHP container (php70, php71, php72, php73, php74, php74-c2, php81-c2, php82)
+    command          Optional command to run (default: bash)
+
+Options:
+    -h, --help       Display this help and exit
+
+Examples:
+    ./scripts/$(basename "$0") php72                    # Open bash shell in php72 container
+    ./scripts/$(basename "$0") php74 composer --version # Run composer command in php74 container
+EOF
+    _printPoweredBy
+    exit 0
+}
+
+# Validate PHP container name
+validatePhpContainer() {
+    local container="$1"
+    local valid_containers="php70 php71 php72 php73 php74 php74-c2 php81-c2 php82"
+
+    if [[ ! " $valid_containers " =~ " $container " ]]; then
+        _error "Invalid PHP container: $container"
+        _error "Valid containers: $valid_containers"
+        exit 1
+    fi
+}
+
+# Check if PHP container is running
+checkPhpContainerRunning() {
+    local container="$1"
+
+    _arrow "Checking if $container container is running..."
+
+    if isServiceRunning "$container"; then
+        _success "$container container is running"
+    else
+        _error "$container container is not running"
+        _error "Please start the container first with: docker-compose up -d $container"
+        exit 1
+    fi
+}
+
+# Execute command in PHP container
+executeInContainer() {
+    local container="$1"
+    shift  # Remove first argument (container name)
+
+    _arrow "Connecting to $container container as nginx user..."
+    echo ""
+
+    # Execute command in container
+    docker-compose exec --user nginx "$container" "$@" || {
+        _error "Failed to execute command in $container container"
+        exit 1
+    }
+}
+
+################################################################################
+# MAIN
+################################################################################
+
+main() {
+    # Check for help flag first
+    if [[ "$#" -eq 0 ]] || [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
+        printUsage
+    fi
+
+    local php_container="$1"
+    shift  # Remove container name from arguments
+
+    # If no command specified, default to bash
+    if [[ "$#" -eq 0 ]]; then
+        set -- bash
+    fi
+
+    # Validate container name
+    validatePhpContainer "$php_container"
+
+    # Check if container is running
+    checkPhpContainerRunning "$php_container"
+
+    # Execute command in container
+    executeInContainer "$php_container" "$@"
+
+    exit 0
+}
+
+main "$@"

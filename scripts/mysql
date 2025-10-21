@@ -1,8 +1,122 @@
-#!/bin/bash
+#!/usr/bin/env bash
+#
+# MySQL CLI Connection Script
+# Opens an interactive MySQL shell connection to the MySQL container
+#
 
-containerNameDB=$(docker inspect -f '{{.Name}}' $(docker-compose ps -q mysql) | cut -c2-)
+set -e
 
-mysqRootPass=$(docker inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}'  $containerNameDB | grep MYSQL_ROOT_PASSWORD)
-rootPass="${mysqRootPass/MYSQL_ROOT_PASSWORD=/$replace}"
+# Get the directory where the script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-docker-compose exec mysql mysql -uroot -p${rootPass}
+# Source common library
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+################################################################################
+# SCRIPT FUNCTIONS
+################################################################################
+
+# Print usage information
+printUsage() {
+    cat <<EOF
+MySQL CLI Connection Script
+Version 1.0.0
+
+Opens an interactive MySQL shell connection to the MySQL container as root user.
+
+Usage:
+    ./scripts/$(basename "$0")
+
+Options:
+    -h, --help    Display this help and exit
+
+Examples:
+    ./scripts/$(basename "$0")         # Open MySQL shell
+EOF
+    _printPoweredBy
+    exit 0
+}
+
+# Get MySQL root password from container environment
+getMysqlRootPassword() {
+    local containerNameDB mysqRootPass
+
+    # Get MySQL container name
+    containerNameDB=$(docker inspect -f '{{.Name}}' "$(docker-compose ps -q mysql 2>/dev/null)" | cut -c2-) || {
+        _error "Failed to get MySQL container name"
+        _error "Is the MySQL container running?"
+        exit 1
+    }
+
+    # Extract root password from container environment
+    mysqRootPass=$(docker inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}' "$containerNameDB" | grep MYSQL_ROOT_PASSWORD) || {
+        _error "Failed to get MySQL root password from container"
+        exit 1
+    }
+
+    rootPass="${mysqRootPass/MYSQL_ROOT_PASSWORD=/}"
+
+    if [[ -z "$rootPass" ]]; then
+        _error "MySQL root password is empty"
+        exit 1
+    fi
+}
+
+# Check if MySQL container is running
+checkMysqlContainerRunning() {
+    _arrow "Checking if MySQL container is running..."
+
+    if isServiceRunning "mysql"; then
+        _success "MySQL container is running"
+    else
+        _error "MySQL container is not running"
+        _error "Please start the MySQL container first with: docker-compose up -d mysql"
+        exit 1
+    fi
+}
+
+# Connect to MySQL CLI
+connectToMysql() {
+    _arrow "Connecting to MySQL as root user..."
+    echo ""
+
+    # Connect to MySQL
+    docker-compose exec mysql mysql -uroot -p"${rootPass}" || {
+        _error "Failed to connect to MySQL"
+        exit 1
+    }
+}
+
+################################################################################
+# MAIN
+################################################################################
+
+main() {
+    # Parse arguments
+    if [[ "$#" -gt 0 ]]; then
+        case "$1" in
+            -h|--help)
+                printUsage
+                ;;
+            *)
+                _error "Unknown option: $1"
+                printUsage
+                ;;
+        esac
+    fi
+
+    # Check if MySQL is running
+    checkMysqlContainerRunning
+
+    # Get MySQL credentials
+    getMysqlRootPassword
+
+    # Connect to MySQL
+    connectToMysql
+
+    exit 0
+}
+
+main "$@"

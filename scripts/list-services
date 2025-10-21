@@ -1,2 +1,93 @@
-#!/bin/bash
-docker-compose ps --services --filter "status=running"
+#!/usr/bin/env bash
+#
+# List Running Docker Services
+# Displays all currently running Docker Compose services
+#
+
+set -e
+
+# Get the directory where the script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Source common library
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+################################################################################
+# SCRIPT FUNCTIONS
+################################################################################
+
+# Print usage information
+printUsage() {
+    cat <<EOF
+List Running Docker Services
+Version 1.0.0
+
+Displays all currently running Docker Compose services.
+
+Usage:
+    ./scripts/$(basename "$0") [options]
+
+Options:
+    -h, --help    Display this help and exit
+    -v, --verbose Show detailed service information
+
+Examples:
+    ./scripts/$(basename "$0")           # List running services
+    ./scripts/$(basename "$0") --verbose # Show detailed information
+EOF
+    _printPoweredBy
+    exit 0
+}
+
+# List running services
+listServices() {
+    local verbose="$1"
+
+    if [[ "$verbose" == "true" ]]; then
+        _arrow "Running Docker Compose services (detailed):"
+        echo ""
+        docker-compose ps || {
+            _error "Failed to list Docker Compose services"
+            exit 1
+        }
+    else
+        docker-compose ps --services --filter "status=running" || {
+            _error "Failed to list running Docker Compose services"
+            exit 1
+        }
+    fi
+}
+
+################################################################################
+# MAIN
+################################################################################
+
+main() {
+    local verbose="false"
+
+    # Parse arguments
+    while [[ "$#" -gt 0 ]]; do
+        case "$1" in
+            -h|--help)
+                printUsage
+                ;;
+            -v|--verbose)
+                verbose="true"
+                shift
+                ;;
+            *)
+                _error "Unknown option: $1"
+                printUsage
+                ;;
+        esac
+    done
+
+    # List services
+    listServices "$verbose"
+
+    exit 0
+}
+
+main "$@"

@@ -1,0 +1,13 @@
+server {
+    listen 80;
+    server_name __DOMAIN__;
+    root /home/public_html/__ROOT_DIR__;
+    index index.html index.htm;
+
+    access_log /var/log/nginx/__DOMAIN__.access.log;
+    error_log /var/log/nginx/__DOMAIN__.error.log;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}

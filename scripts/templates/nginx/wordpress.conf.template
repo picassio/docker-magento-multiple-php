@@ -1,0 +1,32 @@
+server {
+    listen 80;
+    server_name __DOMAIN__;
+    root /home/public_html/__ROOT_DIR__;
+
+    access_log /var/log/nginx/__DOMAIN__.access.log;
+    error_log /var/log/nginx/__DOMAIN__.error.log;
+
+    location / {
+        index index.html index.php;
+        try_files $uri $uri/ /index.php?$args;
+    }
+
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico)$ {
+        expires max;
+        log_not_found off;
+    }
+
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    location ~ \.php$ {
+        if (!-e $request_filename) { rewrite / /index.php last; }
+        fastcgi_pass   __PHP_VERSION__:9001;
+        fastcgi_param  SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include        fastcgi_params;
+        fastcgi_read_timeout 300;
+    }
+}

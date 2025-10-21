@@ -1,520 +1,278 @@
 #!/usr/bin/env bash
 #
-# Script to create virtual host for Nginx server
+# Magento Installation Script
+# Automated Magento installation from scratch
 #
 
-# UnComment it if bash is lower than 4.x version
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+source "${SCRIPT_DIR}/lib/common.sh"
+
 shopt -s extglob
 
 ################################################################################
-# CORE FUNCTIONS - Do not edit
+# CONSTANTS
 ################################################################################
 
-## Uncomment it for debugging purpose
-###set -o errexit
-#set -o pipefail
-#set -o nounset
-#set -o xtrace
+readonly VERSION="1.0.0"
+readonly VALID_PHP_VERSIONS="php70 php71 php72 php73 php74 php74-c2 php81-c2 php82"
+readonly VALID_EDITIONS="community enterprise"
+readonly ADMIN_USER="admin"
+readonly ADMIN_PASSWORD="Admin123"
+readonly MYSQL_HOST="mysql"
 
-#
-# VARIABLES
-#
-_bold=$(tput bold)
-_underline=$(tput sgr 0 1)
-_reset=$(tput sgr0)
+################################################################################
+# GLOBAL VARIABLES
+################################################################################
 
-_purple=$(tput setaf 171)
-_red=$(tput setaf 1)
-_green=$(tput setaf 76)
-_tan=$(tput setaf 3)
-_blue=$(tput setaf 38)
+VHOST_DOMAIN=""
+MAGENTO_VERSION=""
+MAGENTO_EDITION=""
+APP_PHP=""
+DATABASE_NAME=""
+SOURCE_DIR=""
+SCRIPTS_DIR=""
+rootPass=""
 
-#
-# HEADERS & LOGGING
-#
-function _debug()
-{
-    if [[ "$DEBUG" = 1 ]]; then
-        "$@"
-    fi
-}
+################################################################################
+# FUNCTIONS
+################################################################################
 
-function _header()
-{
-    printf '\n%s%s==========  %s  ==========%s\n' "$_bold" "$_purple" "$@" "$_reset"
-}
-
-function _arrow()
-{
-    printf '➜ %s\n' "$@"
-}
-
-function _success()
-{
-    printf '%s✔ %s%s\n' "$_green" "$@" "$_reset"
-}
-
-function _error() {
-    printf '%s✖ %s%s\n' "$_red" "$@" "$_reset"
-}
-
-function _warning()
-{
-    printf '%s➜ %s%s\n' "$_tan" "$@" "$_reset"
-}
-
-function _underline()
-{
-    printf '%s%s%s%s\n' "$_underline" "$_bold" "$@" "$_reset"
-}
-
-function _bold()
-{
-    printf '%s%s%s\n' "$_bold" "$@" "$_reset"
-}
-
-function _note()
-{
-    printf '%s%s%sNote:%s %s%s%s\n' "$_underline" "$_bold" "$_blue" "$_reset" "$_blue" "$@" "$_reset"
-}
-
-function _die()
-{
-    _error "$@"
-    exit 1
-}
-
-function _safeExit()
-{
-    exit 0
-}
-
-#
-# UTILITY HELPER
-#
-function _seekConfirmation()
-{
-  printf '\n%s%s%s' "$_bold" "$@" "$_reset"
-  read -p " (y/n) " -n 1
-  printf '\n'
-}
-
-# Test whether the result of an 'ask' is a confirmation
-function _isConfirmed()
-{
-    if [[ "$REPLY" =~ ^[Yy]$ ]]; then
-        return 0
-    fi
-    return 1
-}
-
-
-function _typeExists()
-{
-    if type "$1" >/dev/null; then
-        return 0
-    fi
-    return 1
-}
-
-function _isOs()
-{
-    if [[ "${OSTYPE}" == $1* ]]; then
-      return 0
-    fi
-    return 1
-}
-
-function _isOsDebian()
-{
-    if [[ -f /etc/debian_version ]]; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-function _isOsRedHat()
-{
-    if [[ -f /etc/redhat-release ]]; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-function _isOsMac()
-{
-    if [[ "$(uname -s)" = "Darwin" ]]; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-function _checkRootUser()
-{
-    #if [ "$(id -u)" != "0" ]; then
-    if [ "$(whoami)" != 'root' ]; then
-        _die "You cannot run $0 as non-root user. Please use sudo $0"
-    fi
-}
-
-
-function askYesOrNo {
-    REPLY=""
-    while [ -z "$REPLY" ] ; do
-        read -ep "$1 $YES_NO_PROMPT" -n1 REPLY
-        REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
-        case $REPLY in
-            $YES_CAPS ) return 0 ;;
-            $NO_CAPS ) return 1 ;;
-            * ) REPLY=""
-        esac
-    done
-}
-
-
-function _printPoweredBy()
-{
-    local mp_ascii
-    mp_ascii='
-                ____  __  __    _    ____ _____ ___  ____   ____
-               / ___||  \/  |  / \  |  _ \_   _/ _ \/ ___| / ___|
-               \___ \| |\/| | / _ \ | |_) || || | | \___ \| |
-                ___) | |  | |/ ___ \|  _ < | || |_| |___) | |___
-               |____/|_|  |_/_/   \_\_| \_\|_| \___/|____/ \____|
-
-'
+printUsage() {
     cat <<EOF
-${_green}
-$mp_ascii
-
-################################################################################
-${_reset}
-EOF
-}
-
-################################################################################
-# SCRIPT FUNCTIONS
-################################################################################
-function _printUsage()
-{
-    echo -n "Docker Init Fresh Magento
+Magento Installation Tool
 Version $VERSION
 
-./scripts/$(basename "$0") [ARG]...
+./scripts/$(basename "$0") [OPTIONS]...
 
-    Options:
-        --php-version             PHP version used for application (php70|php71|php72|php73|php74|php74-c2|php81-c2|php82).
-        --domain                  Domain name (eg: test.com).
-        --magento-version         Magento Version (eg: 2.3.4).
-        --magento-edition         Magento Edition. (community|enterprise)
-        -h, --help                Display this help and exit.
+Options:
+    --domain                  Domain name (e.g., magento.local)
+    --magento-version         Magento version (e.g., 2.4.6)
+    --magento-edition         Edition (community|enterprise)
+    --php-version             PHP version (${VALID_PHP_VERSIONS// /|})
+    -h, --help                Display this help
 
-    Examples:
-      Install Magento community edition version 2.3.4 with PHP version 7.2 for domain test-magento.com:
-        ./scripts/$(basename "$0") --domain=test-magento.com --magento-version=2.3.4 --magento-edition=community --php-version=php72
-"
+Examples:
+    ./scripts/$(basename "$0") --domain=test.local --magento-version=2.4.6 --magento-edition=community --php-version=php81-c2
+EOF
     _printPoweredBy
     exit 1
 }
 
-function checkCmdDependencies()
-{
-    local _dependencies=(
-      wget
-      cat
-      basename
-      mkdir
-      cp
-      mv
-      rm
-      chown
-      chmod
-      date
-      find
-      awk
-      docker-compose
-      docker
-    )
-
-    for cmd in "${_dependencies[@]}"
-    do
-        hash "${cmd}" &>/dev/null || _die "'${cmd}' command not found."
-    done;
-}
-
-function processArgs()
-{
-    for arg in "$@"
-    do
-        case $arg in
+processArgs() {
+    for arg in "$@"; do
+        case "$arg" in
             --domain=*)
                 VHOST_DOMAIN="${arg#*=}"
-            ;;
+                ;;
             --magento-version=*)
                 MAGENTO_VERSION="${arg#*=}"
-            ;;
+                ;;
             --magento-edition=*)
                 MAGENTO_EDITION="${arg#*=}"
-            ;;
+                ;;
             --php-version=*)
                 APP_PHP="${arg#*=}"
-            ;;            
-            --debug)
-                DEBUG=1
-                set -o xtrace
-            ;;
+                ;;
             -h|--help)
-                _printUsage
-            ;;
+                printUsage
+                ;;
             *)
-                _printUsage
-            ;;
+                _error "Unknown option: $arg"
+                printUsage
+                ;;
         esac
     done
-        
+
     validateArgs
-    sanitizeArgs
 }
 
-function initDefaultArgs()
-{
-    IMPORT_DIR="$(pwd)/databases/import"
-    SCRIPTS_DIR="$(pwd)/scripts"
-    DES_DIR="$(pwd)/databases/export"
-    TODAY="$(date +"%Y-%m-%d")"
-    BACKDATE="$(date +"%Y-%m-%d")"
-    DATABASE_PATTERN="^([[:alnum:]]([[:alnum:]_]{0,61}[[:alnum:]]))$"
-    SOURCE_DIR="$(pwd)/sources"
+validateArgs() {
+    local error_count=0
 
-    YES_STRING=$"y"
-    NO_STRING=$"n"
-    YES_NO_PROMPT=$"[y/n]: "
-    YES_CAPS=$(echo ${YES_STRING}|tr [:lower:] [:upper:])
-    NO_CAPS=$(echo ${NO_STRING}|tr [:lower:] [:upper:])
-    DATABASE_NAME="magento"_"$(date +%s)"
-
-    NGINX_SITES_CONF_D="$(pwd)/conf/nginx/conf.d"
-    NGINX_SITES_CONF_D_FILE="${NGINX_SITES_CONF_D}/${VHOST_DOMAIN}.conf"
-
-    ADMIN_USER="admin"
-    ADMIN_PASSWORD="Admin123"
-
-    MYSQL_HOST="mysql"
-}
-
-
-function validateArgs()
-{
-    ERROR_COUNT=0
     if [[ -z "$VHOST_DOMAIN" ]]; then
-        _error "--domain=... parameter is missing."
-        ERROR_COUNT=$((ERROR_COUNT + 1))
+        _error "--domain parameter is required"
+        ((error_count++))
     fi
-    if [[ ! -z "$APP_PHP" && "$APP_PHP" != @(php70|php71|php72|php73|php74|php74-c2|php81-c2|php82) ]]; then
-        _error "Please enter valid application php --php-version=... parameter(php70|php71|php72|php73|php74|php74-c2|php81-c2|php82)."
-        ERROR_COUNT=$((ERROR_COUNT + 1))
-    fi
+
     if [[ -z "$MAGENTO_VERSION" ]]; then
-        _error "--mangeto-version=... parameter is missing."
-        ERROR_COUNT=$((ERROR_COUNT + 1))
+        _error "--magento-version parameter is required"
+        ((error_count++))
     fi
-    if [[ -z "$APP_PHP" ]]; then
-        _error "--php-version=... parameter is missing."
-        ERROR_COUNT=$((ERROR_COUNT + 1))
-    fi
+
     if [[ -z "$MAGENTO_EDITION" ]]; then
-        _error "--magento-edition=... parameter is missing."
-        ERROR_COUNT=$((ERROR_COUNT + 1))
-    fi
-    if [[ ! -z "$MAGENTO_EDITION" && "$MAGENTO_EDITION" != @(community|enterprise) ]]; then
-        _error "Please enter valid application magento edition --magento-edition=... parameter(community|enterprise)."
-        ERROR_COUNT=$((ERROR_COUNT + 1))
+        _error "--magento-edition parameter is required"
+        ((error_count++))
+    elif [[ ! " $VALID_EDITIONS " =~ " $MAGENTO_EDITION " ]]; then
+        _error "Invalid edition: $MAGENTO_EDITION. Valid: $VALID_EDITIONS"
+        ((error_count++))
     fi
 
-    [[ "$ERROR_COUNT" -gt 0 ]] && exit 1
+    if [[ -z "$APP_PHP" ]]; then
+        _error "--php-version parameter is required"
+        ((error_count++))
+    elif [[ ! " $VALID_PHP_VERSIONS " =~ " $APP_PHP " ]]; then
+        _error "Invalid PHP version: $APP_PHP"
+        ((error_count++))
+    fi
+
+    [[ "$error_count" -gt 0 ]] && exit 1
 }
 
-function sanitizeArgs()
-{
-    if [[ ! -z "$VHOST_DOMAIN" ]] && [[ "$VHOST_DOMAIN" == http* ]]; then
-        VHOST_DOMAIN=$(getPureDomain)
-    fi
+initDefaultArgs() {
+    SCRIPTS_DIR="${SCRIPT_DIR}"
+    SOURCE_DIR="${PROJECT_ROOT}/sources"
+    DATABASE_NAME="magento_$(date +%s)"
+    initYesNoPrompt
 }
 
-function verifyCurrentDirIsDockercomposeDir()
-{
-    if [[ ! -f $($(pwd)/.root_dir) ]]; then 
-        _error "Please change your current folder to docker-compose root folder (root folder is the folder contain docker-compose.yml file)."
-        exit 1
-    fi
-}
+validateMagentoVersion() {
+    _arrow "Validating Magento version compatibility..."
 
-function getMysqlInformation()
-{
-    containerNameDB=$(docker inspect -f '{{.Name}}' $(docker-compose ps -q mysql) | cut -c2-)
-
-    mysqlUser=$(docker inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}'  $containerNameDB | grep MYSQL_USER)
-    user="${mysqlUser/MYSQL_USER=/$replace}" 
-
-    mysqlPass=$(docker inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}'  $containerNameDB | grep MYSQL_PASSWORD)
-    pass="${mysqlPass/MYSQL_PASSWORD=/$replace}" 
-
-    mysqRootPass=$(docker inspect -f '{{range $index, $value := .Config.Env}}{{println $value}}{{end}}'  $containerNameDB | grep MYSQL_ROOT_PASSWORD)
-    rootPass="${mysqRootPass/MYSQL_ROOT_PASSWORD=/$replace}"
-}
-
-function validateMagentoVersion()
-{
-    if [[ $MAGENTO_VERSION = @(2.4.0*|2.4.1*|2.4.2*|2.4.3*) ]]; then 
+    if [[ $MAGENTO_VERSION == 2.4.@(0|1|2|3)* ]]; then
         if [[ $APP_PHP != "php74" ]]; then
-            _error "PHP should run with PHP version 7.4 composer1, --php-version=php74"
-            exit 1
-        elif [[ ! $($SCRIPTS_DIR/list-services | grep elasticsearch) ]]; then
-            _error "Elasticsearch service should be started, please start elasticsearch"
+            _error "Magento $MAGENTO_VERSION requires PHP 7.4"
             exit 1
         fi
-    elif [[ $MAGENTO_VERSION == 2.4* ]] && [[ $MAGENTO_VERSION != @(2.4.0*|2.4.1*|2.4.2*|2.4.3*) ]]; then 
-        if [[ $APP_PHP != @(php81-c2*|php82*) ]]; then
-            _error "PHP should run with PHP version 8.1 composer2 or PHP version 8.2, --php-version=php81-c2 or --php-version=php82 "
+        if ! isServiceRunning "elasticsearch"; then
+            _error "Elasticsearch is required for Magento $MAGENTO_VERSION"
             exit 1
-        elif [[ ! $($SCRIPTS_DIR/list-services | grep elasticsearch) ]]; then
-            _error "Elasticsearch service should be started, please start elasticsearch"
+        fi
+    elif [[ $MAGENTO_VERSION == 2.4* ]]; then
+        if [[ ! " php81-c2 php82 " =~ " $APP_PHP " ]]; then
+            _error "Magento $MAGENTO_VERSION requires PHP 8.1+ with Composer 2"
+            exit 1
+        fi
+        if ! isServiceRunning "elasticsearch"; then
+            _error "Elasticsearch is required for Magento 2.4.x"
             exit 1
         fi
     fi
+
+    _success "Version compatibility validated"
 }
 
-function validateBaseServices()
-{
-    if [[ ! $($SCRIPTS_DIR/list-services | grep nginx) ]]; then
-        _error "nginx service should be started, please start Nginx"
-        exit 1
-    fi
-    if [[ ! $($SCRIPTS_DIR/list-services | grep mysql) ]]; then
-        _error "Mysql service should be started, please start Mysql"
-        exit 1
-    fi
-    if [[ ! $($SCRIPTS_DIR/list-services | grep $APP_PHP) ]]; then
-        _error "$APP_PHP service should be started, please start $APP_PHP"
-        exit 1
-    fi
-}
+validateBaseServices() {
+    _arrow "Validating required services..."
 
-function createSourceCodeFolder()
-{
-    if [[ -d ${SOURCE_DIR}/$VHOST_DOMAIN ]] && [[ "$(ls -A  ${SOURCE_DIR}/$VHOST_DOMAIN)" ]]; then
-        _error "${SOURCE_DIR}/$VHOST_DOMAIN folder is not empty"
-        exit 1
-    else
-        _arrow "Create source code folder"
-        mkdir -p ${SOURCE_DIR}/$VHOST_DOMAIN || _die "Error"
-        _success "Source code folder created"
-    fi
-}
-
-function createMagentoDomain()
-{
-    ${SCRIPTS_DIR}/create-vhost --domain=${VHOST_DOMAIN} --app=magento2 --root-dir=${VHOST_DOMAIN} --php-version=${APP_PHP}
-}
-
-function createDomainDatabase()
-{
-    ${SCRIPTS_DIR}/database create --database-name=${DATABASE_NAME}
-}
-
-function checkComposerAuth()
-{
-    MAGENTO_USERNAME_PROP="http-basic.repo.magento.com.username"
-    MAGENTO_PASSWORD_PROP="http-basic.repo.magento.com.password"
-
-        PUBLIC_KEY="$(docker-compose exec -T --user nginx ${APP_PHP} composer config --global $MAGENTO_USERNAME_PROP 2>/dev/null)"
-        PRIVATE_KEY="$(docker-compose exec -T --user nginx ${APP_PHP} composer config --global $MAGENTO_PASSWORD_PROP 2>/dev/null)"
-
-    if [ -z "$PUBLIC_KEY" ] || [ -z "$PRIVATE_KEY" ]; then
-        echo
-        echo "Composer authentication required (repo.magento.com public and private keys):"
-        read -r -p "    Username: " PUBLIC_KEY
-        read -r -p "    Password: " PRIVATE_KEY
-        echo
-        if [ -z "$PUBLIC_KEY" ] || [ -z "$PRIVATE_KEY" ]; then
-            _error "Please setup Composer auth for repo.magento.com to continue."
+    for service in nginx mysql "$APP_PHP"; do
+        if ! isServiceRunning "$service"; then
+            _error "$service is not running. Start with: docker-compose up -d $service"
+            exit 1
         fi
-        _arrow "Configure magento repo auth"
-        $(docker-compose exec -T --user nginx ${APP_PHP} composer config --global http-basic.repo.magento.com ${PUBLIC_KEY} ${PRIVATE_KEY}) || _die "Cannot configure magento auth"
-        _success "Configure magento repo auth done"
+    done
+
+    _success "All required services are running"
+}
+
+createSourceCodeFolder() {
+    _arrow "Creating source code directory..."
+
+    if [[ -d "${SOURCE_DIR}/${VHOST_DOMAIN}" ]] && [[ -n "$(ls -A "${SOURCE_DIR}/${VHOST_DOMAIN}" 2>/dev/null)" ]]; then
+        _error "Directory not empty: ${SOURCE_DIR}/${VHOST_DOMAIN}"
+        exit 1
     fi
 
+    mkdir -p "${SOURCE_DIR}/${VHOST_DOMAIN}"
+    _success "Source directory created"
 }
 
-function downloadMagentoVersion()
-{
-    VERSION=${MAGENTO_VERSION}
-    EDITION=${MAGENTO_EDITION}
-    _arrow "Download Magento ${EDITION} version ${VERSION}"
-    docker-compose exec --user nginx ${APP_PHP} php -d memory_limit=-1 /usr/bin/composer create-project --repository=https://repo.magento.com/ magento/project-"${EDITION}"-edition="${VERSION}" /home/public_html/${VHOST_DOMAIN}/ || _die "Cannot download source code"
-    _success "Download Magento ${EDITION} version ${VERSION} done"
+createMagentoDomain() {
+    _arrow "Creating virtual host..."
+    "${SCRIPTS_DIR}/create-vhost" --domain="${VHOST_DOMAIN}" --app=magento2 \
+        --root-dir="${VHOST_DOMAIN}" --php-version="${APP_PHP}"
 }
 
-function installMagentoVersion()
-{
-    _arrow "Install Magento ${EDITION} version ${VERSION} for $VHOST_DOMAIN"
+createDomainDatabase() {
+    _arrow "Creating database..."
+    "${SCRIPTS_DIR}/database" create --database-name="${DATABASE_NAME}"
+}
 
-    if [[ $MAGENTO_VERSION == 2.4* ]]; then 
-        docker-compose exec --user nginx ${APP_PHP} php -d memory_limit=-1 /home/public_html/${VHOST_DOMAIN}/bin/magento setup:install \
-            --db-host="$MYSQL_HOST" \
-            --db-name="${DATABASE_NAME}" \
-            --db-user="root" \
-            --db-password="$rootPass" \
-            --base-url=http://"$VHOST_DOMAIN"/ \
-            --admin-firstname="admin" \
-            --admin-lastname="admin" \
-            --admin-email="admin@localhost.com" \
-            --admin-user="$ADMIN_USER" \
-            --admin-password="$ADMIN_PASSWORD" \
-            --backend-frontname="admin" \
-            --language="en_US" \
-            --search-engine=elasticsearch7 \
-            --elasticsearch-host="elasticsearch" \
-            --elasticsearch-port="9200" \
-            --elasticsearch-index-prefix="${VHOST_DOMAIN}" \
-            --currency="USD" \
-            --timezone="America/Chicago" \
-            --use-rewrites=1 || _die "Cannot Install Magento"
-        _success "Install Magento ${EDITION} version ${VERSION} for $VHOST_DOMAIN successful!"
-    else 
-        docker-compose exec --user nginx ${APP_PHP} php -d memory_limit=-1 /home/public_html/${VHOST_DOMAIN}/bin/magento setup:install \
-            --db-host="$MYSQL_HOST" \
-            --db-name="${DATABASE_NAME}" \
-            --db-user="root" \
-            --db-password="$rootPass" \
-            --base-url=http://"$VHOST_DOMAIN"/ \
-            --admin-firstname="admin" \
-            --admin-lastname="admin" \
-            --admin-email="admin@localhost.com" \
-            --admin-user="$ADMIN_USER" \
-            --admin-password="$ADMIN_PASSWORD" \
-            --backend-frontname="admin" \
-            --language="en_US" \
-            --currency="USD" \
-            --timezone="America/Chicago" \
-            --use-rewrites=1 || _die "Cannot Install Magento"
-        _success "Install Magento ${EDITION} version ${VERSION} for $VHOST_DOMAIN successful!"
+checkComposerAuth() {
+    _arrow "Checking Composer authentication..."
+
+    local public_key private_key
+    public_key="$(docker-compose exec -T --user nginx ${APP_PHP} composer config --global http-basic.repo.magento.com.username 2>/dev/null || true)"
+    private_key="$(docker-compose exec -T --user nginx ${APP_PHP} composer config --global http-basic.repo.magento.com.password 2>/dev/null || true)"
+
+    if [[ -z "$public_key" ]] || [[ -z "$private_key" ]]; then
+        echo ""
+        echo "Composer authentication required for repo.magento.com"
+        read -r -p "    Public Key: " public_key
+        read -r -p "    Private Key: " private_key
+        echo ""
+
+        docker-compose exec -T --user nginx ${APP_PHP} composer config --global \
+            http-basic.repo.magento.com "${public_key}" "${private_key}"
+
+        _success "Composer authentication configured"
     fi
 }
 
-function printSuccessMessage()
-{
+downloadMagento() {
+    _arrow "Downloading Magento ${MAGENTO_EDITION} ${MAGENTO_VERSION}..."
+
+    docker-compose exec --user nginx ${APP_PHP} php -d memory_limit=-1 /usr/bin/composer \
+        create-project --repository=https://repo.magento.com/ \
+        magento/project-"${MAGENTO_EDITION}"-edition="${MAGENTO_VERSION}" \
+        "/home/public_html/${VHOST_DOMAIN}/" || {
+        _error "Failed to download Magento"
+        exit 1
+    }
+
+    _success "Magento downloaded successfully"
+}
+
+installMagento() {
+    _arrow "Installing Magento..."
+
+    local install_cmd=(
+        php -d memory_limit=-1 "/home/public_html/${VHOST_DOMAIN}/bin/magento" setup:install
+        --db-host="$MYSQL_HOST"
+        --db-name="${DATABASE_NAME}"
+        --db-user="root"
+        --db-password="$rootPass"
+        --base-url=http://"$VHOST_DOMAIN"/
+        --admin-firstname="admin"
+        --admin-lastname="admin"
+        --admin-email="admin@localhost.com"
+        --admin-user="$ADMIN_USER"
+        --admin-password="$ADMIN_PASSWORD"
+        --backend-frontname="admin"
+        --language="en_US"
+        --currency="USD"
+        --timezone="America/Chicago"
+        --use-rewrites=1
+    )
+
+    if [[ $MAGENTO_VERSION == 2.4* ]]; then
+        install_cmd+=(
+            --search-engine=elasticsearch7
+            --elasticsearch-host="elasticsearch"
+            --elasticsearch-port="9200"
+            --elasticsearch-index-prefix="${VHOST_DOMAIN}"
+        )
+    fi
+
+    docker-compose exec --user nginx ${APP_PHP} "${install_cmd[@]}" || {
+        _error "Failed to install Magento"
+        exit 1
+    }
+
+    _success "Magento installed successfully"
+}
+
+printSuccessMessage() {
+    echo ""
     echo "################################################################"
     echo ""
     echo " >> Domain               : ${VHOST_DOMAIN}"
     echo " >> PHP version          : ${APP_PHP}"
     echo " >> Document Root        : /home/public_html/${VHOST_DOMAIN}/"
-    echo " >> Nginx Config File    : ${NGINX_SITES_CONF_D_FILE}"
     echo " >> Database name        : ${DATABASE_NAME}"
-    echo " >> Database User        : root"
     echo " >> Database Password    : $rootPass"
     echo " >> Admin URL            : http://${VHOST_DOMAIN}/admin"
     echo " >> Admin User           : $ADMIN_USER"
@@ -524,43 +282,29 @@ function printSuccessMessage()
 }
 
 ################################################################################
-# Main
+# MAIN
 ################################################################################
-export LC_CTYPE=C
-export LANG=C
 
-DEBUG=0
-_debug set -x
-VERSION="1"
-
-function main()
-{
-    # _checkRootUser
-    # verifyCurrentDirIsDockercomposeDir
+main() {
     checkCmdDependencies
-    
-    [[ $# -lt 1 ]] && _printUsage
+
+    [[ $# -lt 1 ]] && printUsage
 
     processArgs "$@"
     initDefaultArgs
-
     validateMagentoVersion
     validateBaseServices
-
     createSourceCodeFolder
     createMagentoDomain
     createDomainDatabase
-
-    checkComposerAuth
-    downloadMagentoVersion
-
     getMysqlInformation
-    installMagentoVersion
+    checkComposerAuth
+    downloadMagento
+    installMagento
 
+    _success "Magento installation completed successfully"
     printSuccessMessage
     exit 0
 }
 
 main "$@"
-
-_debug set +x

@@ -1,0 +1,22 @@
+server {
+    listen 80;
+    server_name __DOMAIN__;
+    root /home/public_html/__ROOT_DIR__;
+    index index.php index.html index.htm;
+
+    access_log /var/log/nginx/__DOMAIN__.access.log;
+    error_log /var/log/nginx/__DOMAIN__.error.log;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        try_files $uri =404;
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        fastcgi_pass __PHP_VERSION__:9001;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+}

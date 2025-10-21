@@ -1,12 +1,118 @@
-#!/bin/bash
-echo "Fixing all source code folder file ownerships..."
+#!/usr/bin/env bash
+#
+# Fix file ownership for source code directories
+# Changes ownership of all files in sources/* to user 1000:1000
+#
 
-if [[ -f "$(pwd)/.root_dir" ]]; then 
-    echo "you maybe need to enter your user password to use sudo command to change file owner"
-    sudo chown -R 1000:1000 $(pwd)/sources/*
-    echo "Files ownerships fixed."
+set -e
+
+# Get the directory where the script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Source common library
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+################################################################################
+# SCRIPT FUNCTIONS
+################################################################################
+
+# Print usage information
+printUsage() {
+    cat <<EOF
+Fix Ownership Script
+Version 1.0.0
+
+This script fixes file ownership for source code directories.
+All files in sources/* will be owned by user 1000:1000 (nginx user in containers).
+
+Usage:
+    ./scripts/$(basename "$0")
+
+Options:
+    -h, --help    Display this help and exit
+
+Note:
+    This script must be run from the docker-compose root directory.
+    You may need to enter your sudo password.
+EOF
+    _printPoweredBy
     exit 0
-else
-    echo "Please change your current folder to docker-compose root folder (root folder is the folder contain docker-compose.yml file)."
-    exit 1
-fi
+}
+
+# Verify we're in the docker-compose root directory
+verifyRootDirectory() {
+    if [[ ! -f "${PROJECT_ROOT}/.root_dir" ]]; then
+        _error "This script must be run from the docker-compose root directory."
+        _error "Root directory must contain the .root_dir file."
+        exit 1
+    fi
+}
+
+# Fix ownership of source files
+fixSourceOwnership() {
+    local sources_dir="${PROJECT_ROOT}/sources"
+
+    if [[ ! -d "$sources_dir" ]]; then
+        _error "Sources directory not found: $sources_dir"
+        exit 1
+    fi
+
+    if [[ ! "$(ls -A "$sources_dir" 2>/dev/null)" ]]; then
+        _warning "Sources directory is empty. Nothing to fix."
+        exit 0
+    fi
+
+    _arrow "Fixing file ownership for all source code directories..."
+    _arrow "Target: $sources_dir/*"
+    _arrow "New owner: 1000:1000 (nginx user)"
+
+    echo ""
+    _warning "You may need to enter your sudo password"
+
+    # Change ownership
+    if sudo chown -R 1000:1000 "${sources_dir}"/* 2>/dev/null; then
+        _success "File ownership fixed successfully!"
+
+        # Show summary
+        echo ""
+        echo "Summary:"
+        echo "  Location: $sources_dir"
+        echo "  Owner: 1000:1000"
+        echo "  Directories processed: $(find "${sources_dir}" -maxdepth 1 -mindepth 1 -type d | wc -l)"
+    else
+        _error "Failed to change file ownership"
+        _error "Make sure you have sudo permissions"
+        exit 1
+    fi
+}
+
+################################################################################
+# MAIN
+################################################################################
+
+main() {
+    # Parse arguments
+    if [[ "$#" -gt 0 ]]; then
+        case "$1" in
+            -h|--help)
+                printUsage
+                ;;
+            *)
+                _error "Unknown option: $1"
+                printUsage
+                ;;
+        esac
+    fi
+
+    # Verify environment
+    verifyRootDirectory
+
+    # Fix ownership
+    fixSourceOwnership
+
+    exit 0
+}
+
+main "$@"
