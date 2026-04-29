@@ -20,7 +20,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=UTC
 
 # --- System setup: directories, user, base packages -------------------------
-RUN mkdir -p /home/public_html /run/php /var/lib/php/session && \
+# Ubuntu 24.04 ships with uid/gid 1000 taken by 'ubuntu' user — remove it first
+RUN if getent passwd 1000 >/dev/null 2>&1; then userdel -r $(getent passwd 1000 | cut -d: -f1) 2>/dev/null || true; fi && \
+    if getent group 1000 >/dev/null 2>&1; then groupdel $(getent group 1000 | cut -d: -f1) 2>/dev/null || true; fi && \
+    mkdir -p /home/public_html /run/php /var/lib/php/session && \
     groupadd -g 1000 nginx && \
     useradd -u 1000 -g nginx -m -d /home/nginx -s /bin/bash nginx && \
     chown -R nginx:nginx /home/public_html/ && \
@@ -131,10 +134,16 @@ RUN pecl channel-update pecl.php.net && \
     rm -f /etc/php/${PHP_VERSION}/cli/conf.d/*-xdebug.ini \
           /etc/php/${PHP_VERSION}/fpm/conf.d/*-xdebug.ini || true
 
-# --- mhsendmail (Mailpit-compatible) ----------------------------------------
+# --- mhsendmail (MailHog binary, compatible with Mailpit SMTP) ---------------
+# The MailHog mhsendmail binary speaks standard SMTP and works with Mailpit.
+# Only amd64 binary available; for other archs we create a simple wrapper script.
 RUN ARCH=$(dpkg --print-architecture) && \
-    curl -fsSL "https://github.com/axllent/mailpit/releases/latest/download/mhsendmail_linux_${ARCH}" \
-        --output /usr/local/bin/mhsendmail && \
+    if [ "${ARCH}" = "amd64" ]; then \
+        curl -fsSL "https://github.com/mailhog/mhsendmail/releases/download/v0.2.0/mhsendmail_linux_amd64" \
+            --output /usr/local/bin/mhsendmail; \
+    else \
+        printf '#!/bin/sh\nexec /usr/sbin/sendmail "$@"\n' > /usr/local/bin/mhsendmail; \
+    fi && \
     chmod +x /usr/local/bin/mhsendmail
 
 # --- Composer directory for nginx user ---------------------------------------
