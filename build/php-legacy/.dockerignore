@@ -1,0 +1,7 @@
+.git
+data/
+databases/
+logs/
+sources/
+images/
+*.md

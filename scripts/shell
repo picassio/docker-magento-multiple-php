@@ -1,7 +1,13 @@
-#!/bin/bash
-if [ -z "$1" ]; then
-    echo "Please specify a PHP container to go into (ex. php74). 
-EG: ./scripts/shell php72"
+#!/usr/bin/env bash
+source "$(dirname "$0")/lib/docker.sh"
+
+if [[ -z "${1:-}" ]]; then
+    _error "Usage: ./scripts/shell <php-version>"
+    _arrow "Example: ./scripts/shell php83"
+    _arrow "Available: $(get_available_php_versions | tr '\n' ', ' | sed 's/,$//')"
     exit 1
 fi
-docker-compose exec --user nginx "$@" bash
+
+validate_php_version "$1"
+require_service "$1"
+dc exec --user nginx "$@" bash

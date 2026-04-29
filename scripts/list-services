@@ -1,2 +1,3 @@
-#!/bin/bash
-docker-compose ps --services --filter "status=running"
+#!/usr/bin/env bash
+source "$(dirname "$0")/lib/docker.sh"
+dc ps --services --filter "status=running"
