@@ -26,7 +26,7 @@ start_stack() {
 }
 
 stop_stack() {
-    dc --profile legacy --profile elasticsearch down --remove-orphans 2>/dev/null || true
+    dc --profile legacy --profile elasticsearch --profile mariadb down --remove-orphans 2>/dev/null || true
 }
 
 wait_healthy() {
@@ -63,18 +63,20 @@ check_php_version() {
     fi
 }
 
-check_mysql() {
+check_db() {
     local php_svc="$1"
+    local db_host="${2:-mysql}"
+    local db_label="${3:-MySQL}"
     local result
     result=$(dc exec -T "$php_svc" php -r "
-        \$c = @new mysqli('mysql', 'root', 'root');
+        \$c = @new mysqli('${db_host}', 'root', 'root');
         echo \$c->connect_error ? 'FAIL:'.\$c->connect_error : 'OK';
     " 2>/dev/null || echo "FAIL")
     if [[ "$result" == "OK" ]]; then
-        echo "  ✔ MySQL connection: OK"
+        echo "  ✔ ${db_label} connection ($db_host): OK"
         return 0
     else
-        echo "  ✖ MySQL connection: $result"
+        echo "  ✖ ${db_label} connection ($db_host): $result"
         return 1
     fi
 }
@@ -120,7 +122,8 @@ run_test() {
     local php_svc="$2"
     local php_ver="$3"
     local search_svc="${4:-}"
-    local extra_checks="${5:-}"
+    local db_host="${5:-mysql}"
+    local db_label="${6:-MySQL}"
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -132,8 +135,8 @@ run_test() {
     # Check PHP version
     if ! check_php_version "$php_svc" "$php_ver"; then test_pass=false; fi
 
-    # Check MySQL
-    if ! check_mysql "$php_svc"; then test_pass=false; fi
+    # Check database
+    if ! check_db "$php_svc" "$db_host" "$db_label"; then test_pass=false; fi
 
     # Check Redis
     if ! check_redis "$php_svc"; then test_pass=false; fi
@@ -220,14 +223,14 @@ wait_healthy opensearch 60
 sleep 5
 run_test "Magento 2.4.7 (PHP 8.3 + MySQL 8.4 + OpenSearch)" "php83" "8.3" "opensearch" ""
 
-# --- Magento 2.4.8: PHP 8.4, OS/MySQL 8.4 ---
-_header "Magento 2.4.8 Stack"
+# --- Magento 2.4.8: PHP 8.4, OS/MariaDB 11.4 (official support) ---
+_header "Magento 2.4.8 Stack (MariaDB)"
 stop_stack
-start_stack "" php84 nginx mysql opensearch redis mailpit
-wait_healthy mysql 60
+start_stack "mariadb" php84 nginx mariadb opensearch redis mailpit
+wait_healthy mariadb 60
 wait_healthy opensearch 60
 sleep 5
-run_test "Magento 2.4.8 (PHP 8.4 + MySQL 8.4 + OpenSearch)" "php84" "8.4" "opensearch" ""
+run_test "Magento 2.4.8 (PHP 8.4 + MariaDB 11.4 + OpenSearch)" "php84" "8.4" "opensearch" "mariadb" "MariaDB"
 
 # ── Cleanup & Report ──────────────────────────────────────────────────────────
 stop_stack
