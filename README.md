@@ -13,32 +13,34 @@ git clone https://github.com/picassio/docker-magento-multiple-php.git ~/docker-m
 cd ~/docker-magento
 cp env-example .env
 
-# Register your project
-bin/mage project add mysite.com    # Interactive wizard: pick PHP, DB, search
+# Register your first project (interactive wizard)
+bin/mage project add mysite.com
+# → Picks: PHP 8.3, magento2, mysql, mysite_com DB, opensearch
 
-# Start — automatically starts only what your project needs
+# Start — only starts services your projects actually need
 bin/mage up
 
-# Work with your project by domain name
-bin/mage shell mysite.com           # PHP shell
-bin/mage composer mysite.com install # Run composer
-bin/mage db import mysite.com bk.sql # Import database
+# Everything uses your domain name — no need to remember service names
+bin/mage shell mysite.com              # Opens bash in the right PHP container
+bin/mage composer mysite.com install   # Runs composer in the right container
+bin/mage db import mysite.com dump.sql # Imports into the right DB service
+bin/mage magento mysite.com cache:flush
 ```
 
 ---
 
 ## Features
 
-- **Project management** — register projects, enable/disable, switch PHP versions. `bin/mage up` starts only what your projects need.
-- **Multi-PHP** — PHP 7.0–8.4 (PPA for 7.4+, compiled from source for 7.0–7.3)
-- **Multi-database** — MySQL 8.4, MySQL 8.0, MariaDB 11.4 running simultaneously on different ports
-- **Project-aware commands** — `bin/mage shell mysite.com` auto-resolves PHP version + directory
-- **Auto virtual hosts** — Nginx vhosts with runtime DNS (nginx won’t crash if a PHP container is stopped)
-- **SSL, Xdebug, Varnish** — one-command toggle
-- **Database management** — project-aware create, drop, import, export — auto-routes to the right DB service
-- **Email catching** — Mailpit (web UI on port 8025)
-- **Search engines** — OpenSearch 2.x (default) or Elasticsearch 8.x
-- **Redis, RabbitMQ** — with optional debug UIs via profiles
+- **Project management** — register projects with `bin/mage project add`, switch PHP/DB/search per project, enable/disable without data loss
+- **Smart start** — `bin/mage up` reads `projects.json`, starts only the services your projects need, auto-loads the right compose override files
+- **Multi-PHP** — PHP 7.0–8.4 simultaneously (PPA for 7.4+, compiled from source for 7.0–7.3)
+- **Multi-database** — MySQL 8.4, MySQL 8.0, MariaDB 11.4 on separate ports — all at once
+- **Multi-search** — OpenSearch 2.x, OpenSearch 1.x, Elasticsearch 8.x, ES 7.x — all simultaneously
+- **Multi-cache** — Redis 7.x and Redis 6.x on separate ports
+- **Project-aware commands** — `bin/mage shell mysite.com` auto-resolves PHP version and `cd`'s into the project directory
+- **Compose overrides** — clean core compose file (10 services); variants in `compose/*.yml` loaded on demand
+- **Runtime DNS** — nginx starts even if a PHP backend is stopped (returns 502, doesn't crash)
+- **Zero password warnings** — DB exports are clean SQL, no `Using a password` contamination
 
 ---
 
@@ -46,63 +48,79 @@ bin/mage db import mysite.com bk.sql # Import database
 
 ```
 .
-├── bin/mage              # CLI wrapper — single entrypoint for everything
-├── projects.json         # Project registry (which sites need which services)
+├── bin/mage              # CLI — single entrypoint for everything
+├── projects.json         # Project registry
+├── docker-compose.yml    # Core services (nginx, php81-84, mysql, opensearch, redis, rabbitmq, mailpit)
+├── compose/              # Override files loaded on demand
+│   ├── legacy.yml        #   PHP 7.0–7.4
+│   ├── mysql80.yml       #   MySQL 8.0 (:3307)
+│   ├── mariadb.yml       #   MariaDB 11.4 (:3308)
+│   ├── opensearch1.yml   #   OpenSearch 1.3 (:9201)
+│   ├── elasticsearch.yml #   Elasticsearch 8.x (:9202)
+│   ├── elasticsearch7.yml#   Elasticsearch 7.x (:9203)
+│   ├── redis6.yml        #   Redis 6.2 (:6380)
+│   ├── debug.yml         #   phpMyAdmin + Redis Commander
+│   ├── varnish.yml       #   Varnish 7.6
+│   └── dashboards.yml    #   OpenSearch Dashboards
 ├── build/
 │   ├── php/              # Dockerfile for PHP 7.4–8.4 (ondrej PPA)
 │   └── php-legacy/       # Dockerfile for PHP 7.0–7.3 (compiled from source)
-├── conf/
-│   ├── nginx/            # Nginx configs, SSL certs
-│   ├── php/php70-php84/  # Per-version PHP configs
-│   ├── mysql/            # MySQL config
-│   └── varnish/          # Varnish VCL
-├── data/                 # Persistent data (MySQL, etc.)
-├── databases/
-│   ├── import/           # Drop .sql/.sql.gz here to import
-│   └── export/           # Exported dumps land here
-├── logs/nginx/           # Nginx access/error logs
-├── scripts/              # Individual command scripts
-│   └── lib/              # Shared bash library
-├── sources/              # Website source code (mount point)
-├── docker-compose.yml    # Service definitions
-└── env-example           # Template for .env
+├── conf/                 # Nginx, PHP, MySQL, Varnish configs
+├── data/                 # Persistent DB data
+├── databases/import|export/
+├── logs/nginx/
+├── scripts/lib/          # Shared bash library
+└── sources/              # Website source code
 ```
 
 ---
 
-## Services
+## Services & Port Map
 
-| Service | Image | Default | Profile | Ports |
-|---|---|:---:|---|---|
-| **nginx** | `nginx:stable-alpine` | ✅ | — | 80, 443 |
-| **php81 – php84** | `build/php` | ✅ | — | — |
-| **php70 – php74** | `build/php` | — | `legacy` | — |
-| **mysql** | `mysql:8.4` | ✅ | — | 3306 |
-| **mysql80** | `mysql:8.0` | — | `mysql80` | 3307 |
-| **mariadb** | `mariadb:11.4` | — | `mariadb` | 3308 |
-| **opensearch** | `opensearchproject/opensearch:2.19.1` | ✅ | — | 9200 |
-| **elasticsearch** | `elasticsearch:8.17` | — | `elasticsearch` | 9200 |
-| **redis** | `redis:7.4-alpine` | ✅ | — | 6379 |
-| **rabbitmq** | `rabbitmq:4.1-management` | ✅ | — | 5672, 15672 |
-| **mailpit** | `axllent/mailpit:latest` | ✅ | — | 1025, 8025 |
-| **varnish** | `varnish:7.6-alpine` | — | `varnish` | 6081 |
-| **phpmyadmin** | `phpmyadmin:latest` | — | `debug` | 8080 |
-| **redis-commander** | `rediscommander/redis-commander` | — | `debug` | 8081 |
-| **opensearch-dashboards** | `opensearchproject/opensearch-dashboards` | — | `dashboards` | 5601 |
+### Core (always available)
+
+| Service | Image | Port |
+|---|---|---|
+| nginx | `nginx:stable-alpine` | 80, 443 |
+| php81–php84 | `build/php` | — |
+| mysql | `mysql:8.4` | 3306 |
+| opensearch | `opensearch:2.19.1` | 9200 |
+| redis | `redis:7.4-alpine` | 6379 |
+| rabbitmq | `rabbitmq:4.1` | 5672, 15672 |
+| mailpit | `axllent/mailpit` | 1025, 8025 |
+
+### Override files (`compose/*.yml` — loaded when projects need them)
+
+| File | Service | Port | Use case |
+|---|---|---|---|
+| `legacy.yml` | php70–php74 | — | Magento 2.1–2.4.3 |
+| `mysql80.yml` | MySQL 8.0 | 3307 | Legacy Magento |
+| `mariadb.yml` | MariaDB 11.4 | 3308 | Magento 2.4.8 |
+| `opensearch1.yml` | OpenSearch 1.3 | 9201 | Magento 2.4.4–2.4.5 |
+| `elasticsearch.yml` | ES 8.17 | 9202 | Alternative to OpenSearch |
+| `elasticsearch7.yml` | ES 7.17 | 9203 | Magento 2.3–2.4.5 |
+| `redis6.yml` | Redis 6.2 | 6380 | Magento 2.4.0–2.4.5 |
+| `debug.yml` | phpMyAdmin, Redis Commander | 8080, 8081 | DB/cache inspection |
+| `varnish.yml` | Varnish 7.6 | 6081 | Full-page cache |
+| `dashboards.yml` | OpenSearch Dashboards | 5601 | Search analytics |
+
+> All ports are unique — every service variant can run simultaneously.
 
 ---
 
 ## Magento Compatibility Matrix
 
-| Magento | PHP | Search | Database | Profile |
-|---|---|---|---|---|
-| 2.1 – 2.2 | 7.0, 7.1 | — | MySQL 5.7 | `legacy` |
-| 2.3.x | 7.2 – 7.4 | ES 7.x | MySQL 8.0 | `legacy` |
-| 2.4.0 – 2.4.3 | 7.4 | ES 7.x | MySQL 8.0 | `legacy` |
-| 2.4.4 – 2.4.5 | 8.1 | ES 7.17 / OS 1.2 | MySQL 8.0 | default |
-| 2.4.6 | 8.1, 8.2 | ES 8.x / OS 2.x | MySQL 8.0 | default |
-| 2.4.7 | 8.2, 8.3 | ES 8.x / OS 2.x | MySQL 8.4 | default |
-| 2.4.8 | 8.3, 8.4 | OS 2.x / 3 | MySQL 8.4 / MariaDB 11.4 | default |
+| Magento | PHP | Search | Database | Redis | Override files needed |
+|---|---|---|---|---|---|
+| 2.1–2.2 | 7.0, 7.1 | — | MySQL | 5.x | `legacy.yml` |
+| 2.3.x | 7.2–7.4 | ES 7.x | MySQL 8.0 | 6.x | `legacy.yml` `elasticsearch7.yml` `mysql80.yml` `redis6.yml` |
+| 2.4.0–2.4.3 | 7.4 | ES 7.x | MySQL 8.0 | 6.x | `legacy.yml` `elasticsearch7.yml` `mysql80.yml` `redis6.yml` |
+| 2.4.4–2.4.5 | 8.1 | OS 1.x / ES 7.17 | MySQL 8.0 | 6.x+ | `opensearch1.yml` or `elasticsearch7.yml` `mysql80.yml` |
+| 2.4.6 | 8.1, 8.2 | OS 2.x / ES 8.x | MySQL 8.0 | 7.x | *(core only)* |
+| 2.4.7 | 8.2, 8.3 | OS 2.x / ES 8.x | MySQL 8.4 | 7.x | *(core only)* |
+| 2.4.8 | 8.3, 8.4 | OS 2.x+ | MySQL 8.4 / MariaDB 11.4 | 7.x | `mariadb.yml` *(optional)* |
+
+> `bin/mage up` auto-detects which override files to load from your `projects.json`.
 
 ---
 
@@ -120,19 +138,22 @@ bin/mage db import mysite.com bk.sql # Import database
 | `project info <domain>` | Show config + service status |
 | `project switch-php <domain> <php>` | Change PHP version |
 | `project switch-db <domain> <db>` | Change DB (mysql/mysql80/mariadb) |
-| `project switch-search <domain> <s>` | Change search (opensearch/elasticsearch/none) |
-| `project set <domain> <field> <val>` | Set any project field |
+| `project switch-search <domain> <s>` | Change search engine |
+| `project set <domain> <field> <val>` | Set any field (php, app, db_service, db_name, search, redis, enabled) |
 
 ### Lifecycle
 
 | Command | Description |
 |---|---|
-| `up [services...]` | Smart start from projects.json (or manual) |
+| `setup` | Interactive first-time setup |
+| `up [services...]` | Smart start from projects.json (or explicit services) |
+| `up --with=<override>` | Start with specific compose override |
 | `down` | Stop & remove all containers |
-| `status` | Show projects, services, domains |
-| `logs [service]` | Tail logs |
+| `stop` / `restart` | Stop or restart services |
+| `status` | Show projects + running containers |
+| `logs [service]` | Tail container logs |
 
-### Development (accepts domain — auto-resolves PHP)
+### Development
 
 | Command | Example |
 |---|---|
@@ -140,7 +161,7 @@ bin/mage db import mysite.com bk.sql # Import database
 | `composer <domain\|php> [args]` | `bin/mage composer mysite.com install` |
 | `magento <domain> [args]` | `bin/mage magento mysite.com cache:flush` |
 
-### Database (project-aware — auto-routes to correct DB service)
+### Database
 
 | Command | Example |
 |---|---|
@@ -162,150 +183,210 @@ bin/mage db import mysite.com bk.sql # Import database
 
 ---
 
-## Common Workflows
+## Examples
 
-### Setting Up an Existing Magento Project
+### Multi-project agency setup
+
+A typical agency running 3 projects on different stacks:
 
 ```bash
-# 1. Register the project
-bin/mage project add mysite.com
-# → Wizard asks: PHP version, app type, DB service, DB name, search engine
-# → Creates source dir, offers to create vhost + database
+# Modern Magento 2.4.7 project
+bin/mage project add shop.test
+# → php83, mysql, opensearch
 
-# 2. Clone code
-git clone git@github.com:you/your-magento.git sources/mysite.com
+# Legacy Magento 2.3 project
+bin/mage project add legacy.test
+# → php72, mysql80, elasticsearch7, redis6
+bin/mage project set legacy.test redis redis6
 
-# 3. Start (auto-detects needed services)
+# New Magento 2.4.8 on MariaDB
+bin/mage project add new-shop.test
+# → php84, mariadb, opensearch
+
+# Start everything — smart start loads the right overrides
 bin/mage up
+# → Services: nginx php83 php72 php84 mysql mysql80 mariadb opensearch elasticsearch7 redis redis6 mailpit
+# → Overrides: legacy mysql80 mariadb elasticsearch7 redis6
 
-# 4. Import database (auto-routes to the right DB service)
-bin/mage db import mysite.com backup.sql
-
-# 5. Update env.php — DB host is the service name (mysql / mysql80 / mariadb)
-
-# 6. Build
-bin/mage composer mysite.com install
-bin/mage magento mysite.com setup:upgrade
+# Check what's running
+bin/mage status
 ```
 
-### Installing Fresh Magento
+### Working with a project
 
 ```bash
+# Shell into the right PHP container for your project
+bin/mage shell shop.test
+# → Opens bash in php83 container, cd's to /home/public_html/shop.test
+
+# Run composer (auto-detects PHP version from project config)
+bin/mage composer shop.test install
+bin/mage composer shop.test require monolog/monolog
+
+# Run Magento CLI commands
+bin/mage magento shop.test cache:flush
+bin/mage magento shop.test setup:upgrade
+bin/mage magento shop.test indexer:reindex
+
+# Database operations (auto-routes to the right DB service)
+bin/mage db create shop.test        # Creates 'shop_test' on mysql
+bin/mage db import shop.test bk.sql # Imports into the right DB
+bin/mage db export shop.test        # Exports clean SQL (no password warnings)
+```
+
+### Switching services for a project
+
+```bash
+# Upgrade PHP
+bin/mage project switch-php shop.test php84
+# → Regenerates nginx vhost automatically
+
+# Switch from MySQL to MariaDB
+bin/mage project switch-db shop.test mariadb
+# → Gives migration steps: export → create → import → update env.php
+
+# Switch search engine
+bin/mage project switch-search shop.test elasticsearch
+# → Reminds to update Magento config
+
+# Change any field
+bin/mage project set shop.test db_name new_database
+bin/mage project set shop.test redis redis6
+```
+
+### Enable/disable without data loss
+
+```bash
+# Taking a project offline temporarily
+bin/mage project disable legacy.test
+# → Removes nginx vhost (so nginx doesn't try to route to it)
+# → Keeps source code, database, all data intact
+# → Next 'bin/mage up' won't start php72/mysql80 if nothing else needs them
+
+# Bring it back
+bin/mage project enable legacy.test
+# → Recreates nginx vhost
+# → 'bin/mage up' will start the required services again
+```
+
+### Manual override (without projects.json)
+
+```bash
+# Start with specific overrides
+bin/mage up --with=legacy --with=debug php72 nginx mysql
+
+# Or use docker compose directly
+docker compose -f docker-compose.yml -f compose/legacy.yml -f compose/mariadb.yml up -d
+
+# Debug tools
+docker compose -f docker-compose.yml -f compose/debug.yml up -d
+# → phpMyAdmin at http://localhost:8080
+# → Redis Commander at http://localhost:8081
+```
+
+### Fresh Magento install
+
+```bash
+# Install Magento 2.4.7 community edition
 bin/mage install 2.4.7 community shop.test php83
-# → Downloads, creates DB, configures vhost, runs setup:install
+
+# Install with specific DB
+bin/mage project add enterprise.test
+# → Choose: php84, mariadb, opensearch
+bin/mage up
+bin/mage install 2.4.8 enterprise enterprise.test php84
 ```
 
-### Enabling SSL
+### SSL & Xdebug
 
 ```bash
-# Requires mkcert (https://github.com/FiloSottile/mkcert)
-mkcert -install   # one-time: install local CA
+# SSL
+mkcert -install                  # One-time: install local CA
+bin/mage ssl shop.test           # Generate cert + HTTPS vhost
+# → https://shop.test now works
 
-bin/mage ssl shop.test php83
-# → generates cert, creates HTTPS vhost, reloads nginx
-# → site available at https://shop.test
+# Xdebug
+bin/mage xdebug on php83         # Enable
+bin/mage xdebug status php83     # Check
+bin/mage xdebug off php83        # Disable
+# PHPStorm: map /home/public_html/shop.test → sources/shop.test
 ```
 
-### Using Xdebug with PHPStorm
+### Varnish
 
 ```bash
-# Enable Xdebug for your PHP version
-bin/mage xdebug on php83
-
-# In PHPStorm:
-# 1. Settings → PHP → Servers → add "shop.test" mapping /home/public_html → sources/
-# 2. Start listening for connections (phone icon)
-# 3. Set a breakpoint and reload the page
-```
-
-See `images/xdebug-phpstorm-01.png` for PHPStorm configuration screenshot.
-
-### Using Varnish
-
-```bash
-# Start Varnish
-docker compose --profile varnish up -d varnish
-
-# Enable for a domain
-bin/mage varnish enable shop.test
-
-# Disable
-bin/mage varnish disable shop.test
+bin/mage up --with=varnish
+bin/mage varnish on shop.test     # Enable FPC + proxy
+bin/mage varnish status shop.test # Check
+bin/mage varnish off shop.test    # Disable
 ```
 
 ---
 
-## Docker Compose Profiles
+## Compose Override Files
 
-`bin/mage up` auto-detects needed profiles from your projects. Manual override:
+Core services live in `docker-compose.yml`. Non-default services live in `compose/*.yml`:
 
 ```bash
-bin/mage up                                    # Smart: from projects.json
-docker compose --profile legacy up -d           # Legacy PHP 7.x
-docker compose --profile mysql80 up -d mysql80  # MySQL 8.0 on port 3307
-docker compose --profile mariadb up -d mariadb  # MariaDB on port 3308
-docker compose --profile debug up -d            # phpMyAdmin + Redis Commander
+# bin/mage up auto-loads needed overrides from projects.json
+bin/mage up
+
+# Manual: specify which overrides to load
+bin/mage up --with=legacy --with=mariadb
+# equivalent to:
+docker compose -f docker-compose.yml -f compose/legacy.yml -f compose/mariadb.yml up -d
+
+# All overrides (everything)
+docker compose \
+  -f docker-compose.yml \
+  -f compose/legacy.yml \
+  -f compose/mysql80.yml \
+  -f compose/mariadb.yml \
+  -f compose/opensearch1.yml \
+  -f compose/elasticsearch.yml \
+  -f compose/elasticsearch7.yml \
+  -f compose/redis6.yml \
+  -f compose/debug.yml \
+  -f compose/varnish.yml \
+  up -d
 ```
 
-| Profile | Services | Use Case |
-|---|---|---|
-| *(default)* | nginx, php81–84, mysql, opensearch, redis, rabbitmq, mailpit | Magento 2.4.4+ |
-| `legacy` | php70–74 | Magento 2.1–2.4.3 |
-| `mysql80` | MySQL 8.0 (port 3307) | Legacy projects |
-| `mariadb` | MariaDB 11.4 (port 3308) | Magento 2.4.8 |
-| `elasticsearch` | ES 8.17 | Alternative to OpenSearch |
-| `varnish` | Varnish 7.6 | Full-page cache |
-| `debug` | phpMyAdmin, Redis Commander | DB/cache inspection |
+### Port map (no conflicts)
+
+```
+Service           Port    Service              Port
+────────────────  ────    ──────────────────   ────
+mysql      8.4   3306    opensearch    2.x    9200
+mysql80    8.0   3307    opensearch1   1.3    9201
+mariadb   11.4   3308    elasticsearch 8.x    9202
+redis      7.4   6379    elasticsearch7 7.x   9203
+redis6     6.2   6380
+```
 
 ---
 
 ## Environment Variables
 
-Copy `env-example` to `.env` and adjust as needed:
-
-### Database
+Copy `env-example` to `.env`. Each service variant has its own version + port:
 
 | Variable | Default | Description |
 |---|---|---|
-| `MYSQL_VERSION` | `8.4` | MySQL image tag |
-| `MYSQL_DATABASE` | `magento` | Default database name |
-| `MYSQL_USER` | `magento` | Database user |
-| `MYSQL_PASSWORD` | `magento` | Database password |
-| `MYSQL_ROOT_PASSWORD` | `root` | Root password |
-| `MARIADB_VERSION` | `11.4` | MariaDB (profile: mariadb) |
-| `MYSQL80_VERSION` | `8.0` | MySQL 8.0 (profile: mysql80) |
+| `MYSQL_VERSION` | `8.4` | MySQL (core) |
+| `MYSQL80_VERSION` | `8.0` | MySQL 8.0 (override) |
+| `MARIADB_VERSION` | `11.4` | MariaDB (override) |
+| `MYSQL_PORT` | `3306` | MySQL 8.4 port |
+| `MYSQL80_PORT` | `3307` | MySQL 8.0 port |
+| `MARIADB_PORT` | `3308` | MariaDB port |
+| `OPENSEARCH_VERSION` | `2.19.1` | OpenSearch (core) |
+| `OPENSEARCH1_VERSION` | `1.3.19` | OpenSearch 1.x (override) |
+| `ELASTICSEARCH_VERSION` | `8.17.0` | ES 8.x (override) |
+| `ELASTICSEARCH7_VERSION` | `7.17.27` | ES 7.x (override) |
+| `REDIS_VERSION` | `7.4` | Redis (core) |
+| `REDIS6_VERSION` | `6.2` | Redis 6.x (override) |
+| `REDIS_PORT` | `6379` | Redis 7.x port |
+| `REDIS6_PORT` | `6380` | Redis 6.x port |
 
-### Search
-
-| Variable | Default | Description |
-|---|---|---|
-| `OPENSEARCH_VERSION` | `2.19.1` | OpenSearch image tag |
-| `ELASTICSEARCH_VERSION` | `8.17.0` | Elasticsearch image tag (when using elasticsearch profile) |
-
-### Services
-
-| Variable | Default | Description |
-|---|---|---|
-| `REDIS_VERSION` | `7.4` | Redis image tag |
-| `RABBITMQ_VERSION` | `4.1` | RabbitMQ image tag |
-| `RABBITMQ_DEFAULT_USER` | `admin` | RabbitMQ admin user |
-| `RABBITMQ_DEFAULT_PASS` | `admin` | RabbitMQ admin password |
-| `VARNISH_VERSION` | `7.6` | Varnish image tag |
-
-### Ports
-
-| Variable | Default | Description |
-|---|---|---|
-| `HTTP_PORT` | `80` | Nginx HTTP |
-| `HTTPS_PORT` | `443` | Nginx HTTPS |
-| `MYSQL_PORT` | `3306` | MySQL 8.4 |
-| `MYSQL80_PORT` | `3307` | MySQL 8.0 |
-| `PHPMYADMIN_PORT` | `8080` | phpMyAdmin |
-| `MAILPIT_PORT` | `8025` | Mailpit web UI |
-| `RABBITMQ_MGMT_PORT` | `15672` | RabbitMQ management UI |
-| `OPENSEARCH_PORT` | `9200` | OpenSearch API |
-| `REDIS_PORT` | `6379` | Redis |
-| `REDISCMD_PORT` | `8081` | Redis Commander |
+See `env-example` for the full list including credentials and other ports.
 
 ---
 
@@ -316,36 +397,33 @@ Copy `env-example` to `.env` and adjust as needed:
 - **mkcert** — optional, for local SSL certificates
 
 ```bash
-# Verify Docker
 docker compose version   # needs v2.x
-
-# Install mkcert (Ubuntu)
-sudo apt install mkcert
-mkcert -install
 ```
 
 ---
 
 ## Migrating from v1
 
-If you used the previous version of this stack:
-
 | Old | New |
 |---|---|
 | `php74-c2` | `php74` |
 | `php81-c2` | `php81` |
 | `mailhog` | `mailpit` (port 8025) |
-| `elasticsearch` | `opensearch` (default; ES available via profile) |
-| `docker-compose up` | `docker compose up` (Compose v2 plugin) |
-| Per-version Dockerfiles | Single unified `build/php/Dockerfile` |
+| `elasticsearch` | `opensearch` (default) |
+| `docker-compose up` | `docker compose up` |
+| Per-version Dockerfiles | `build/php/` + `build/php-legacy/` |
+| All services in one file | Core + `compose/*.yml` overrides |
+| Manual service selection | `projects.json` + smart `bin/mage up` |
 
-**Steps:**
-1. Back up your `.env` and nginx vhost configs
-2. Pull the latest changes
-3. Copy `env-example` to `.env` and merge your settings
-4. Update nginx vhost configs: change PHP upstream names (remove `-c2` suffix)
-5. Rebuild: `docker compose build --no-cache`
-6. Start: `docker compose up -d`
+---
+
+## Tests
+
+```bash
+bash tests/test-all.sh        # Full suite: ~160 assertions across 16 sections
+bash tests/test-php-images.sh  # PHP image verification: 101 checks × 9 versions
+bash tests/test-stacks.sh      # Magento stack connectivity: 6 scenarios
+```
 
 ---
 
