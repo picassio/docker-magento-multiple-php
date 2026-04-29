@@ -41,10 +41,12 @@ RUN apt-get update -y && \
         vim \
         zip \
         unzip \
-        tini \
         tzdata \
         gnupg \
         ca-certificates && \
+    # tini: available in noble (24.04) repos, needs manual install on bionic (18.04)
+    (apt-get install -y tini 2>/dev/null || \
+        (curl -fsSL https://github.com/krallin/tini/releases/download/v0.19.0/tini -o /usr/bin/tini && chmod +x /usr/bin/tini)) && \
     dpkg-reconfigure -f noninteractive tzdata && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 

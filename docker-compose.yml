@@ -33,14 +33,18 @@ services:
   # Legacy PHP 7.x (profiles: [legacy]) — opt-in only
   # Modern PHP 8.1+ — always available
 
+  # Legacy PHP 7.0–7.3: built from source (no longer in ondrej/php PPA)
+  # Uses build/php-legacy/Dockerfile which compiles PHP from php.net tarballs
+
   php70:
     build:
-      context: ./build/php
+      context: ./build/php-legacy
       args:
-        BASE_IMAGE: ubuntu:focal
+        BASE_IMAGE: ubuntu:bionic
         PHP_VERSION: "7.0"
+        PHP_PATCH_VERSION: "7.0.33"
         COMPOSER_VERSION: "1.10.19"
-        NODE_MAJOR: "14"
+        NODE_MAJOR: "18"
         XDEBUG_VERSION: "2.7.2"
     hostname: php70
     profiles: [legacy]
@@ -56,12 +60,13 @@ services:
 
   php71:
     build:
-      context: ./build/php
+      context: ./build/php-legacy
       args:
-        BASE_IMAGE: ubuntu:focal
+        BASE_IMAGE: ubuntu:bionic
         PHP_VERSION: "7.1"
+        PHP_PATCH_VERSION: "7.1.33"
         COMPOSER_VERSION: "1.10.19"
-        NODE_MAJOR: "14"
+        NODE_MAJOR: "18"
         XDEBUG_VERSION: "2.9.8"
     hostname: php71
     profiles: [legacy]
@@ -77,12 +82,13 @@ services:
 
   php72:
     build:
-      context: ./build/php
+      context: ./build/php-legacy
       args:
         BASE_IMAGE: ubuntu:focal
         PHP_VERSION: "7.2"
+        PHP_PATCH_VERSION: "7.2.34"
         COMPOSER_VERSION: "1.10.19"
-        NODE_MAJOR: "14"
+        NODE_MAJOR: "18"
         XDEBUG_VERSION: "2.9.8"
     hostname: php72
     profiles: [legacy]
@@ -98,12 +104,13 @@ services:
 
   php73:
     build:
-      context: ./build/php
+      context: ./build/php-legacy
       args:
         BASE_IMAGE: ubuntu:focal
         PHP_VERSION: "7.3"
+        PHP_PATCH_VERSION: "7.3.33"
         COMPOSER_VERSION: "1.10.19"
-        NODE_MAJOR: "14"
+        NODE_MAJOR: "18"
         XDEBUG_VERSION: "2.9.8"
     hostname: php73
     profiles: [legacy]
