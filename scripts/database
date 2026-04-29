@@ -126,16 +126,20 @@ validateArgs() {
 }
 
 # ── DB helpers (service-aware) ────────────────────────────────────────────────
+# Run mysql command, suppressing password warning cleanly
+# Uses MYSQL_PWD env var to avoid the "Using a password on the command line" warning entirely
 mysql_exec() {
     local root_pass
     root_pass="$(get_db_root_password "$DB_SERVICE")"
-    dc exec -T "$DB_SERVICE" mysql -u root -p"${root_pass}" --skip-column-names "$@" 2>&1 | grep -v "Using a password"
+    dc exec -T -e MYSQL_PWD="${root_pass}" "$DB_SERVICE" mysql -u root --skip-column-names "$@" 2>/dev/null
 }
 
+# Run mysqldump, suppressing password warning cleanly
+# stderr goes to /dev/null (warnings), stdout is pure SQL
 mysql_dump() {
     local root_pass
     root_pass="$(get_db_root_password "$DB_SERVICE")"
-    dc exec -T "$DB_SERVICE" /usr/bin/mysqldump -u root --password="${root_pass}" "$@" 2>&1 | grep -v "Using a password"
+    dc exec -T -e MYSQL_PWD="${root_pass}" "$DB_SERVICE" /usr/bin/mysqldump -u root "$@" 2>/dev/null
 }
 
 db_exists() {
@@ -155,7 +159,7 @@ checkDatabaseName() {
 listDatabases() {
     local root_pass
     root_pass="$(get_db_root_password "$DB_SERVICE")"
-    dc exec -T "$DB_SERVICE" mysql -u root --password="${root_pass}" -e "show databases" 2>&1 | grep -v "Using a password"
+    dc exec -T -e MYSQL_PWD="${root_pass}" "$DB_SERVICE" mysql -u root -e "show databases" 2>/dev/null
 }
 
 createDatabase() {
@@ -218,8 +222,8 @@ importDatabase() {
     local root_pass
     root_pass="$(get_db_root_password "$DB_SERVICE")"
     _arrow "Importing into ${DATABASE_IMPORT_TARGET_NAME} on ${DB_SERVICE}..."
-    dc exec -T "$DB_SERVICE" mysql -u root -p"${root_pass}" "${DATABASE_IMPORT_TARGET_NAME}" \
-        < "${DB_IMPORT_DIR}/${DATABASE_IMPORT_SOURCE_NAME}" 2>&1 | grep -v "Using a password"
+    dc exec -T -e MYSQL_PWD="${root_pass}" "$DB_SERVICE" mysql -u root "${DATABASE_IMPORT_TARGET_NAME}" \
+        < "${DB_IMPORT_DIR}/${DATABASE_IMPORT_SOURCE_NAME}" 2>/dev/null
     _success "Database '${DATABASE_IMPORT_TARGET_NAME}' imported on ${DB_SERVICE}"
 }
 

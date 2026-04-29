@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 source "$(dirname "$0")/lib/docker.sh"
 
-require_service mysql
-dc exec mysql mysql -uroot -p"$(get_mysql_root_password)"
+DB_SVC="${1:-mysql}"
+require_service "$DB_SVC"
+dc exec -e MYSQL_PWD="$(get_db_root_password "$DB_SVC")" "$DB_SVC" mysql -u root
