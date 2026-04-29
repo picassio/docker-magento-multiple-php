@@ -44,6 +44,9 @@ ${_bold}PROJECT MANAGEMENT${_reset}
     ${_green}project disable${_reset} <domain>            Disable project & remove vhost
     ${_green}project info${_reset} <domain>               Show project configuration
     ${_green}project switch-php${_reset} <domain> <php>   Change PHP version
+    ${_green}project switch-db${_reset} <domain> <db>     Change DB service (mysql/mysql80/mariadb)
+    ${_green}project switch-search${_reset} <domain> <s>  Change search (opensearch/elasticsearch/none)
+    ${_green}project set${_reset} <domain> <field> <val>  Set any project field
 
 ${_bold}DEVELOPMENT (accepts domain name — auto-resolves PHP/DB)${_reset}
     ${_green}shell${_reset} <domain|php>                  Open bash in PHP container
@@ -76,6 +79,8 @@ ${_bold}EXAMPLES${_reset}
     bin/mage db import mysite.com backup.sql        # Import into right DB
     bin/mage project disable oldsite.com            # Disable without data loss
     bin/mage project switch-php mysite.com php84    # Upgrade PHP
+    bin/mage project switch-db mysite.com mariadb    # Switch to MariaDB
+    bin/mage project switch-search mysite.com elasticsearch
 
 EOF
 }
@@ -83,18 +88,21 @@ EOF
 # ── Command: project ──────────────────────────────────────────────────────────
 cmd_project() {
     local action="${1:-}"
-    [[ -z "$action" ]] && { _error "Usage: bin/mage project <list|add|remove|enable|disable|info|switch-php> [args]"; exit 1; }
+    [[ -z "$action" ]] && { _error "Usage: bin/mage project <list|add|remove|enable|disable|info|set|switch-php|switch-db|switch-search> [args]"; exit 1; }
     shift
 
     case "$action" in
-        list)       cmd_project_list ;;
-        add)        cmd_project_add "$@" ;;
-        remove)     cmd_project_remove "$@" ;;
-        enable)     cmd_project_enable "$@" ;;
-        disable)    cmd_project_disable "$@" ;;
-        info)       cmd_project_info "$@" ;;
-        switch-php) cmd_project_switch_php "$@" ;;
-        *)          _die "Unknown project action: $action" ;;
+        list)          cmd_project_list ;;
+        add)           cmd_project_add "$@" ;;
+        remove)        cmd_project_remove "$@" ;;
+        enable)        cmd_project_enable "$@" ;;
+        disable)       cmd_project_disable "$@" ;;
+        info)          cmd_project_info "$@" ;;
+        set)           cmd_project_set_field "$@" ;;
+        switch-php)    cmd_project_switch_php "$@" ;;
+        switch-db)     cmd_project_switch_db "$@" ;;
+        switch-search) cmd_project_switch_search "$@" ;;
+        *)             _die "Unknown project action: $action" ;;
     esac
 }
 
@@ -312,6 +320,91 @@ cmd_project_switch_php() {
 
     _success "Project '$domain' switched to $new_php"
     _arrow "Make sure $new_php is running: bin/mage up"
+}
+
+cmd_project_switch_db() {
+    local domain="${1:-}" new_db="${2:-}"
+    [[ -z "$domain" || -z "$new_db" ]] && _die "Usage: bin/mage project switch-db <domain> <mysql|mysql80|mariadb>"
+    require_project "$domain"
+    validate_db_service "$new_db"
+
+    local old_db old_name
+    old_db=$(project_get "$domain" "db_service")
+    old_name=$(project_get "$domain" "db_name")
+
+    if [[ "$old_db" == "$new_db" ]]; then
+        _warning "Project '$domain' already uses $new_db"
+        return
+    fi
+
+    _arrow "Switching $domain DB: $old_db \u2192 $new_db"
+    project_update "$domain" "db_service" "$new_db"
+
+    _success "Project '$domain' now uses $new_db"
+    _warning "Database '$old_name' still exists on $old_db. You may need to:"
+    echo "  1. Export: bin/mage db export $domain"
+    echo "  2. Create on new service: ./scripts/database create --database-name=$old_name --db-service=$new_db"
+    echo "  3. Import: ./scripts/database import --source=${old_name}-*.sql --target=$old_name --db-service=$new_db"
+    echo "  4. Update app/etc/env.php: change db host to '$new_db'"
+    _arrow "Make sure $new_db is running: bin/mage up"
+}
+
+cmd_project_switch_search() {
+    local domain="${1:-}" new_search="${2:-}"
+    [[ -z "$domain" || -z "$new_search" ]] && _die "Usage: bin/mage project switch-search <domain> <opensearch|elasticsearch|none>"
+    require_project "$domain"
+
+    if [[ "$new_search" != @(opensearch|elasticsearch|none) ]]; then
+        _die "Invalid search engine. Must be: opensearch, elasticsearch, or none"
+    fi
+
+    local old_search
+    old_search=$(project_get "$domain" "search")
+
+    if [[ "$old_search" == "$new_search" ]]; then
+        _warning "Project '$domain' already uses $new_search"
+        return
+    fi
+
+    _arrow "Switching $domain search: $old_search \u2192 $new_search"
+    project_update "$domain" "search" "$new_search"
+
+    _success "Project '$domain' now uses $new_search"
+    if [[ "$new_search" != "none" ]]; then
+        _arrow "Make sure $new_search is running: bin/mage up"
+    fi
+    if [[ "$new_search" == "opensearch" || "$new_search" == "elasticsearch" ]]; then
+        _warning "Update Magento search config: bin/mage magento $domain config:set catalog/search/engine $new_search"
+    fi
+}
+
+cmd_project_set_field() {
+    local domain="${1:-}" field="${2:-}" value="${3:-}"
+    [[ -z "$domain" || -z "$field" || -z "$value" ]] && _die "Usage: bin/mage project set <domain> <field> <value>\n\nFields: php, app, db_service, db_name, search, enabled"
+    require_project "$domain"
+
+    # Validate known fields
+    case "$field" in
+        php)        validate_php_version "$value" ;;
+        db_service) validate_db_service "$value" ;;
+        app)        [[ "$value" != @(magento1|magento2|wordpress|laravel|default) ]] && _die "Invalid app: $value" ;;
+        search)     [[ "$value" != @(opensearch|elasticsearch|none) ]] && _die "Invalid search: $value" ;;
+        db_name|enabled) ;; # no validation needed
+        *)          _die "Unknown field: $field. Valid: php, app, db_service, db_name, search, enabled" ;;
+    esac
+
+    local old_value
+    old_value=$(project_get "$domain" "$field")
+    project_update "$domain" "$field" "$value"
+    _success "$domain: $field changed from '$old_value' to '$value'"
+
+    # If PHP changed, regenerate vhost
+    if [[ "$field" == "php" && -f "${NGINX_CONF_DIR}/${domain}.conf" ]]; then
+        local app
+        app=$(project_get "$domain" "app")
+        rm -f "${NGINX_CONF_DIR}/${domain}.conf"
+        "${SCRIPTS_DIR}/create-vhost" --domain="$domain" --app="$app" --root-dir="$domain" --php-version="$value" 2>&1 || true
+    fi
 }
 
 # ── Command: up (smart start) ────────────────────────────────────────────────
