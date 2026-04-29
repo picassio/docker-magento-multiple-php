@@ -6,7 +6,7 @@
 # (automatically sources services.sh → docker.sh → common.sh)
 #
 
-[[ -n "$_PROJECTS_SH_LOADED" ]] && return 0
+[[ -n "${_PROJECTS_SH_LOADED:-}" ]] && return 0
 _PROJECTS_SH_LOADED=1
 
 source "$(dirname "${BASH_SOURCE[0]}")/services.sh"
@@ -154,7 +154,8 @@ project_compute_services() {
     echo "${services}${php_versions}${db_services}${search_services}${redis_services}" | tr -s ' '
 }
 
-# ── Compute required docker compose profiles ──────────────────────────────────
+# ── Compute required compose override files ──────────────────────────────────
+# Returns space-separated list of override names (legacy, mysql80, mariadb, etc.)
 project_compute_profiles() {
     local profiles=""
 

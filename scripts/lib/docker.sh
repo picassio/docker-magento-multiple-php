@@ -13,23 +13,58 @@ _DOCKER_SH_LOADED=1
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 # ── Compose command (v2 preferred, v1 fallback) ──────────────────────────────
+# ── Compose file resolution ───────────────────────────────────────────────────
+# Maps override names to compose files.
+# Usage: dc_compose_files  → returns "-f ... -f ..." flags for active overrides
+
+# Map of override names → compose file paths
+declare -A COMPOSE_OVERRIDES 2>/dev/null || true
+COMPOSE_OVERRIDES=(
+    [legacy]="compose/legacy.yml"
+    [mysql80]="compose/mysql80.yml"
+    [mariadb]="compose/mariadb.yml"
+    [opensearch1]="compose/opensearch1.yml"
+    [elasticsearch]="compose/elasticsearch.yml"
+    [elasticsearch7]="compose/elasticsearch7.yml"
+    [redis6]="compose/redis6.yml"
+    [debug]="compose/debug.yml"
+    [varnish]="compose/varnish.yml"
+    [dashboards]="compose/dashboards.yml"
+)
+
+# Build -f flags for a list of override names
+# Usage: dc_file_flags legacy mariadb redis6
+dc_file_flags() {
+    local flags="-f docker-compose.yml"
+    for name in "$@"; do
+        local file="${COMPOSE_OVERRIDES[$name]:-}"
+        if [[ -n "$file" && -f "${ROOT_DIR}/${file}" ]]; then
+            flags="$flags -f $file"
+        fi
+    done
+    echo "$flags"
+}
+
+# Core compose wrapper. Reads DC_FILE_FLAGS for extra -f flags.
 dc() {
+    local cmd
     if docker compose version &>/dev/null; then
-        docker compose "$@"
+        cmd="docker compose"
     elif command -v docker-compose &>/dev/null; then
-        docker-compose "$@"
+        cmd="docker-compose"
     else
-        _die "Neither 'docker compose' nor 'docker-compose' found. Please install Docker."
+        _die "Neither 'docker compose' nor 'docker-compose' found."
+    fi
+
+    if [[ -n "${DC_FILE_FLAGS:-}" ]]; then
+        eval "$cmd $DC_FILE_FLAGS" '"$@"'
+    else
+        $cmd "$@"
     fi
 }
 
-# Return the compose command string (for display in messages)
 dc_cmd() {
-    if docker compose version &>/dev/null; then
-        echo "docker compose"
-    else
-        echo "docker-compose"
-    fi
+    if docker compose version &>/dev/null; then echo "docker compose"; else echo "docker-compose"; fi
 }
 
 # ── PHP version helpers ───────────────────────────────────────────────────────

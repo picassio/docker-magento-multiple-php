@@ -408,48 +408,59 @@ cmd_project_set_field() {
 
 # ── Command: up (smart start) ────────────────────────────────────────────────
 cmd_up() {
-    local profiles=()
+    local overrides=()
     local services=()
     local explicit=false
 
     for arg in "$@"; do
         case "$arg" in
-            --profile=*) profiles+=("--profile" "${arg#*=}") ;;
-            -*)          _die "Unknown option: $arg" ;;
-            *)           services+=("$arg"); explicit=true ;;
+            --with=*)   overrides+=("${arg#*=}") ;;
+            -*)         _die "Unknown option: $arg. Use --with=<override> (e.g. --with=legacy)" ;;
+            *)          services+=("$arg"); explicit=true ;;
         esac
     done
 
     if [[ "$explicit" == false ]]; then
-        local proj_services proj_profiles
+        local proj_services proj_overrides
         proj_services=$(project_compute_services)
-        proj_profiles=$(project_compute_profiles)
+        proj_overrides=$(project_compute_profiles)
 
-        if [[ -n "$proj_services" && "$proj_services" != "nginx redis mailpit" ]]; then
+        if [[ -n "$proj_services" && "$proj_services" != "nginx mailpit" ]]; then
             _arrow "Smart start from projects.json..."
-            for p in $proj_profiles; do
-                profiles+=("--profile" "$p")
-            done
+            read -ra overrides <<< "$proj_overrides"
             read -ra services <<< "$proj_services"
             _arrow "Services: ${services[*]}"
-            [[ -n "$proj_profiles" ]] && _arrow "Profiles: $proj_profiles"
+            [[ ${#overrides[@]} -gt 0 ]] && _arrow "Overrides: ${overrides[*]}"
         else
             _arrow "No projects registered. Starting default stack..."
             _arrow "Tip: ${_bold}bin/mage project add <domain>${_reset}"
         fi
     fi
 
+    # Build compose file flags
+    local file_flags
+    file_flags=$(dc_file_flags "${overrides[@]}")
+
     _arrow "Starting services..."
+    export DC_FILE_FLAGS="$file_flags"
     if [[ ${#services[@]} -gt 0 ]]; then
-        dc "${profiles[@]}" up -d "${services[@]}" 2>&1
+        dc up -d "${services[@]}" 2>&1
     else
-        dc "${profiles[@]}" up -d 2>&1
+        dc up -d 2>&1
     fi
+    unset DC_FILE_FLAGS
     _success "Services started"
 }
 
 # ── Command: down/stop/restart ────────────────────────────────────────────────
-cmd_down()    { _arrow "Stopping..."; dc --profile legacy --profile mysql80 --profile mariadb --profile elasticsearch down --remove-orphans; _success "Done"; }
+cmd_down() {
+    _arrow "Stopping..."
+    # Include all override files so 'down' can find all running containers
+    local all_overrides
+    all_overrides=$(dc_file_flags legacy mysql80 mariadb opensearch1 elasticsearch elasticsearch7 redis6 debug varnish dashboards)
+    DC_FILE_FLAGS="$all_overrides" dc down --remove-orphans
+    _success "Done"
+}
 cmd_stop()    { _arrow "Stopping..."; dc stop; _success "Done"; }
 cmd_restart() { if [[ -n "${1:-}" ]]; then dc restart "$1"; else dc restart; fi; _success "Restarted"; }
 

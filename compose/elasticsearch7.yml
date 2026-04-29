@@ -1,0 +1,22 @@
+# Elasticsearch 7.x — for Magento 2.3–2.4.5
+services:
+  elasticsearch7:
+    image: elasticsearch:${ELASTICSEARCH7_VERSION:-7.17.27}
+    hostname: elasticsearch7
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch7-data:/usr/share/elasticsearch/data
+    ports:
+      - "${ELASTICSEARCH7_PORT:-9203}:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  elasticsearch7-data:

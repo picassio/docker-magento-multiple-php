@@ -1,0 +1,105 @@
+# Legacy PHP 7.0–7.4 — for Magento 2.1–2.4.3
+services:
+  php70:
+    build:
+      context: ./build/php-legacy
+      args:
+        BASE_IMAGE: ubuntu:bionic
+        PHP_VERSION: "7.0"
+        PHP_PATCH_VERSION: "7.0.33"
+        COMPOSER_VERSION: "1.10.19"
+        NODE_MAJOR: "18"
+        XDEBUG_VERSION: "2.7.2"
+    hostname: php70
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
+      - ./conf/php/php70/magento.conf:/etc/php/7.0/fpm/pool.d/www.conf:ro
+      - ./conf/php/php70/php.ini:/etc/php/7.0/fpm/php.ini:ro
+      - ./conf/php/php70/php.ini:/etc/php/7.0/cli/php.ini:ro
+    restart: unless-stopped
+
+  php71:
+    build:
+      context: ./build/php-legacy
+      args:
+        BASE_IMAGE: ubuntu:bionic
+        PHP_VERSION: "7.1"
+        PHP_PATCH_VERSION: "7.1.33"
+        COMPOSER_VERSION: "1.10.19"
+        NODE_MAJOR: "18"
+        XDEBUG_VERSION: "2.9.8"
+    hostname: php71
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
+      - ./conf/php/php71/magento.conf:/etc/php/7.1/fpm/pool.d/www.conf:ro
+      - ./conf/php/php71/php.ini:/etc/php/7.1/fpm/php.ini:ro
+      - ./conf/php/php71/php.ini:/etc/php/7.1/cli/php.ini:ro
+    restart: unless-stopped
+
+  php72:
+    build:
+      context: ./build/php-legacy
+      args:
+        BASE_IMAGE: ubuntu:focal
+        PHP_VERSION: "7.2"
+        PHP_PATCH_VERSION: "7.2.34"
+        COMPOSER_VERSION: "1.10.19"
+        NODE_MAJOR: "18"
+        XDEBUG_VERSION: "2.9.8"
+    hostname: php72
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
+      - ./conf/php/php72/magento.conf:/etc/php/7.2/fpm/pool.d/www.conf:ro
+      - ./conf/php/php72/php.ini:/etc/php/7.2/fpm/php.ini:ro
+      - ./conf/php/php72/php.ini:/etc/php/7.2/cli/php.ini:ro
+    restart: unless-stopped
+
+  php73:
+    build:
+      context: ./build/php-legacy
+      args:
+        BASE_IMAGE: ubuntu:focal
+        PHP_VERSION: "7.3"
+        PHP_PATCH_VERSION: "7.3.33"
+        COMPOSER_VERSION: "1.10.19"
+        NODE_MAJOR: "18"
+        XDEBUG_VERSION: "2.9.8"
+    hostname: php73
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
+      - ./conf/php/php73/magento.conf:/etc/php/7.3/fpm/pool.d/www.conf:ro
+      - ./conf/php/php73/php.ini:/etc/php/7.3/fpm/php.ini:ro
+      - ./conf/php/php73/php.ini:/etc/php/7.3/cli/php.ini:ro
+    restart: unless-stopped
+
+  php74:
+    build:
+      context: ./build/php
+      args:
+        BASE_IMAGE: ubuntu:focal
+        PHP_VERSION: "7.4"
+        COMPOSER_VERSION: "2.8.4"
+        NODE_MAJOR: "20"
+        XDEBUG_VERSION: "2.9.8"
+    hostname: php74
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
+      - ./conf/php/php74/magento.conf:/etc/php/7.4/fpm/pool.d/www.conf:ro
+      - ./conf/php/php74/php.ini:/etc/php/7.4/fpm/php.ini:ro
+      - ./conf/php/php74/php.ini:/etc/php/7.4/cli/php.ini:ro
+    restart: unless-stopped

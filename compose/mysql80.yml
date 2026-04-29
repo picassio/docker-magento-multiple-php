@@ -1,0 +1,22 @@
+# MySQL 8.0 — for Magento 2.3–2.4.6
+services:
+  mysql80:
+    image: mysql:${MYSQL80_VERSION:-8.0}
+    hostname: mysql80
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-magento}
+      MYSQL_USER: ${MYSQL_USER:-magento}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-magento}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+    volumes:
+      - ./data/mysql80:/var/lib/mysql
+      - ./conf/mysql/conf.d:/etc/mysql/conf.d:ro
+    ports:
+      - "${MYSQL80_PORT:-3307}:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
