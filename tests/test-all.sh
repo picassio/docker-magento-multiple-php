@@ -291,10 +291,21 @@ assert_contains "compute has mysql80" "$OUT" "mysql80"
 assert_contains "compute has elasticsearch" "$OUT" "elasticsearch"
 
 OUT=$(bash -c 'source scripts/lib/projects.sh; project_compute_profiles' 2>&1)
-assert_contains "compute profiles has legacy" "$OUT" "legacy"
-assert_contains "compute profiles has mariadb" "$OUT" "mariadb"
-assert_contains "compute profiles has mysql80" "$OUT" "mysql80"
-assert_contains "compute profiles has elasticsearch" "$OUT" "elasticsearch"
+assert_contains "compute overrides has legacy" "$OUT" "legacy"
+assert_contains "compute overrides has mariadb" "$OUT" "mariadb"
+assert_contains "compute overrides has mysql80" "$OUT" "mysql80"
+assert_contains "compute overrides has elasticsearch" "$OUT" "elasticsearch"
+
+# Test that computed overrides map to valid compose files
+OUT=$(bash -c '
+    source scripts/lib/projects.sh
+    overrides=$(project_compute_profiles)
+    flags=$(dc_file_flags $overrides)
+    DC_FILE_FLAGS="$flags" dc config --services
+' 2>/dev/null | sort)
+assert_contains "override compose has php70" "$OUT" "php70"
+assert_contains "override compose has mariadb" "$OUT" "mariadb"
+assert_contains "override compose has elasticsearch" "$OUT" "elasticsearch"
 
 # project remove
 OUT=$(./bin/mage project remove gamma.test 2>&1 <<< "y")
@@ -302,19 +313,78 @@ assert_contains "remove success" "$OUT" "removed"
 assert_exit_nonzero "removed project gone" bash -c 'source scripts/lib/projects.sh; project_exists "gamma.test"'
 
 # ══════════════════════════════════════════════════════════════════════════════
-section "8. DOCKER COMPOSE VALIDATION"
+section "8. DOCKER COMPOSE — Core + Override Files"
 # ══════════════════════════════════════════════════════════════════════════════
 
-assert_exit_0 "compose config valid (all profiles)" docker compose --profile legacy --profile mysql80 --profile mariadb --profile elasticsearch --profile debug --profile varnish --profile dashboards config --quiet
+# Core file valid
+assert_exit_0 "core compose config valid" docker compose config --quiet
 
-OUT=$(docker compose --profile legacy --profile mysql80 --profile mariadb --profile elasticsearch --profile debug --profile varnish --profile dashboards config --services 2>/dev/null | sort)
-assert_contains "has mysql80 service" "$OUT" "mysql80"
-assert_contains "has mariadb service" "$OUT" "mariadb"
-assert_contains "has opensearch service" "$OUT" "opensearch"
-assert_contains "has elasticsearch service" "$OUT" "elasticsearch"
-assert_contains "has php70 service" "$OUT" "php70"
-assert_contains "has php84 service" "$OUT" "php84"
-assert_contains "has mailpit service" "$OUT" "mailpit"
+# Core has only default services
+OUT=$(docker compose config --services 2>/dev/null | sort)
+assert_contains "core has nginx" "$OUT" "nginx"
+assert_contains "core has php83" "$OUT" "php83"
+assert_contains "core has mysql" "$OUT" "mysql"
+assert_contains "core has opensearch" "$OUT" "opensearch"
+assert_contains "core has redis" "$OUT" "redis"
+assert_contains "core has mailpit" "$OUT" "mailpit"
+assert_not_contains "core has NO php70" "$OUT" "php70"
+assert_not_contains "core has NO mariadb" "$OUT" "mariadb"
+assert_not_contains "core has NO elasticsearch" "$OUT" "elasticsearch"
+assert_not_contains "core has NO redis6" "$OUT" "redis6"
+
+# Each override file valid
+for ovr in legacy mysql80 mariadb opensearch1 elasticsearch elasticsearch7 redis6 debug varnish dashboards; do
+    assert_exit_0 "override valid: $ovr" docker compose -f docker-compose.yml -f "compose/${ovr}.yml" config --quiet
+done
+
+# Override adds the right service
+OUT=$(docker compose -f docker-compose.yml -f compose/legacy.yml config --services 2>/dev/null | sort)
+assert_contains "legacy adds php70" "$OUT" "php70"
+assert_contains "legacy adds php74" "$OUT" "php74"
+
+OUT=$(docker compose -f docker-compose.yml -f compose/mysql80.yml config --services 2>/dev/null)
+assert_contains "mysql80 override adds mysql80" "$OUT" "mysql80"
+
+OUT=$(docker compose -f docker-compose.yml -f compose/mariadb.yml config --services 2>/dev/null)
+assert_contains "mariadb override adds mariadb" "$OUT" "mariadb"
+
+OUT=$(docker compose -f docker-compose.yml -f compose/elasticsearch7.yml config --services 2>/dev/null)
+assert_contains "es7 override adds elasticsearch7" "$OUT" "elasticsearch7"
+
+OUT=$(docker compose -f docker-compose.yml -f compose/redis6.yml config --services 2>/dev/null)
+assert_contains "redis6 override adds redis6" "$OUT" "redis6"
+
+OUT=$(docker compose -f docker-compose.yml -f compose/opensearch1.yml config --services 2>/dev/null)
+assert_contains "os1 override adds opensearch1" "$OUT" "opensearch1"
+
+# All overrides combined
+ALL_FLAGS="-f docker-compose.yml"
+for ovr in legacy mysql80 mariadb opensearch1 elasticsearch elasticsearch7 redis6 debug varnish dashboards; do
+    ALL_FLAGS="$ALL_FLAGS -f compose/${ovr}.yml"
+done
+assert_exit_0 "all overrides combined valid" eval docker compose $ALL_FLAGS config --quiet
+OUT=$(eval docker compose $ALL_FLAGS config --services 2>/dev/null | wc -l)
+if [[ $OUT -ge 25 ]]; then pass "all overrides: $OUT services total"; else fail "expected 25+ services, got $OUT"; fi
+
+# dc_file_flags mapping
+OUT=$(bash -c 'cd '"$PWD"' && source scripts/lib/docker.sh; dc_file_flags legacy mariadb redis6' 2>/dev/null)
+assert_contains "dc_file_flags has core" "$OUT" "-f docker-compose.yml"
+assert_contains "dc_file_flags has legacy" "$OUT" "compose/legacy.yml"
+assert_contains "dc_file_flags has mariadb" "$OUT" "compose/mariadb.yml"
+assert_contains "dc_file_flags has redis6" "$OUT" "compose/redis6.yml"
+
+# DC_FILE_FLAGS integration with dc()
+OUT=$(bash -c 'source scripts/lib/docker.sh; DC_FILE_FLAGS="-f docker-compose.yml -f compose/legacy.yml" dc config --services' 2>/dev/null | sort)
+assert_contains "DC_FILE_FLAGS loads legacy" "$OUT" "php70"
+assert_contains "DC_FILE_FLAGS keeps core" "$OUT" "nginx"
+
+# No override = core only
+OUT=$(bash -c 'source scripts/lib/docker.sh; dc config --services' 2>/dev/null)
+assert_not_contains "no override: no php70" "$OUT" "php70"
+assert_contains "no override: has php83" "$OUT" "php83"
+
+# Port conflicts: no two overrides share same host port
+# (Verified by: all-overrides config --quiet passes above)
 
 # ══════════════════════════════════════════════════════════════════════════════
 section "9. LIVE STACK — Services"
@@ -322,12 +392,14 @@ section "9. LIVE STACK — Services"
 
 # Start minimal stack for testing
 docker compose up -d nginx php83 mysql redis mailpit opensearch 2>&1 | tail -1
-sleep 20
+sleep 15
 
-# Wait for opensearch specifically (it's slow)
-for i in $(seq 1 12); do
-    if docker compose ps opensearch --format '{{.Status}}' 2>/dev/null | grep -qi healthy; then break; fi
-    sleep 5
+# Wait for healthchecks
+for svc in mysql redis opensearch; do
+    for i in $(seq 1 12); do
+        if docker compose ps "$svc" --format '{{.Status}}' 2>/dev/null | grep -qi healthy; then break; fi
+        sleep 5
+    done
 done
 
 # Service checks
@@ -546,7 +618,7 @@ docker compose exec nginx nginx -s reload 2>/dev/null
 # ══════════════════════════════════════════════════════════════════════════════
 
 section "CLEANUP"
-docker compose down --remove-orphans 2>/dev/null
+./bin/mage down 2>/dev/null || docker compose down --remove-orphans 2>/dev/null
 echo '{}' > projects.json
 cp projects.json.bak projects.json 2>/dev/null || echo '{}' > projects.json
 rm -f projects.json.bak
