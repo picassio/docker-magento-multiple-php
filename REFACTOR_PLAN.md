@@ -46,15 +46,33 @@
 ### Phase 1: Foundation (Do First)
 > Clean up the base, remove dead weight, establish patterns.
 
-#### 1.1 — Remove EOL PHP versions
-- **Delete** `build/php70/`, `build/php71/`, `build/php72/`, `build/php73/`, `build/php74/` and their `conf/php/` directories.
-- **Keep** `php74-c2` (renamed to `php74`) as the oldest supported for legacy Magento 2.4.4.
-- **Rationale:** PHP 7.0–7.3 have been EOL since 2019–2021. No Magento version supported today runs on them. They clutter the project and slow down `docker compose build`.
+#### 1.1 — Keep ALL PHP versions, reorganize into tiers
+Legacy Magento projects (2.3.x, 2.4.0–2.4.3) still need older PHP. We keep them all but organize into clear tiers:
+
+**Legacy tier** (PHP 7.x — for maintaining old projects):
+- `php70` — Magento 2.1–2.2
+- `php71` — Magento 2.2–2.3
+- `php72` — Magento 2.3.0–2.3.4
+- `php73` — Magento 2.3.3–2.3.7
+- `php74` — Magento 2.3.7, 2.4.0–2.4.3 (merge `php74` + `php74-c2` into one, Composer 2)
+
+**Current tier** (PHP 8.x — actively supported Magento):
+- `php81` — Magento 2.4.4–2.4.6 (renamed from `php81-c2`)
+- `php82` — Magento 2.4.6–2.4.7
+- `php83` — Magento 2.4.7–2.4.8 **(NEW)**
+- `php84` — Magento 2.4.8+ **(NEW)**
+
+All tiers benefit from the unified Dockerfile (Phase 1.2). Legacy containers still get:
+- Updated base image (where possible)
+- Xdebug version matching their PHP
+- Composer 2 (works fine with old Magento, `-c2` suffix removed)
+- Proper Mailpit sendmail (replacing mhsendmail)
+
+Legacy PHP containers are placed under a `legacy` Docker Compose profile so they don't build by default — users opt in only when needed.
 
 #### 1.2 — Add modern PHP versions
 - **Add** `php83` (for Magento 2.4.7) — recommended
 - **Add** `php84` (for Magento 2.4.8) — latest
-- **Keep** `php81` (renamed from `php81-c2`), `php82`
 - All containers use **Composer 2 only** (no more `-c2` suffix naming confusion).
 
 #### 1.3 — Templatize Dockerfiles
@@ -75,8 +93,9 @@
 - Each script becomes ~50 lines instead of ~300 by sourcing `common.sh`.
 
 #### 1.5 — Rename services (drop `-c2` suffix)
-- `php74-c2` → `php74`, `php81-c2` → `php81`
+- `php74-c2` → `php74` (absorbs old `php74`), `php81-c2` → `php81`
 - All PHP containers ship with Composer 2. The `-c2` naming was a migration artifact.
+- Old `php74` (Composer 1) is deleted — Composer 2 is backward-compatible with Magento 2.3.x/2.4.x.
 
 ---
 
@@ -173,8 +192,8 @@ profiles:
   # Debug
   - name: debug  # phpmyadmin, redisinsight
 
-  # Legacy
-  - name: legacy  # php74, php81 (for old projects)
+  # Legacy PHP (7.x — not built by default, opt-in for old Magento projects)
+  - name: legacy  # php70, php71, php72, php73, php74
 ```
 
 #### 3.3 — Docker healthchecks
@@ -274,13 +293,16 @@ images/
 #### 4.3 — Add Magento compatibility matrix
 Document which `bin/mage` preset to use:
 
-| Magento Version | PHP | Search | MySQL | Redis | Composer |
-|----------------|-----|--------|-------|-------|----------|
-| 2.4.4 | 8.1 | ES 7.17 / OS 1.2 | 8.0 | 6.2+ | 2.x |
-| 2.4.5 | 8.1 | ES 7.17 / OS 1.2 | 8.0 | 6.2+ | 2.x |
-| 2.4.6 | 8.1, 8.2 | ES 8.x / OS 2.x | 8.0 | 7.0+ | 2.x |
-| 2.4.7 | 8.2, 8.3 | ES 8.x / OS 2.x | 8.0, 8.4 | 7.0+ | 2.7+ |
-| 2.4.8 | 8.3, 8.4 | OS 2.x, OS 3 | 8.4 / MariaDB 11.4 | 7.2+ | 2.9+ |
+| Magento Version | PHP | Search | MySQL | Redis | Composer | Profile |
+|----------------|-----|--------|-------|-------|----------|----------|
+| 2.1–2.2 | 7.0, 7.1 | — | 5.7 | 5.x | 1.x | `legacy` |
+| 2.3.0–2.3.4 | 7.2, 7.3 | ES 6.x–7.x | 5.7 / 8.0 | 5.x | 1.x / 2.x | `legacy` |
+| 2.3.5–2.3.7 | 7.3, 7.4 | ES 7.x | 8.0 | 5.x–6.x | 1.x / 2.x | `legacy` |
+| 2.4.0–2.4.3 | 7.4 | ES 7.x | 8.0 | 6.x | 2.x | `legacy` |
+| 2.4.4–2.4.5 | 8.1 | ES 7.17 / OS 1.2 | 8.0 | 6.2+ | 2.x | default |
+| 2.4.6 | 8.1, 8.2 | ES 8.x / OS 2.x | 8.0 | 7.0+ | 2.x | default |
+| 2.4.7 | 8.2, 8.3 | ES 8.x / OS 2.x | 8.0, 8.4 | 7.0+ | 2.7+ | default |
+| 2.4.8 | 8.3, 8.4 | OS 2.x, OS 3 | 8.4 / MariaDB 11.4 | 7.2+ | 2.9+ | default |
 
 #### 4.4 — Add `Makefile` aliases
 For users who prefer `make`:
@@ -295,28 +317,27 @@ status:  bin/mage status
 
 ## 3. File Changes Summary
 
-### Delete (EOL / dead code)
+### Delete (consolidated into unified Dockerfile)
 ```
-build/php70/              # PHP 7.0 — EOL Dec 2018
-build/php71/              # PHP 7.1 — EOL Dec 2019
-build/php72/              # PHP 7.2 — EOL Nov 2020
-build/php73/              # PHP 7.3 — EOL Dec 2021
-build/php74/              # PHP 7.4 (Composer 1) — use php74-c2 instead
-conf/php/php70/           # Config for deleted PHP
-conf/php/php71/
-conf/php/php72/
-conf/php/php73/
-conf/php/php74/           # Replaced by php74-c2 → php74
+build/php70/              # Replaced by build/php/Dockerfile ARG
+build/php71/              # Replaced by build/php/Dockerfile ARG
+build/php72/              # Replaced by build/php/Dockerfile ARG
+build/php73/              # Replaced by build/php/Dockerfile ARG
+build/php74/              # Merged into php74-c2 → php74
+build/php74-c2/           # Replaced by build/php/Dockerfile ARG
+build/php81-c2/           # Replaced by build/php/Dockerfile ARG
+build/php82/              # Replaced by build/php/Dockerfile ARG
 build/nginx/              # Replace with official image
 build/varnish/            # Replace with official image
 build/elasticsearch/      # Replace with OpenSearch
 ```
 
+> **Note:** All PHP versions (7.0–8.4) are KEPT as services.
+> They are consolidated into a single `build/php/Dockerfile` using build args.
+> Legacy PHP (7.x) services are placed under a `legacy` Compose profile.
+
 ### Rename
 ```
-build/php74-c2/  → (deleted, unified into build/php/Dockerfile)
-build/php81-c2/  → (deleted, unified into build/php/Dockerfile)
-build/php82/     → (deleted, unified into build/php/Dockerfile)
 conf/php/php74-c2/ → conf/php/php74/
 conf/php/php81-c2/ → conf/php/php81/
 ```
@@ -397,7 +418,11 @@ Phase 4 (Docs)                ~half day
 3. `git pull` and checkout the new branch.
 4. Run `bin/mage setup` — it will migrate your `.env` and rebuild images.
 5. Update nginx vhost configs: rename `php74-c2` → `php74`, `php81-c2` → `php81` in your `.conf` files.
-6. `bin/mage up` — start the new stack.
+6. If you need legacy PHP (7.x): `bin/mage up --profile=legacy php72 nginx mysql` 
+7. `bin/mage up` — start the new stack.
+
+> **Legacy users:** All PHP 7.x versions still work. They just require `--profile=legacy` flag
+> so they're not built/started by default (saving resources for most users).
 
 ---
 
