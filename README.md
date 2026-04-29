@@ -13,6 +13,9 @@ git clone https://github.com/picassio/docker-magento-multiple-php.git ~/docker-m
 cd ~/docker-magento
 cp env-example .env
 
+# Check & tune your system (sysctl, THP, Docker log rotation, etc.)
+bin/mage doctor fix
+
 # Register your first project (interactive wizard)
 bin/mage project add mysite.com
 # → Picks: PHP 8.3, magento2, mysql, mysite_com DB, opensearch
@@ -146,6 +149,7 @@ bin/mage magento mysite.com cache:flush
 | Command | Description |
 |---|---|
 | `setup` | Interactive first-time setup |
+| `doctor [fix]` | Check/fix system settings (sysctl, THP, Docker logs) |
 | `up [services...]` | Smart start from projects.json (or explicit services) |
 | `up --with=<override>` | Start with specific compose override |
 | `down` | Stop & remove all containers |
@@ -319,6 +323,26 @@ bin/mage up --with=varnish
 bin/mage varnish on shop.test     # Enable FPC + proxy
 bin/mage varnish status shop.test # Check
 bin/mage varnish off shop.test    # Disable
+```
+
+### System tuning (first-time setup)
+
+```bash
+# Check what needs fixing
+bin/mage doctor
+# ✔ Docker Engine installed: v29.4.0
+# ✔ vm.max_map_count = 262144
+# ✖ vm.overcommit_memory = 0 (need 1 for Redis)
+# ✖ THP enabled (causes Redis latency spikes)
+# ✖ Docker log rotation NOT configured
+# ✖ vm.swappiness = 60 (recommend ≤ 10)
+
+# Auto-fix everything (persists across reboots)
+bin/mage doctor fix
+# ✔ vm.overcommit_memory = 1 (fixed, persistent)
+# ✔ THP disabled (fixed, systemd service created)
+# ✔ Docker log rotation enabled (daemon restarted)
+# ✔ vm.swappiness = 10 (fixed, persistent)
 ```
 
 ---
