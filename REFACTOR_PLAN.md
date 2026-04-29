@@ -88,9 +88,7 @@ Legacy PHP containers are placed under a `legacy` Docker Compose profile so they
 - Eliminates 90% of Dockerfile duplication.
 - Base image: `ubuntu:24.04` (noble, supported until 2029).
 
-#### 1.4 — Extract shared script library
-- Create `scripts/lib/common.sh` with all the shared functions (`_arrow`, `_success`, `_error`, `_die`, `_printPoweredBy`, `checkCmdDependencies`, etc.).
-- Each script becomes ~50 lines instead of ~300 by sourcing `common.sh`.
+#### 1.4 — Script refactoring (detailed below in Section 6)
 
 #### 1.5 — Rename services (drop `-c2` suffix)
 - `php74-c2` → `php74` (absorbs old `php74`), `php81-c2` → `php81`
@@ -423,6 +421,451 @@ Phase 4 (Docs)                ~half day
 
 > **Legacy users:** All PHP 7.x versions still work. They just require `--profile=legacy` flag
 > so they're not built/started by default (saving resources for most users).
+
+---
+
+## 6. Script Refactoring — Detailed Plan
+
+### Current State Analysis
+
+The `scripts/` directory has **3,870 total lines** across 11 scripts:
+
+| Script | Lines | Purpose |
+|--------|------:|--------|
+| `create-vhost` | 896 | Create nginx virtual hosts (M1, M2, WP, Laravel, default) |
+| `database` | 607 | Create/drop/import/export/list MySQL databases |
+| `init-magento` | 565 | Download & install fresh Magento |
+| `varnish` | 556 | Enable/disable/status Varnish for a domain |
+| `xdebug` | 452 | Enable/disable/status Xdebug per PHP version |
+| `ssl` | 438 | Generate SSL cert & nginx vhost with mkcert |
+| `setup-composer` | 330 | Setup Composer auth for repo.magento.com |
+| `fixowner` | 12 | Fix file ownership to 1000:1000 |
+| `mysql` | 7 | Open MySQL shell |
+| `shell` | 6 | Open bash shell in PHP container |
+| `list-services` | 1 | List running services |
+
+### Problem #1: Massive Boilerplate Duplication (~1,300 lines wasted)
+
+**7 scripts** each contain an identical **~189-line "CORE FUNCTIONS" block** with:
+- Color variables (`_bold`, `_red`, `_green`, etc.)
+- Logging functions (`_arrow`, `_success`, `_error`, `_warning`, `_die`)
+- OS detection (`_isOsDebian`, `_isOsRedHat`, `_isOsMac`) — mostly unused
+- User helpers (`_seekConfirmation`, `_isConfirmed`, `askYesOrNo`)
+- `_printPoweredBy` ASCII art banner
+- `checkCmdDependencies` with identical dependency list
+
+That's **~1,300 lines** of identical copy-paste across the codebase.
+
+### Problem #2: Hardcoded PHP Version Lists (6 files to edit)
+
+Every time a new PHP version is added, you must edit hardcoded validation in:
+- `create-vhost` line 299: `@(php70|php71|php72|php73|php74|php74-c2|php81-c2|php82)`
+- `init-magento` line 316: same pattern
+- `setup-composer` line 263: only goes up to `php74-c2`
+- `xdebug` line 338: missing `php82`
+- Help text in all scripts
+
+They're already out of sync — `setup-composer` doesn't know about `php81-c2` or `php82`, `xdebug` doesn't know about `php82`.
+
+### Problem #3: Duplicated Business Logic (~8 functions repeated)
+
+| Function | Duplicated in |
+|----------|---------------|
+| `reloadNginx()` | create-vhost, ssl, varnish |
+| `checkMysqlContainerRunning()` | database, varnish |
+| `checkNginxContainerRunning()` | create-vhost, varnish |
+| `getMysqlInformation()` | database, init-magento |
+| `checkDomainExist()` | ssl, varnish |
+| `checkPhpContainerRunning()` | varnish, xdebug |
+| `sanitizeArgs()` / `getPureDomain()` | create-vhost, init-magento, ssl |
+| `checkComposerAuth()` | setup-composer, init-magento |
+
+### Problem #4: `docker-compose` (v1) hardcoded everywhere
+
+48 occurrences of `docker-compose` across all scripts. Docker Compose v1 standalone binary is deprecated. Modern Docker uses `docker compose` (plugin). Need to support both with a wrapper function.
+
+---
+
+### Solution: 3-Layer Architecture
+
+```
+scripts/
+├── lib/
+│   ├── common.sh          # Layer 1: UI, colors, logging, prompts
+│   ├── docker.sh           # Layer 2: Docker/Compose helpers
+│   └── services.sh         # Layer 3: Service-specific shared logic
+├── create-vhost            # Slim scripts (~50-150 lines each)
+├── database
+├── fixowner
+├── init-magento
+├── list-services
+├── mysql
+├── setup-composer
+├── shell
+├── ssl
+├── varnish
+└── xdebug
+```
+
+#### Layer 1: `scripts/lib/common.sh` (~100 lines)
+Extract the shared boilerplate **once**:
+
+```bash
+#!/usr/bin/env bash
+# Shared functions for all scripts
+
+# ── Colors & formatting ──
+_bold=$(tput bold 2>/dev/null || echo '')
+_reset=$(tput sgr0 2>/dev/null || echo '')
+_red=$(tput setaf 1 2>/dev/null || echo '')
+_green=$(tput setaf 76 2>/dev/null || echo '')
+_tan=$(tput setaf 3 2>/dev/null || echo '')
+_blue=$(tput setaf 38 2>/dev/null || echo '')
+_purple=$(tput setaf 171 2>/dev/null || echo '')
+
+# ── Logging ──
+_arrow()   { printf '➜ %s\n' "$@"; }
+_success() { printf '%s✔ %s%s\n' "$_green" "$@" "$_reset"; }
+_error()   { printf '%s✖ %s%s\n' "$_red" "$@" "$_reset"; }
+_warning() { printf '%s➜ %s%s\n' "$_tan" "$@" "$_reset"; }
+_die()     { _error "$@"; exit 1; }
+
+# ── Prompts ──
+ask_yes_no() {
+    local prompt="$1"
+    read -rp "${_bold}${prompt} [y/N]:${_reset} " answer
+    [[ "$answer" =~ ^[Yy]$ ]]
+}
+
+# ── Resolve project root (where docker-compose.yml lives) ──
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[1]}")/.."; pwd)"
+SCRIPTS_DIR="${ROOT_DIR}/scripts"
+SOURCE_DIR="${ROOT_DIR}/sources"
+CONF_DIR="${ROOT_DIR}/conf"
+
+# ── Banner ──
+_print_banner() {
+    echo -e "${_green}"
+    echo '    ____             __                __  ___                        __        '
+    echo '   / __ \____  _____/ /_____  _____   /  |/  /___ _____ ____  ____  / /_____ _ '
+    echo '  / / / / __ \/ ___/ //_/ _ \/ ___/  / /|_/ / __ `/ __ `/ _ \/ __ \/ __/ __ `/'
+    echo ' / /_/ / /_/ / /__/ ,< /  __/ /     / /  / / /_/ / /_/ /  __/ / / / /_/ /_/ / '
+    echo '/_____/\____/\___/_/|_|\___/_/     /_/  /_/\__,_/\__, /\___/_/ /_/\__/\__,_/  '
+    echo '                                                /____/                        '
+    echo -e "${_reset}"
+}
+```
+
+#### Layer 2: `scripts/lib/docker.sh` (~80 lines)
+Docker & Compose wrappers + PHP version detection:
+
+```bash
+#!/usr/bin/env bash
+# Docker helpers — sourced by scripts that interact with containers
+
+source "${BASH_SOURCE%/*}/common.sh"
+
+# ── Compose command (v1 fallback → v2) ──
+dc() {
+    if docker compose version &>/dev/null; then
+        docker compose "$@"
+    elif command -v docker-compose &>/dev/null; then
+        docker-compose "$@"
+    else
+        _die "Neither 'docker compose' nor 'docker-compose' found. Install Docker."
+    fi
+}
+
+# ── Auto-detect available PHP versions from docker-compose.yml ──
+get_available_php_versions() {
+    dc config --services 2>/dev/null | grep '^php' | sort
+}
+
+# ── Validate a PHP version against what's actually defined ──
+validate_php_version() {
+    local php_ver="$1"
+    if ! get_available_php_versions | grep -qx "$php_ver"; then
+        _error "Invalid PHP version: $php_ver"
+        _arrow "Available versions: $(get_available_php_versions | tr '\n' ', ' | sed 's/,$//')"
+        exit 1
+    fi
+}
+
+# ── Check if a service is running ──
+require_service() {
+    local svc="$1"
+    if ! dc ps --services --filter "status=running" 2>/dev/null | grep -qx "$svc"; then
+        _die "Service '$svc' is not running. Start it with: $(dc_cmd) up -d $svc"
+    fi
+}
+
+# ── Reload nginx safely ──
+reload_nginx() {
+    _arrow "Testing nginx configuration..."
+    dc exec nginx nginx -t || _die "Nginx config test failed"
+    dc exec nginx nginx -s reload || _die "Nginx reload failed"
+    _success "Nginx reloaded"
+}
+
+# ── Get MySQL root password from running container ──
+get_mysql_root_password() {
+    local container
+    container=$(docker inspect -f '{{.Name}}' $(dc ps -q mysql) | cut -c2-)
+    docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" \
+        | grep MYSQL_ROOT_PASSWORD | cut -d= -f2-
+}
+```
+
+#### Layer 3: `scripts/lib/services.sh` (~60 lines)
+Shared domain/service logic used by multiple scripts:
+
+```bash
+#!/usr/bin/env bash
+# Shared service helpers — nginx domains, PHP detection, etc.
+
+source "${BASH_SOURCE%/*}/docker.sh"
+
+NGINX_CONF_DIR="${CONF_DIR}/nginx/conf.d"
+NGINX_SSL_DIR="${CONF_DIR}/nginx/ssl"
+
+# ── Sanitize domain (strip protocol, lowercase) ──
+sanitize_domain() {
+    local domain="$1"
+    domain=$(echo "$domain" | sed 's|https\?://||' | awk -F'[:/]' '{print $1}' | tr '[:upper:]' '[:lower:]')
+    echo "$domain"
+}
+
+# ── Validate domain format ──
+validate_domain() {
+    local domain="$1"
+    if [[ ! "$domain" =~ ^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]]; then
+        _die "Invalid domain name: $domain"
+    fi
+}
+
+# ── Check domain nginx config exists ──
+require_domain_config() {
+    local domain="$1"
+    [[ -f "${NGINX_CONF_DIR}/${domain}.conf" ]] || _die "No nginx config for '$domain'. Create it first with create-vhost."
+}
+
+# ── Check domain SSL config exists ──
+require_domain_ssl() {
+    local domain="$1"
+    [[ -f "${NGINX_CONF_DIR}/${domain}-ssl.conf" ]] || _die "No SSL config for '$domain'. Enable SSL first with: ./scripts/ssl --domain=$domain"
+}
+
+# ── Get PHP version from an existing nginx vhost config ──
+get_domain_php_version() {
+    local domain="$1"
+    grep ':9001' "${NGINX_CONF_DIR}/${domain}.conf" | awk 'NR==1{print $2}' | cut -d: -f1
+}
+
+# ── Get document root from an existing nginx vhost config ──
+get_domain_docroot() {
+    local domain="$1"
+    grep '/home/public_html/' "${NGINX_CONF_DIR}/${domain}.conf" | grep -v fastcgi_param | awk '{print $3}' | awk -F/ '{print $4}' | awk -F\; '{print $1}' | head -1
+}
+
+# ── Add /etc/hosts entry ──
+add_etc_hosts() {
+    local domain="$1"
+    if grep -qE "127\.0\.0\.1[[:space:]]+${domain}" /etc/hosts; then
+        _warning "$domain already in /etc/hosts"
+    else
+        _arrow "Adding $domain to /etc/hosts (may require sudo password)"
+        echo "127.0.0.1  ${domain}" | sudo tee -a /etc/hosts >/dev/null || _die "Cannot write to /etc/hosts"
+        _success "Added to /etc/hosts"
+    fi
+}
+```
+
+---
+
+### Script-by-Script Refactoring
+
+Each script drops from hundreds of lines to just its unique logic:
+
+#### `create-vhost` (896 → ~250 lines)
+```bash
+#!/usr/bin/env bash
+source "$(dirname "$0")/lib/services.sh"
+
+# Only unique code remains:
+# - _printUsage (updated help text)
+# - processArgs (unchanged arg parsing)
+# - validateArgs → uses validate_php_version() from docker.sh
+# - vhost templates (prepareM1VhostContent, prepareM2VhostContent, etc.)
+# - main flow
+#
+# REMOVED: ~189 lines CORE FUNCTIONS, reloadNginx, checkAppStackContainerRunning,
+#          sanitizeArgs, getPureDomain, checkDomain, createEtcHostEntry
+# REPLACED BY: reload_nginx(), require_service(), sanitize_domain(),
+#              validate_domain(), add_etc_hosts() from lib/
+```
+
+#### `database` (607 → ~200 lines)
+```bash
+#!/usr/bin/env bash
+source "$(dirname "$0")/lib/docker.sh"
+
+# Only unique code remains:
+# - _printUsage
+# - processArgs (subcommand parsing: create/drop/import/export/list)
+# - validateArgs
+# - checkDatabaseName, checkDatabaseFileName
+# - createMysqlDatabase, dropMysqlDatabase, importMysqlDatabase, exportMysqlDatabase
+# - listMysqlDatabase
+#
+# REMOVED: ~189 lines CORE FUNCTIONS, getMysqlInformation, checkMysqlContainerRunning
+# REPLACED BY: get_mysql_root_password(), require_service('mysql') from lib/
+```
+
+#### `xdebug` (452 → ~80 lines)
+```bash
+#!/usr/bin/env bash
+source "$(dirname "$0")/lib/docker.sh"
+
+# Only unique code remains:
+# - _printUsage
+# - processArgs (enable/disable/status)
+# - enableXdebug, disableXdebug, statusXdebug
+#
+# REMOVED: ~189 lines CORE FUNCTIONS, checkPhpContainerRunning, hardcoded PHP list
+# REPLACED BY: validate_php_version(), require_service() from lib/
+# PHP version list auto-detected — never goes stale
+```
+
+#### `ssl` (438 → ~100 lines)
+```bash
+#!/usr/bin/env bash
+source "$(dirname "$0")/lib/services.sh"
+
+# Only unique code remains:
+# - _printUsage
+# - processArgs
+# - checkSslCommand (mkcert check)
+# - createCertificate
+# - prepareSslVhostContent
+#
+# REMOVED: ~189 lines CORE FUNCTIONS, checkDomainExist, sanitizeArgs, getPureDomain, reloadNginx
+# REPLACED BY: require_domain_config(), sanitize_domain(), reload_nginx() from lib/
+```
+
+#### `varnish` (556 → ~150 lines)
+```bash
+#!/usr/bin/env bash
+source "$(dirname "$0")/lib/services.sh"
+
+# Only unique code remains:
+# - _printUsage
+# - processArgs (enable/disable/status)
+# - enableVarnish, disableVarnish, statusVarnish
+# - checkDomainMagentoFullPageCacheStatus
+# - checkNginxSSLVhostVarnishProxyPass
+#
+# REMOVED: ~189 lines CORE FUNCTIONS, checkDomainExist, checkDomainSslExist,
+#          checkNginxContainerRunning, checkMysqlContainerRunning,
+#          checkPhpContainerRunning, getDomainDocroot, getDomainPhpVersion, reloadNginx
+# REPLACED BY: require_domain_config(), require_domain_ssl(), require_service(),
+#              get_domain_docroot(), get_domain_php_version(), reload_nginx() from lib/
+```
+
+#### `init-magento` (565 → ~200 lines)
+```bash
+#!/usr/bin/env bash
+source "$(dirname "$0")/lib/services.sh"
+
+# Only unique code remains:
+# - _printUsage
+# - processArgs
+# - validateMagentoVersion (updated for 2.4.7/2.4.8 + OpenSearch)
+# - downloadMagentoVersion, installMagentoVersion
+# - printSuccessMessage
+#
+# REMOVED: ~189 lines CORE FUNCTIONS, getMysqlInformation, validateBaseServices,
+#          sanitizeArgs, createSourceCodeFolder, createMagentoDomain, checkComposerAuth
+# REPLACED BY: get_mysql_root_password(), require_service(), sanitize_domain() from lib/
+#              checkComposerAuth moved to lib/services.sh (shared with setup-composer)
+```
+
+#### `setup-composer` (330 → ~40 lines)
+```bash
+#!/usr/bin/env bash
+source "$(dirname "$0")/lib/docker.sh"
+
+# Only unique code remains:
+# - _printUsage
+# - processArgs
+# - main
+#
+# REMOVED: ~174 lines CORE FUNCTIONS, checkComposerAuth, validateBaseServices
+# REPLACED BY: validate_php_version(), require_service(), check_composer_auth() from lib/
+```
+
+#### Small scripts (unchanged logic, just modernized)
+```bash
+# list-services (1 → ~5 lines)
+#!/usr/bin/env bash
+source "$(dirname "$0")/lib/docker.sh"
+dc ps --services --filter "status=running"
+
+# shell (6 → ~8 lines)
+#!/usr/bin/env bash
+source "$(dirname "$0")/lib/docker.sh"
+[[ -z "$1" ]] && _die "Usage: ./scripts/shell <php-version>\nExample: ./scripts/shell php83"
+validate_php_version "$1"
+require_service "$1"
+dc exec --user nginx "$@" bash
+
+# mysql (7 → ~6 lines)
+#!/usr/bin/env bash
+source "$(dirname "$0")/lib/docker.sh"
+require_service mysql
+dc exec mysql mysql -uroot -p"$(get_mysql_root_password)"
+
+# fixowner (12 → ~6 lines)
+#!/usr/bin/env bash
+source "$(dirname "$0")/lib/common.sh"
+_arrow "Fixing file ownership in sources/..."
+sudo chown -R 1000:1000 "${SOURCE_DIR}/"* || _die "Cannot fix ownership"
+_success "Done"
+```
+
+---
+
+### Line Count Before vs After
+
+| Component | Before | After | Savings |
+|-----------|-------:|------:|--------:|
+| CORE FUNCTIONS (×7 scripts) | 1,316 | 0 | **-1,316** |
+| `lib/common.sh` | 0 | ~100 | +100 |
+| `lib/docker.sh` | 0 | ~80 | +80 |
+| `lib/services.sh` | 0 | ~60 | +60 |
+| `create-vhost` | 896 | ~250 | -646 |
+| `database` | 607 | ~200 | -407 |
+| `init-magento` | 565 | ~200 | -365 |
+| `varnish` | 556 | ~150 | -406 |
+| `xdebug` | 452 | ~80 | -372 |
+| `ssl` | 438 | ~100 | -338 |
+| `setup-composer` | 330 | ~40 | -290 |
+| Small scripts (4) | 26 | ~25 | ~same |
+| **TOTAL** | **3,870** | **~1,285** | **-67%** |
+
+### Key Design Decisions
+
+1. **Auto-detect PHP versions** — `get_available_php_versions()` reads from `docker-compose.yml` instead of hardcoded lists. Adding `php85` later = just add it to compose, scripts work automatically.
+
+2. **`dc()` wrapper** — Supports both `docker compose` (v2) and `docker-compose` (v1 fallback). Migrate once, forget forever.
+
+3. **Source chain**: `common.sh` ← `docker.sh` ← `services.sh`. Scripts source the deepest layer they need:
+   - `fixowner` needs only `common.sh` (no Docker interaction)
+   - `xdebug`, `database` need `docker.sh` (container operations)
+   - `create-vhost`, `ssl`, `varnish` need `services.sh` (nginx/domain logic)
+
+4. **Backward-compatible CLI** — All existing command signatures (`./scripts/xdebug enable --php-version=php72`) stay the same. Users don't need to relearn anything.
+
+5. **Each script keeps its own `_printUsage`** — Help text is unique to each script, so it stays inline rather than trying to genericize it.
 
 ---
 
