@@ -471,11 +471,6 @@ bash tests/test-stacks.sh      # Magento stack connectivity: 6 scenarios
 
 ---
 
-## Vietnamese Documentation
-
-Tài liệu tiếng Việt: [README.vi.md](README.vi.md)
-
----
 
 ## License
 
