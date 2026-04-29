@@ -1,371 +1,107 @@
 #!/usr/bin/env bash
 #
-# Script to create virtual host for Nginx server
+# SSL certificate setup — generate cert with mkcert and create nginx SSL vhost
 #
 
-# UnComment it if bash is lower than 4.x version
-shopt -s extglob
+source "$(dirname "$0")/lib/services.sh"
 
-################################################################################
-# CORE FUNCTIONS - Do not edit
-################################################################################
+VHOST_DOMAIN=""
 
-## Uncomment it for debugging purpose
-###set -o errexit
-#set -o pipefail
-#set -o nounset
-#set -o xtrace
-
-#
-# VARIABLES
-#
-_bold=$(tput bold)
-_underline=$(tput sgr 0 1)
-_reset=$(tput sgr0)
-
-_purple=$(tput setaf 171)
-_red=$(tput setaf 1)
-_green=$(tput setaf 76)
-_tan=$(tput setaf 3)
-_blue=$(tput setaf 38)
-
-#
-# HEADERS & LOGGING
-#
-function _debug()
-{
-    if [[ "$DEBUG" = 1 ]]; then
-        "$@"
-    fi
-}
-
-function _header()
-{
-    printf '\n%s%s==========  %s  ==========%s\n' "$_bold" "$_purple" "$@" "$_reset"
-}
-
-function _arrow()
-{
-    printf '➜ %s\n' "$@"
-}
-
-function _success()
-{
-    printf '%s✔ %s%s\n' "$_green" "$@" "$_reset"
-}
-
-function _error() {
-    printf '%s✖ %s%s\n' "$_red" "$@" "$_reset"
-}
-
-function _warning()
-{
-    printf '%s➜ %s%s\n' "$_tan" "$@" "$_reset"
-}
-
-function _underline()
-{
-    printf '%s%s%s%s\n' "$_underline" "$_bold" "$@" "$_reset"
-}
-
-function _bold()
-{
-    printf '%s%s%s\n' "$_bold" "$@" "$_reset"
-}
-
-function _note()
-{
-    printf '%s%s%sNote:%s %s%s%s\n' "$_underline" "$_bold" "$_blue" "$_reset" "$_blue" "$@" "$_reset"
-}
-
-function _die()
-{
-    _error "$@"
-    exit 1
-}
-
-function _safeExit()
-{
-    exit 0
-}
-
-#
-# UTILITY HELPER
-#
-function _seekConfirmation()
-{
-  printf '\n%s%s%s' "$_bold" "$@" "$_reset"
-  read -p " (y/n) " -n 1
-  printf '\n'
-}
-
-# Test whether the result of an 'ask' is a confirmation
-function _isConfirmed()
-{
-    if [[ "$REPLY" =~ ^[Yy]$ ]]; then
-        return 0
-    fi
-    return 1
-}
-
-
-function _typeExists()
-{
-    if type "$1" >/dev/null; then
-        return 0
-    fi
-    return 1
-}
-
-function _isOs()
-{
-    if [[ "${OSTYPE}" == $1* ]]; then
-      return 0
-    fi
-    return 1
-}
-
-function _isOsDebian()
-{
-    if [[ -f /etc/debian_version ]]; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-function _isOsRedHat()
-{
-    if [[ -f /etc/redhat-release ]]; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-function _isOsMac()
-{
-    if [[ "$(uname -s)" = "Darwin" ]]; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-function _checkRootUser()
-{
-    #if [ "$(id -u)" != "0" ]; then
-    if [ "$(whoami)" != 'root' ]; then
-        _die "You cannot run $0 as non-root user. Please use sudo $0"
-    fi
-}
-
-
-function askYesOrNo {
-    REPLY=""
-    while [ -z "$REPLY" ] ; do
-        read -ep "$1 $YES_NO_PROMPT" -n1 REPLY
-        REPLY=$(echo ${REPLY}|tr [:lower:] [:upper:])
-        case $REPLY in
-            $YES_CAPS ) return 0 ;;
-            $NO_CAPS ) return 1 ;;
-            * ) REPLY=""
-        esac
-    done
-}
-
-
-function _printPoweredBy()
-{
-    local mp_ascii
-    mp_ascii='
-                ____  __  __    _    ____ _____ ___  ____   ____
-               / ___||  \/  |  / \  |  _ \_   _/ _ \/ ___| / ___|
-               \___ \| |\/| | / _ \ | |_) || || | | \___ \| |
-                ___) | |  | |/ ___ \|  _ < | || |_| |___) | |___
-               |____/|_|  |_/_/   \_\_| \_\|_| \___/|____/ \____|
-
-'
-    cat <<EOF
-${_green}
-$mp_ascii
-
-################################################################################
-${_reset}
-EOF
-}
-
-################################################################################
-# SCRIPT FUNCTIONS
-################################################################################
-function _printUsage()
-{
+# ── Usage ─────────────────────────────────────────────────────────────────────
+_printUsage() {
     echo -n "Docker SSL Setup
-Version $VERSION
+Version 2.0
 
 ./scripts/$(basename "$0") [ARG]...
 
     Options:
         --domain                  Domain name (eg: test.com).
+        --debug                   Run command in debug mode.
         -h, --help                Display this help and exit.
 
     Examples:
-      Install Magento community edition version 2.3.4 with PHP version 7.2 for domain test-magento.com:
+      Enable SSL for domain test-magento.com:
         ./scripts/$(basename "$0") --domain=test-magento.com
 "
-    _printPoweredBy
+    _print_banner
     exit 1
 }
 
-function checkCmdDependencies()
-{
-    local _dependencies=(
-      wget
-      cat
-      basename
-      mkdir
-      cp
-      mv
-      rm
-      chown
-      chmod
-      date
-      find
-      awk
-      docker-compose
-      docker
-    )
-
-    for cmd in "${_dependencies[@]}"
-    do
-        hash "${cmd}" &>/dev/null || _die "'${cmd}' command not found."
-    done;
-}
-
-function processArgs()
-{
-    for arg in "$@"
-    do
+# ── Arg parsing ───────────────────────────────────────────────────────────────
+processArgs() {
+    for arg in "$@"; do
         case $arg in
-            --domain=*)
-                VHOST_DOMAIN="${arg#*=}"
-            ;;            
-            --debug)
-                DEBUG=1
-                set -o xtrace
-            ;;
-            -h|--help)
-                _printUsage
-            ;;
-            *)
-                _printUsage
-            ;;
+            --domain=*) VHOST_DOMAIN="${arg#*=}" ;;
+            --debug)    enable_debug ;;
+            -h|--help)  _printUsage ;;
+            *)          _printUsage ;;
         esac
     done
-        
-    validateArgs
-    sanitizeArgs
-}
 
-function validateArgs()
-{
-    ERROR_COUNT=0
     if [[ -z "$VHOST_DOMAIN" ]]; then
         _error "--domain=... parameter is missing."
-        ERROR_COUNT=$((ERROR_COUNT + 1))
+        exit 1
     fi
 
-    [[ "$ERROR_COUNT" -gt 0 ]] && exit 1
+    VHOST_DOMAIN="$(sanitize_domain "$VHOST_DOMAIN")"
+    validate_domain "$VHOST_DOMAIN"
 }
 
-function sanitizeArgs()
-{
-    if [[ ! -z "$VHOST_DOMAIN" ]] && [[ "$VHOST_DOMAIN" == http* ]]; then
-        VHOST_DOMAIN=$(getPureDomain)
-    fi
-}
-
-function initDefaultArgs()
-{
-    SSL_DIR="$(pwd)/conf/nginx/ssl"
-
-    YES_STRING=$"y"
-    NO_STRING=$"n"
-    YES_NO_PROMPT=$"[y/n]: "
-    YES_CAPS=$(echo ${YES_STRING}|tr [:lower:] [:upper:])
-    NO_CAPS=$(echo ${NO_STRING}|tr [:lower:] [:upper:])
-    DATABASE_NAME="magento"_"$(date +%s)"
-
-    NGINX_SITES_CONF_D="$(pwd)/conf/nginx/conf.d"
-    NGINX_SITES_CONF_D_SSL_FILE="${NGINX_SITES_CONF_D}/${VHOST_DOMAIN}-ssl.conf"
-}
-
-function command_exists () 
-{
-    type "$1" &> /dev/null
-}
-
-function checkSslCommand()
-{
-    if ! command_exists mkcert; then
+# ── mkcert check ──────────────────────────────────────────────────────────────
+checkSslCommand() {
+    if ! command -v mkcert &>/dev/null; then
         _error "Missing mkcert command"
-        _warning "You need to install mkcert with this command below if you are using Ubuntu:"
-        echo -n "    sudo apt-get install libnss3-tools -y
-    sudo wget https://github.com/FiloSottile/mkcert/releases/download/v1.4.3/mkcert-v1.4.3-linux-amd64 -O /usr/local/bin/mkcert
-    sudo chmod +x /usr/local/bin/mkcert
-    mkcert -install
-"
+        _warning "Install mkcert on Ubuntu:"
+        echo "    sudo apt-get install libnss3-tools -y"
+        echo "    sudo wget https://github.com/FiloSottile/mkcert/releases/download/v1.4.3/mkcert-v1.4.3-linux-amd64 -O /usr/local/bin/mkcert"
+        echo "    sudo chmod +x /usr/local/bin/mkcert"
+        echo "    mkcert -install"
         exit 1
     fi
 }
 
-function createCertificate()
-{
-    _arrow "Create $VHOST_DOMAIN certificate"
-    mkcert -key-file $VHOST_DOMAIN.key -cert-file $VHOST_DOMAIN.crt $VHOST_DOMAIN || _die "Cannot create certificate"
-    _arrow "Moving certificate to the right folder"
-    mv $VHOST_DOMAIN.key $VHOST_DOMAIN.crt ${SSL_DIR}/
-    _success "$VHOST_DOMAIN certificate created"
+# ── Certificate creation ─────────────────────────────────────────────────────
+createCertificate() {
+    _arrow "Creating certificate for ${VHOST_DOMAIN}..."
+    mkcert -key-file "${VHOST_DOMAIN}.key" -cert-file "${VHOST_DOMAIN}.crt" "${VHOST_DOMAIN}" \
+        || _die "Cannot create certificate"
+
+    _arrow "Moving certificate to ${NGINX_SSL_DIR}/"
+    mv "${VHOST_DOMAIN}.key" "${VHOST_DOMAIN}.crt" "${NGINX_SSL_DIR}/"
+    _success "Certificate created for ${VHOST_DOMAIN}"
 }
 
-function checkDomainExist () 
-{
-   if [[ -f ${NGINX_SITES_CONF_D}/$VHOST_DOMAIN.conf ]]; then 
-        _success "Domain exists"
-    else
-        _error "Domain not exist, Did you set it up on docker-compose system?"
-        exit 1
-    fi
-}
+# ── SSL vhost content ─────────────────────────────────────────────────────────
+prepareSslVhostContent() {
+    local ssl_conf="${NGINX_CONF_DIR}/${VHOST_DOMAIN}-ssl.conf"
 
-function prepareSslVhostContent()
-{
-    echo "server {
+    cat > "$ssl_conf" <<SSLEOF || _die "Cannot write to: ${ssl_conf}"
+server {
     server_name ${VHOST_DOMAIN};
 
     listen 443 ssl;
 
-    ssl_certificate /etc/nginx/ssl/$VHOST_DOMAIN.crt;
-    ssl_certificate_key /etc/nginx/ssl/$VHOST_DOMAIN.key;
+    ssl_certificate /etc/nginx/ssl/${VHOST_DOMAIN}.crt;
+    ssl_certificate_key /etc/nginx/ssl/${VHOST_DOMAIN}.key;
 
     client_max_body_size 100M;
     location / {
-    proxy_pass http://127.0.0.1:80;
-    proxy_set_header Host \$http_host;
-    proxy_set_header X-Forwarded-Host \$http_host;
-    proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    proxy_set_header Ssl-Offloaded "1";
-    proxy_set_header X-Forwarded-Proto https;
-    proxy_set_header X-Forwarded-Port 443;
+        proxy_pass http://127.0.0.1:80;
+        proxy_set_header Host \$http_host;
+        proxy_set_header X-Forwarded-Host \$http_host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header Ssl-Offloaded "1";
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Port 443;
 
-    proxy_buffer_size          128k;
-    proxy_buffers              4 256k;
-    proxy_busy_buffers_size    256k;
+        proxy_buffer_size          128k;
+        proxy_buffers              4 256k;
+        proxy_busy_buffers_size    256k;
 
-    proxy_read_timeout 600;
-    proxy_connect_timeout 600;
-    proxy_send_timeout  600;
+        proxy_read_timeout 600;
+        proxy_connect_timeout 600;
+        proxy_send_timeout  600;
     }
 
     error_page 404 /404.html;
@@ -375,65 +111,32 @@ function prepareSslVhostContent()
     error_page 500 502 503 504 /50x.html;
     location = /50x.html {
     }
-}" > "$NGINX_SITES_CONF_D_SSL_FILE" || _die "Couldn't write to file: ${NGINX_SITES_CONF_D_SSL_FILE}"
+}
+SSLEOF
 
-    _arrow "${NGINX_SITES_CONF_D_SSL_FILE} file has been created."
+    _success "SSL vhost config created: ${ssl_conf}"
 }
 
-
-function reloadNginx()
-{
-    local _nginxTest=$(docker-compose exec nginx nginx -t)
-    if [[ $? -eq 0 ]]; then
-        docker-compose exec nginx nginx -s reload || _die "Nginx couldn't be reloaded."
-    else
-        echo "$_nginxTest"
-    fi
-}
-
-function printSuccessMessage()
-{
-    _success "Virtual host for Nginx has been successfully created!"
-
-    echo "################################################################"
-    echo ""
-    echo " >> Domain               : ${VHOST_DOMAIN}"
-    echo " >> Nginx Config File    : ${NGINX_SITES_CONF_D_SSL_FILE}"
-    echo ""
-    echo "################################################################"
-
-}
-
-################################################################################
-# Main
-################################################################################
-export LC_CTYPE=C
-export LANG=C
-
-DEBUG=0
-_debug set -x
-VERSION="1.2.0"
-
-function main()
-{
-    # _checkRootUser
-    checkCmdDependencies
+# ── Main ──────────────────────────────────────────────────────────────────────
+main() {
+    require_root_dir
     checkSslCommand
-
     [[ $# -lt 1 ]] && _printUsage
 
     processArgs "$@"
-    initDefaultArgs
 
-    checkDomainExist
+    require_domain_config "$VHOST_DOMAIN"
     createCertificate
     prepareSslVhostContent
-    reloadNginx
+    reload_nginx
 
-    printSuccessMessage
-    exit 0
+    _success "SSL enabled for ${VHOST_DOMAIN}!"
+    echo "################################################################"
+    echo ""
+    echo " >> Domain               : ${VHOST_DOMAIN}"
+    echo " >> SSL Config           : ${NGINX_CONF_DIR}/${VHOST_DOMAIN}-ssl.conf"
+    echo ""
+    echo "################################################################"
 }
 
 main "$@"
-
-_debug set +x

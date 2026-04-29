@@ -1,330 +1,57 @@
 #!/usr/bin/env bash
-
 #
-# Script to create virtual host for Nginx server
+# Setup Composer auth for repo.magento.com
 #
 
-# UnComment it if bash is lower than 4.x version
-shopt -s extglob
+source "$(dirname "$0")/lib/docker.sh"
 
-################################################################################
-# CORE FUNCTIONS - Do not edit
-################################################################################
+# ── Usage ─────────────────────────────────────────────────────────────────────
+_printUsage() {
+    echo -n "Composer Auth Setup
+Version 2.0
 
-## Uncomment it for debugging purpose
-###set -o errexit
-#set -o pipefail
-#set -o nounset
-#set -o xtrace
-
-#
-# VARIABLES
-#
-_bold=$(tput bold)
-_underline=$(tput sgr 0 1)
-_reset=$(tput sgr0)
-
-_purple=$(tput setaf 171)
-_red=$(tput setaf 1)
-_green=$(tput setaf 76)
-_tan=$(tput setaf 3)
-_blue=$(tput setaf 38)
-
-#
-# HEADERS & LOGGING
-#
-function _debug()
-{
-    if [[ "$DEBUG" = 1 ]]; then
-        "$@"
-    fi
-}
-
-function _header()
-{
-    printf '\n%s%s==========  %s  ==========%s\n' "$_bold" "$_purple" "$@" "$_reset"
-}
-
-function _arrow()
-{
-    printf '➜ %s\n' "$@"
-}
-
-function _success()
-{
-    printf '%s✔ %s%s\n' "$_green" "$@" "$_reset"
-}
-
-function _error() {
-    printf '%s✖ %s%s\n' "$_red" "$@" "$_reset"
-}
-
-function _warning()
-{
-    printf '%s➜ %s%s\n' "$_tan" "$@" "$_reset"
-}
-
-function _underline()
-{
-    printf '%s%s%s%s\n' "$_underline" "$_bold" "$@" "$_reset"
-}
-
-function _bold()
-{
-    printf '%s%s%s\n' "$_bold" "$@" "$_reset"
-}
-
-function _note()
-{
-    printf '%s%s%sNote:%s %s%s%s\n' "$_underline" "$_bold" "$_blue" "$_reset" "$_blue" "$@" "$_reset"
-}
-
-function _die()
-{
-    _error "$@"
-    exit 1
-}
-
-function _safeExit()
-{
-    exit 0
-}
-
-#
-# UTILITY HELPER
-#
-function _seekConfirmation()
-{
-  printf '\n%s%s%s' "$_bold" "$@" "$_reset"
-  read -p " (y/n) " -n 1
-  printf '\n'
-}
-
-# Test whether the result of an 'ask' is a confirmation
-function _isConfirmed()
-{
-    if [[ "$REPLY" =~ ^[Yy]$ ]]; then
-        return 0
-    fi
-    return 1
-}
-
-
-function _typeExists()
-{
-    if type "$1" >/dev/null; then
-        return 0
-    fi
-    return 1
-}
-
-function _isOs()
-{
-    if [[ "${OSTYPE}" == $1* ]]; then
-      return 0
-    fi
-    return 1
-}
-
-function _isOsDebian()
-{
-    if [[ -f /etc/debian_version ]]; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-function _isOsRedHat()
-{
-    if [[ -f /etc/redhat-release ]]; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-function _isOsMac()
-{
-    if [[ "$(uname -s)" = "Darwin" ]]; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-function _checkRootUser()
-{
-    #if [ "$(id -u)" != "0" ]; then
-    if [ "$(whoami)" != 'root' ]; then
-        _die "You cannot run $0 as non-root user. Please use sudo $0"
-    fi
-}
-
-function _printPoweredBy()
-{
-    local mp_ascii
-    mp_ascii='
-                ____  __  __    _    ____ _____ ___  ____   ____
-               / ___||  \/  |  / \  |  _ \_   _/ _ \/ ___| / ___|
-               \___ \| |\/| | / _ \ | |_) || || | | \___ \| |
-                ___) | |  | |/ ___ \|  _ < | || |_| |___) | |___
-               |____/|_|  |_/_/   \_\_| \_\|_| \___/|____/ \____|
-
-'
-    cat <<EOF
-${_green}
-$mp_ascii
-
-################################################################################
-${_reset}
-EOF
-}
-
-################################################################################
-# SCRIPT FUNCTIONS
-################################################################################
-function _printUsage()
-{
-    echo -n "./scripts/$(basename "$0") [OPTION]...
-
-Nginx Virtual Host Creator
-Version $VERSION
+./scripts/$(basename "$0") [OPTION]...
 
     Options:
-        --php-version               PHP version need to setup composer (php70|php71|php72|php73|php74|php74-c2).
-        -d, --debug                 Run command in debug mode.
+        --php-version               PHP version to configure (e.g. php81, php82, php83).
+                                    Run without args to see available versions.
+        --debug                     Run command in debug mode.
         -h, --help                  Display this help and exit.
 
     Examples:
-        ./scripts/$(basename "$0") --php-version=... [--debug]
+        ./scripts/$(basename "$0") --php-version=php83
 
 "
-    _printPoweredBy
+    _print_banner
     exit 1
 }
 
-function checkCmdDependencies()
-{
-    local _dependencies=(
-      wget
-      cat
-      basename
-      mkdir
-      cp
-      mv
-      rm
-      chown
-      chmod
-      date
-      find
-      awk
-      docker-compose
-      docker
-    )
+# ── Arg parsing ───────────────────────────────────────────────────────────────
+processArgs() {
+    APP_PHP=""
 
-    for cmd in "${_dependencies[@]}"
-    do
-        hash "${cmd}" &>/dev/null || _die "'${cmd}' command not found."
-    done;
-}
-
-function processArgs()
-{
-    for arg in "$@"
-    do
+    for arg in "$@"; do
         case $arg in
-            --php-version=*)
-                APP_PHP="${arg#*=}"
-            ;;           
-            --debug)
-                DEBUG=1
-                set -o xtrace
-            ;;
-            -h|--help)
-                _printUsage
-            ;;
-            *)
-                _printUsage
-            ;;
+            --php-version=*) APP_PHP="${arg#*=}" ;;
+            --debug)         enable_debug ;;
+            -h|--help)       _printUsage ;;
+            *)               _printUsage ;;
         esac
     done
-        
-    validateArgs
+
+    validate_php_version "$APP_PHP"
 }
 
-function validateArgs()
-{
-    ERROR_COUNT=0
-    if [[ -z "$APP_PHP" ]]; then
-        _error "--php-version=... parameter is missing."
-        ERROR_COUNT=$((ERROR_COUNT + 1))
-    fi
-    if [[ ! -z "$APP_PHP" && "$APP_PHP" != @(php70|php71|php72|php73|php74|php74-c2) ]]; then
-        _error "Please enter valid application php --php-version=... parameter(php70|php71|php72|php73|php74|php74-c2)."
-        ERROR_COUNT=$((ERROR_COUNT + 1))
-    fi
-
-    [[ "$ERROR_COUNT" -gt 0 ]] && exit 1
-}
-
-function validateBaseServices()
-{
-    if [[ ! $($SCRIPTS_DIR/list-services | grep $APP_PHP) ]]; then
-        _error "$APP_PHP service should be started, please start $APP_PHP"
-        exit 1
-    fi
-}
-
-function checkComposerAuth()
-{
-    MAGENTO_USERNAME_PROP="http-basic.repo.magento.com.username"
-    MAGENTO_PASSWORD_PROP="http-basic.repo.magento.com.password"
-
-        PUBLIC_KEY="$(docker-compose exec -T --user nginx ${APP_PHP} composer config --global $MAGENTO_USERNAME_PROP 2>/dev/null)"
-        PRIVATE_KEY="$(docker-compose exec -T --user nginx ${APP_PHP} composer config --global $MAGENTO_PASSWORD_PROP 2>/dev/null)"
-
-    if [ -z "$PUBLIC_KEY" ] || [ -z "$PRIVATE_KEY" ]; then
-        exec < /dev/tty
-        echo
-        echo "Composer authentication required (repo.magento.com public and private keys):"
-        read -r -p "    Username: " PUBLIC_KEY
-        read -r -p "    Password: " PRIVATE_KEY
-        echo
-        exec <&-
-        if [ -z "$PUBLIC_KEY" ] || [ -z "$PRIVATE_KEY" ]; then
-            _error "Please setup Composer auth for repo.magento.com to continue."
-        fi
-        _arrow "Configure magento repo auth"
-        $(docker-compose exec -T --user nginx ${APP_PHP} composer config --global http-basic.repo.magento.com ${PUBLIC_KEY} ${PRIVATE_KEY}) || _die "Cannot configure magento auth"
-        _success "Configure magento repo auth done"
-    else
-        _warning "Composer auth for Magento has already setup. No need to do anything"
-    fi
-
-}
-
-################################################################################
-# Main
-################################################################################
-export LC_CTYPE=C
-export LANG=C
-
-DEBUG=0
-_debug set -x
-VERSION="1.2.0"
-
-function main()
-{
-    checkCmdDependencies
-
+# ── Main ──────────────────────────────────────────────────────────────────────
+main() {
+    require_root_dir
     [[ $# -lt 1 ]] && _printUsage
 
     processArgs "$@"
-    checkComposerAuth
-    exit 0
+    require_service "$APP_PHP"
+    check_composer_auth "$APP_PHP"
+
+    _success "Done!"
 }
 
 main "$@"
-
-_debug set +x
