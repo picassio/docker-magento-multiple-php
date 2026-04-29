@@ -89,28 +89,29 @@ is_service_running() {
 
 # ── MySQL helpers ─────────────────────────────────────────────────────────────
 
-# Get MySQL root password from the running container's environment
-get_mysql_root_password() {
+# ── Database helpers (supports mysql, mysql80, mariadb) ───────────────────────
+
+# Get root password from a running DB container
+# Usage: get_db_root_password [service_name]
+get_db_root_password() {
+    local svc="${1:-mysql}"
     local container
-    container=$(docker inspect -f '{{.Name}}' "$(dc ps -q mysql)" | cut -c2-)
+    container=$(docker inspect -f '{{.Name}}' "$(dc ps -q "$svc")" | cut -c2-)
     docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" \
         | grep '^MYSQL_ROOT_PASSWORD=' | cut -d= -f2-
 }
 
-# Get MySQL user from the running container's environment
-get_mysql_user() {
-    local container
-    container=$(docker inspect -f '{{.Name}}' "$(dc ps -q mysql)" | cut -c2-)
-    docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" \
-        | grep '^MYSQL_USER=' | cut -d= -f2-
-}
+# Backward compat
+get_mysql_root_password() { get_db_root_password "${1:-mysql}"; }
+get_mysql_user()          { local svc="${1:-mysql}"; local c; c=$(docker inspect -f '{{.Name}}' "$(dc ps -q "$svc")" | cut -c2-); docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$c" | grep '^MYSQL_USER=' | cut -d= -f2-; }
+get_mysql_password()      { local svc="${1:-mysql}"; local c; c=$(docker inspect -f '{{.Name}}' "$(dc ps -q "$svc")" | cut -c2-); docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$c" | grep '^MYSQL_PASSWORD=' | cut -d= -f2-; }
 
-# Get MySQL password from the running container's environment
-get_mysql_password() {
-    local container
-    container=$(docker inspect -f '{{.Name}}' "$(dc ps -q mysql)" | cut -c2-)
-    docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container" \
-        | grep '^MYSQL_PASSWORD=' | cut -d= -f2-
+# Validate db_service name
+validate_db_service() {
+    local svc="$1"
+    if [[ "$svc" != @(mysql|mysql80|mariadb) ]]; then
+        _die "Invalid db_service: $svc. Must be: mysql, mysql80, or mariadb"
+    fi
 }
 
 # ── Composer auth helpers ─────────────────────────────────────────────────────

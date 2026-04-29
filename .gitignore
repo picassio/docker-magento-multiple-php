@@ -20,4 +20,7 @@
 !/databases/import/.keepme
 !/databases/export/.keepme
 .DS_Store
-gitInfo.md
+gitInfo.md/data/mysql80/*
+!/data/mysql80/.keepme
+/data/mariadb/*
+!/data/mariadb/.keepme

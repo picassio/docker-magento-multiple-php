@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# Database management — create/drop/import/export/list MySQL databases
+# Database management — create/drop/import/export/list databases
+# Supports multiple DB services: mysql, mysql80, mariadb
 #
 
 source "$(dirname "$0")/lib/docker.sh"
@@ -8,13 +9,14 @@ source "$(dirname "$0")/lib/docker.sh"
 DATABASE_NAME=""
 DATABASE_IMPORT_SOURCE_NAME=""
 DATABASE_IMPORT_TARGET_NAME=""
+DB_SERVICE="mysql"
 COMMAND=""
 DATABASE_PATTERN="^([[:alnum:]]([[:alnum:]_]{0,61}[[:alnum:]]))$"
 
 # ── Usage ─────────────────────────────────────────────────────────────────────
 _printUsage() {
-    echo -n "Docker MySQL tools
-Version 2.0
+    echo -n "Docker Database tools
+Version 3.0
 
 ./scripts/$(basename "$0") [OPTION] [ARG]...
 
@@ -27,18 +29,21 @@ Version 2.0
         -h, --help                Display this help and exit.
 
     Args:
+      --db-service                DB service to use (mysql|mysql80|mariadb). Default: mysql.
       create / export / drop:
-        --database-name             Database name.
+        --database-name           Database name.
       import:
-        --source                    Backup file name (must be in databases/import/, ending .sql).
-        --target                    Target database name to import into.
+        --source                  Backup file name (in databases/import/, ending .sql).
+        --target                  Target database name.
 
     Examples:
       ./scripts/$(basename "$0") list
+      ./scripts/$(basename "$0") list --db-service=mariadb
       ./scripts/$(basename "$0") create --database-name=my_db
+      ./scripts/$(basename "$0") create --database-name=my_db --db-service=mysql80
+      ./scripts/$(basename "$0") import --source=backup.sql --target=my_db
       ./scripts/$(basename "$0") export --database-name=my_db
       ./scripts/$(basename "$0") drop --database-name=my_db
-      ./scripts/$(basename "$0") import --source=backup.sql --target=my_db
 "
     _print_banner
     exit 1
@@ -52,6 +57,7 @@ processArgs() {
             for arg in "${@:2}"; do
                 case $arg in
                     --database-name=*) DATABASE_NAME="${arg#*=}" ;;
+                    --db-service=*)    DB_SERVICE="${arg#*=}" ;;
                     --debug)           enable_debug ;;
                     -h|--help)         _printUsage ;;
                     *)                 _printUsage ;;
@@ -62,16 +68,23 @@ processArgs() {
             COMMAND="$1"
             for arg in "${@:2}"; do
                 case $arg in
-                    --source=*) DATABASE_IMPORT_SOURCE_NAME="${arg#*=}" ;;
-                    --target=*) DATABASE_IMPORT_TARGET_NAME="${arg#*=}" ;;
-                    --debug)    enable_debug ;;
-                    -h|--help)  _printUsage ;;
-                    *)          _printUsage ;;
+                    --source=*)     DATABASE_IMPORT_SOURCE_NAME="${arg#*=}" ;;
+                    --target=*)     DATABASE_IMPORT_TARGET_NAME="${arg#*=}" ;;
+                    --db-service=*) DB_SERVICE="${arg#*=}" ;;
+                    --debug)        enable_debug ;;
+                    -h|--help)      _printUsage ;;
+                    *)              _printUsage ;;
                 esac
             done
             ;;
         list)
             COMMAND="$1"
+            for arg in "${@:2}"; do
+                case $arg in
+                    --db-service=*) DB_SERVICE="${arg#*=}" ;;
+                    -h|--help)      _printUsage ;;
+                esac
+            done
             ;;
         -h|--help) _printUsage ;;
         *)         _printUsage ;;
@@ -82,6 +95,13 @@ processArgs() {
 
 validateArgs() {
     local errors=0
+
+    # Validate db-service
+    if [[ "$DB_SERVICE" != @(mysql|mysql80|mariadb) ]]; then
+        _error "Invalid --db-service. Must be: mysql, mysql80, or mariadb"
+        errors=$((errors + 1))
+    fi
+
     case "$COMMAND" in
         create|export|drop)
             if [[ -z "$DATABASE_NAME" ]]; then
@@ -105,17 +125,17 @@ validateArgs() {
     fi
 }
 
-# ── MySQL helpers ─────────────────────────────────────────────────────────────
+# ── DB helpers (service-aware) ────────────────────────────────────────────────
 mysql_exec() {
     local root_pass
-    root_pass="$(get_mysql_root_password)"
-    dc exec -T mysql mysql -u root -p"${root_pass}" --skip-column-names "$@" 2>&1 | grep -v "Using a password"
+    root_pass="$(get_db_root_password "$DB_SERVICE")"
+    dc exec -T "$DB_SERVICE" mysql -u root -p"${root_pass}" --skip-column-names "$@" 2>&1 | grep -v "Using a password"
 }
 
 mysql_dump() {
     local root_pass
-    root_pass="$(get_mysql_root_password)"
-    dc exec -T mysql /usr/bin/mysqldump -u root --password="${root_pass}" "$@" 2>&1 | grep -v "Using a password"
+    root_pass="$(get_db_root_password "$DB_SERVICE")"
+    dc exec -T "$DB_SERVICE" /usr/bin/mysqldump -u root --password="${root_pass}" "$@" 2>&1 | grep -v "Using a password"
 }
 
 db_exists() {
@@ -134,56 +154,55 @@ checkDatabaseName() {
 # ── Operations ────────────────────────────────────────────────────────────────
 listDatabases() {
     local root_pass
-    root_pass="$(get_mysql_root_password)"
-    dc exec -T mysql mysql -u root --password="${root_pass}" -e "show databases" 2>&1 | grep -v "Using a password"
+    root_pass="$(get_db_root_password "$DB_SERVICE")"
+    dc exec -T "$DB_SERVICE" mysql -u root --password="${root_pass}" -e "show databases" 2>&1 | grep -v "Using a password"
 }
 
 createDatabase() {
     checkDatabaseName
-    _arrow "Checking if database ${DATABASE_NAME} exists..."
+    _arrow "Checking if database ${DATABASE_NAME} exists on ${DB_SERVICE}..."
     if db_exists "$DATABASE_NAME"; then
-        _die "Database '${DATABASE_NAME}' already exists. Choose another name."
+        _die "Database '${DATABASE_NAME}' already exists on ${DB_SERVICE}."
     fi
 
-    _arrow "Creating database ${DATABASE_NAME}..."
+    _arrow "Creating database ${DATABASE_NAME} on ${DB_SERVICE}..."
     mysql_exec -e "create database ${DATABASE_NAME}"
-    _success "Database '${DATABASE_NAME}' created"
+    _success "Database '${DATABASE_NAME}' created on ${DB_SERVICE}"
     listDatabases
 }
 
 dropDatabase() {
     checkDatabaseName
-    _arrow "Checking if database ${DATABASE_NAME} exists..."
+    _arrow "Checking if database ${DATABASE_NAME} exists on ${DB_SERVICE}..."
     if ! db_exists "$DATABASE_NAME"; then
-        _die "Database '${DATABASE_NAME}' does not exist."
+        _die "Database '${DATABASE_NAME}' does not exist on ${DB_SERVICE}."
     fi
 
-    if ! ask_yes_no "Are you sure you want to drop '${DATABASE_NAME}'?"; then
+    if ! ask_yes_no "Are you sure you want to drop '${DATABASE_NAME}' on ${DB_SERVICE}?"; then
         _warning "Cancelled."
         exit 0
     fi
 
-    _arrow "Dropping database ${DATABASE_NAME}..."
+    _arrow "Dropping database ${DATABASE_NAME} on ${DB_SERVICE}..."
     mysql_exec -e "drop database ${DATABASE_NAME}"
-    _success "Database '${DATABASE_NAME}' dropped"
+    _success "Database '${DATABASE_NAME}' dropped on ${DB_SERVICE}"
     listDatabases
 }
 
 exportDatabase() {
     checkDatabaseName
-    _arrow "Checking if database ${DATABASE_NAME} exists..."
+    _arrow "Checking if database ${DATABASE_NAME} exists on ${DB_SERVICE}..."
     if ! db_exists "$DATABASE_NAME"; then
-        _die "Database '${DATABASE_NAME}' does not exist."
+        _die "Database '${DATABASE_NAME}' does not exist on ${DB_SERVICE}."
     fi
 
     local export_file="${DB_EXPORT_DIR}/${DATABASE_NAME}-$(date +%Y-%m-%d).sql"
-    _arrow "Exporting database ${DATABASE_NAME}..."
+    _arrow "Exporting database ${DATABASE_NAME} from ${DB_SERVICE}..."
     mysql_dump "${DATABASE_NAME}" > "$export_file"
     _success "Database exported to: ${export_file}"
 }
 
 importDatabase() {
-    # Validate source file
     if [[ "${DATABASE_IMPORT_SOURCE_NAME##*.}" != "sql" ]]; then
         _die "Source file must end with .sql (got: ${DATABASE_IMPORT_SOURCE_NAME})"
     fi
@@ -191,17 +210,17 @@ importDatabase() {
         _die "Source file not found: ${DB_IMPORT_DIR}/${DATABASE_IMPORT_SOURCE_NAME}"
     fi
 
-    _arrow "Checking if database ${DATABASE_IMPORT_TARGET_NAME} exists..."
+    _arrow "Checking if database ${DATABASE_IMPORT_TARGET_NAME} exists on ${DB_SERVICE}..."
     if ! db_exists "$DATABASE_IMPORT_TARGET_NAME"; then
-        _die "Database '${DATABASE_IMPORT_TARGET_NAME}' does not exist. Create it first."
+        _die "Database '${DATABASE_IMPORT_TARGET_NAME}' does not exist on ${DB_SERVICE}. Create it first."
     fi
 
     local root_pass
-    root_pass="$(get_mysql_root_password)"
-    _arrow "Importing into ${DATABASE_IMPORT_TARGET_NAME}..."
-    dc exec -T mysql mysql -u root -p"${root_pass}" "${DATABASE_IMPORT_TARGET_NAME}" \
+    root_pass="$(get_db_root_password "$DB_SERVICE")"
+    _arrow "Importing into ${DATABASE_IMPORT_TARGET_NAME} on ${DB_SERVICE}..."
+    dc exec -T "$DB_SERVICE" mysql -u root -p"${root_pass}" "${DATABASE_IMPORT_TARGET_NAME}" \
         < "${DB_IMPORT_DIR}/${DATABASE_IMPORT_SOURCE_NAME}" 2>&1 | grep -v "Using a password"
-    _success "Database '${DATABASE_IMPORT_TARGET_NAME}' imported from ${DATABASE_IMPORT_SOURCE_NAME}"
+    _success "Database '${DATABASE_IMPORT_TARGET_NAME}' imported on ${DB_SERVICE}"
 }
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -209,12 +228,13 @@ main() {
     require_root_dir
     [[ $# -lt 1 ]] && _printUsage
 
-    # Init paths from services.sh via docker.sh
     DB_IMPORT_DIR="${ROOT_DIR}/databases/import"
     DB_EXPORT_DIR="${ROOT_DIR}/databases/export"
 
     processArgs "$@"
-    require_service mysql
+    require_service "$DB_SERVICE"
+
+    _arrow "Using database service: ${_bold}${DB_SERVICE}${_reset}"
 
     case "$COMMAND" in
         list)   listDatabases   ;;

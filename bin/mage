@@ -2,20 +2,22 @@
 # =============================================================================
 # mage — Single CLI entrypoint for Docker Magento Multi-PHP stack
 # =============================================================================
-#
-# Usage: bin/mage <command> [args...]
-#        bin/mage help
-#
-
-# Resolve project root from bin/ directory
 MAGE_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$MAGE_ROOT" || exit 1
+source "${MAGE_ROOT}/scripts/lib/projects.sh"
 
-# Source shared libraries (docker.sh → common.sh)
-source "${MAGE_ROOT}/scripts/lib/docker.sh"
+MAGE_VERSION="2.0.0"
+SCRIPTS_DIR="${MAGE_ROOT}/scripts"
 
-# ── Version ───────────────────────────────────────────────────────────────────
-MAGE_VERSION="1.0.0"
+# ── Helper: resolve domain → PHP version ──────────────────────────────────────
+resolve_php() {
+    local arg="$1"
+    if [[ "$arg" == *"."* ]] && project_exists "$arg"; then
+        project_get "$arg" "php"
+    else
+        echo "$arg"
+    fi
+}
 
 # ── Help ──────────────────────────────────────────────────────────────────────
 show_help() {
@@ -27,519 +29,583 @@ ${_bold}USAGE${_reset}
 
 ${_bold}LIFECYCLE${_reset}
     ${_green}setup${_reset}                              Interactive first-time setup
-    ${_green}up${_reset} [services...]                    Start services (default: core stack)
+    ${_green}up${_reset} [services...]                    Smart start (auto from projects.json)
     ${_green}down${_reset}                                Stop & remove containers
     ${_green}stop${_reset}                                Stop all services
     ${_green}restart${_reset} [service]                   Restart all or a specific service
-    ${_green}status${_reset}                              Show running services & domains
+    ${_green}status${_reset}                              Show projects, services & domains
     ${_green}logs${_reset} [service]                      Tail container logs
 
-${_bold}DEVELOPMENT${_reset}
-    ${_green}shell${_reset} <php>                         Open bash in PHP container
-    ${_green}composer${_reset} <php> [args...]            Run composer in PHP container
-    ${_green}magento${_reset} <php> <dir> [args...]       Run bin/magento in container
+${_bold}PROJECT MANAGEMENT${_reset}
+    ${_green}project list${_reset}                        List all projects with status
+    ${_green}project add${_reset} <domain>                Add a project (interactive wizard)
+    ${_green}project remove${_reset} <domain>             Remove project from registry
+    ${_green}project enable${_reset} <domain>             Enable project & create vhost
+    ${_green}project disable${_reset} <domain>            Disable project & remove vhost
+    ${_green}project info${_reset} <domain>               Show project configuration
+    ${_green}project switch-php${_reset} <domain> <php>   Change PHP version
 
-${_bold}DATABASE${_reset}
-    ${_green}db list${_reset}                             List databases
-    ${_green}db create${_reset} <name>                    Create a database
-    ${_green}db drop${_reset} <name>                      Drop a database
-    ${_green}db export${_reset} <name>                    Export database to SQL file
-    ${_green}db import${_reset} <file.sql> <target_db>    Import SQL file into database
+${_bold}DEVELOPMENT (accepts domain name — auto-resolves PHP/DB)${_reset}
+    ${_green}shell${_reset} <domain|php>                  Open bash in PHP container
+    ${_green}composer${_reset} <domain|php> [args...]     Run composer
+    ${_green}magento${_reset} <domain> [args...]           Run bin/magento
+
+${_bold}DATABASE (project-aware — auto-routes to correct DB service)${_reset}
+    ${_green}db list${_reset} [--db-service=...]           List databases
+    ${_green}db create${_reset} <domain|name>              Create database
+    ${_green}db drop${_reset} <domain|name>                Drop database
+    ${_green}db export${_reset} <domain|name>              Export database
+    ${_green}db import${_reset} <domain> <file.sql>        Import SQL file
 
 ${_bold}HOSTING${_reset}
-    ${_green}vhost${_reset} <domain> <app> <php>          Create nginx virtual host
-    ${_green}ssl${_reset} <domain>                        Enable SSL for domain
-    ${_green}xdebug${_reset} <on|off|status> <php>        Toggle Xdebug
-    ${_green}varnish${_reset} <on|off|status> <domain>    Toggle Varnish
+    ${_green}vhost${_reset} <domain> <app> <php>           Create nginx virtual host
+    ${_green}ssl${_reset} <domain>                         Enable SSL for domain
+    ${_green}xdebug${_reset} <on|off|status> <php>         Toggle Xdebug
+    ${_green}varnish${_reset} <on|off|status> <domain>     Toggle Varnish
 
 ${_bold}INSTALL${_reset}
     ${_green}install${_reset} <ver> <edition> <domain> <php>  Install fresh Magento
 
-${_bold}OPTIONS${_reset}
-    ${_green}--profile=<name>${_reset}   Compose profile (legacy, debug, varnish, mariadb, etc.)
-
 ${_bold}EXAMPLES${_reset}
-    bin/mage setup                                 # First-time setup wizard
-    bin/mage up                                    # Start default stack
-    bin/mage up --profile=legacy php72 nginx       # Start with legacy PHP
-    bin/mage shell php83                           # Open shell in PHP 8.3
-    bin/mage composer php83 install                # Run composer install
-    bin/mage magento php83 mysite.com cache:flush  # Flush Magento cache
-    bin/mage db create mydb                        # Create database
-    bin/mage db import backup.sql mydb             # Import SQL file
-    bin/mage vhost mysite.com magento2 php83       # Create virtual host
-    bin/mage xdebug on php83                       # Enable Xdebug
-    bin/mage install 2.4.7 community my.com php83  # Install Magento
+    bin/mage project add mysite.com                # Add project (interactive)
+    bin/mage up                                    # Smart start all enabled projects
+    bin/mage shell mysite.com                      # Shell into project's PHP
+    bin/mage composer mysite.com install            # Composer in right container
+    bin/mage magento mysite.com cache:flush         # bin/magento for project
+    bin/mage db create mysite.com                   # Create DB on project's DB service
+    bin/mage db import mysite.com backup.sql        # Import into right DB
+    bin/mage project disable oldsite.com            # Disable without data loss
+    bin/mage project switch-php mysite.com php84    # Upgrade PHP
 
 EOF
 }
 
-# ── Command: up ───────────────────────────────────────────────────────────────
+# ── Command: project ──────────────────────────────────────────────────────────
+cmd_project() {
+    local action="${1:-}"
+    [[ -z "$action" ]] && { _error "Usage: bin/mage project <list|add|remove|enable|disable|info|switch-php> [args]"; exit 1; }
+    shift
+
+    case "$action" in
+        list)       cmd_project_list ;;
+        add)        cmd_project_add "$@" ;;
+        remove)     cmd_project_remove "$@" ;;
+        enable)     cmd_project_enable "$@" ;;
+        disable)    cmd_project_disable "$@" ;;
+        info)       cmd_project_info "$@" ;;
+        switch-php) cmd_project_switch_php "$@" ;;
+        *)          _die "Unknown project action: $action" ;;
+    esac
+}
+
+cmd_project_list() {
+    _header "Registered Projects"
+    echo ""
+    printf "  ${_bold}%-25s %-8s %-10s %-10s %-20s %-8s${_reset}\n" "DOMAIN" "PHP" "APP" "DB" "DATABASE" "STATUS"
+    printf "  %-25s %-8s %-10s %-10s %-20s %-8s\n" "─────────────────────────" "────────" "──────────" "──────────" "────────────────────" "────────"
+
+    local count=0
+    while IFS='|' read -r domain php app db_svc db_name search enabled; do
+        [[ -z "$domain" ]] && continue
+        count=$((count + 1))
+        local status_icon
+        if [[ "$enabled" == "true" ]]; then
+            status_icon="${_green}●${_reset} on"
+        else
+            status_icon="${_red}○${_reset} off"
+        fi
+        printf "  %-25s %-8s %-10s %-10s %-20s %b\n" "$domain" "$php" "$app" "$db_svc" "$db_name" "$status_icon"
+    done < <(project_list_raw)
+
+    if [[ $count -eq 0 ]]; then
+        echo "  ${_tan}(no projects registered)${_reset}"
+        echo ""
+        _arrow "Add one with: bin/mage project add <domain>"
+    fi
+    echo ""
+}
+
+cmd_project_add() {
+    local domain="${1:-}"
+    [[ -z "$domain" ]] && _die "Usage: bin/mage project add <domain>"
+
+    if project_exists "$domain"; then
+        _die "Project '$domain' already exists. Use 'project info $domain' to view it."
+    fi
+
+    echo ""
+    _header "Add Project: $domain"
+    echo ""
+
+    # PHP version
+    _arrow "Available PHP versions:"
+    get_available_php_versions | while read -r v; do echo "    $v"; done
+    echo ""
+    read -rp "  PHP version [php83]: " php
+    php="${php:-php83}"
+
+    # App type
+    read -rp "  App type (magento1/magento2/wordpress/laravel/default) [magento2]: " app
+    app="${app:-magento2}"
+
+    # DB service
+    read -rp "  Database service (mysql/mysql80/mariadb) [mysql]: " db_svc
+    db_svc="${db_svc:-mysql}"
+
+    # DB name
+    local default_db
+    default_db=$(echo "$domain" | tr '.' '_' | tr '-' '_')
+    read -rp "  Database name [${default_db}]: " db_name
+    db_name="${db_name:-$default_db}"
+
+    # Search engine
+    read -rp "  Search engine (opensearch/elasticsearch/none) [opensearch]: " search
+    search="${search:-opensearch}"
+
+    # Save
+    project_set "$domain" "$php" "$app" "$db_svc" "$db_name" "$search" "true"
+    _success "Project '$domain' registered"
+
+    # Create source dir
+    if [[ ! -d "${SOURCE_DIR}/${domain}" ]]; then
+        mkdir -p "${SOURCE_DIR}/${domain}"
+        _success "Created sources/${domain}/"
+    fi
+
+    # Offer to create vhost and DB now
+    echo ""
+    if ask_yes_no "Create nginx vhost now?"; then
+        "${SCRIPTS_DIR}/create-vhost" --domain="$domain" --app="$app" --root-dir="$domain" --php-version="$php" 2>&1 || true
+    fi
+
+    if ask_yes_no "Create database '${db_name}' on ${db_svc} now?"; then
+        if is_service_running "$db_svc" 2>/dev/null; then
+            "${SCRIPTS_DIR}/database" create --database-name="$db_name" --db-service="$db_svc" 2>&1 || true
+        else
+            _warning "Service $db_svc is not running. Start it first, then run: bin/mage db create $domain"
+        fi
+    fi
+
+    echo ""
+    _success "Project '$domain' ready!"
+    _arrow "Start services: bin/mage up"
+}
+
+cmd_project_remove() {
+    local domain="${1:-}"
+    [[ -z "$domain" ]] && _die "Usage: bin/mage project remove <domain>"
+    require_project "$domain"
+
+    if ! ask_yes_no "Remove project '$domain' from registry? (source code and data are kept)"; then
+        exit 0
+    fi
+
+    # Remove vhost
+    rm -f "${NGINX_CONF_DIR}/${domain}.conf" "${NGINX_CONF_DIR}/${domain}-ssl.conf" 2>/dev/null
+    project_remove "$domain"
+    _success "Project '$domain' removed from registry"
+    _arrow "Source code kept in: sources/${domain}/"
+}
+
+cmd_project_enable() {
+    local domain="${1:-}"
+    [[ -z "$domain" ]] && _die "Usage: bin/mage project enable <domain>"
+    require_project "$domain"
+
+    local php app
+    php=$(project_get "$domain" "php")
+    app=$(project_get "$domain" "app")
+
+    project_update "$domain" "enabled" "true"
+
+    # Recreate vhost if missing
+    if [[ ! -f "${NGINX_CONF_DIR}/${domain}.conf" ]]; then
+        _arrow "Creating vhost for ${domain}..."
+        "${SCRIPTS_DIR}/create-vhost" --domain="$domain" --app="$app" --root-dir="$domain" --php-version="$php" 2>&1 || true
+    fi
+
+    _success "Project '$domain' enabled"
+    _arrow "Run 'bin/mage up' to start needed services"
+}
+
+cmd_project_disable() {
+    local domain="${1:-}"
+    [[ -z "$domain" ]] && _die "Usage: bin/mage project disable <domain>"
+    require_project "$domain"
+
+    project_update "$domain" "enabled" "false"
+
+    # Remove vhost (nginx won't try to resolve the backend)
+    rm -f "${NGINX_CONF_DIR}/${domain}.conf" "${NGINX_CONF_DIR}/${domain}-ssl.conf" 2>/dev/null
+
+    # Reload nginx if running
+    if is_service_running nginx 2>/dev/null; then
+        dc exec nginx nginx -s reload 2>/dev/null || true
+    fi
+
+    _success "Project '$domain' disabled (vhost removed, data kept)"
+}
+
+cmd_project_info() {
+    local domain="${1:-}"
+    [[ -z "$domain" ]] && _die "Usage: bin/mage project info <domain>"
+    require_project "$domain"
+
+    local php app db_svc db_name search enabled
+    php=$(project_get "$domain" "php")
+    app=$(project_get "$domain" "app")
+    db_svc=$(project_get "$domain" "db_service")
+    db_name=$(project_get "$domain" "db_name")
+    search=$(project_get "$domain" "search")
+    enabled=$(project_get "$domain" "enabled")
+
+    echo ""
+    _header "Project: $domain"
+    echo ""
+    printf "  %-18s %s\n" "Domain:" "$domain"
+    printf "  %-18s %s\n" "PHP:" "$php"
+    printf "  %-18s %s\n" "Application:" "$app"
+    printf "  %-18s %s\n" "DB Service:" "$db_svc"
+    printf "  %-18s %s\n" "Database:" "$db_name"
+    printf "  %-18s %s\n" "Search:" "$search"
+    printf "  %-18s %s\n" "Enabled:" "$enabled"
+    printf "  %-18s %s\n" "Source:" "sources/${domain}/"
+    printf "  %-18s %s\n" "Vhost:" "$(test -f "${NGINX_CONF_DIR}/${domain}.conf" && echo "exists" || echo "not created")"
+    printf "  %-18s %s\n" "SSL:" "$(test -f "${NGINX_CONF_DIR}/${domain}-ssl.conf" && echo "enabled" || echo "no")"
+
+    # Service status
+    echo ""
+    _arrow "Service status:"
+    for svc in "$php" "$db_svc" "$search" nginx redis mailpit; do
+        if is_service_running "$svc" 2>/dev/null; then
+            _success "  $svc: running"
+        else
+            _warning "  $svc: stopped"
+        fi
+    done
+    echo ""
+}
+
+cmd_project_switch_php() {
+    local domain="${1:-}" new_php="${2:-}"
+    [[ -z "$domain" || -z "$new_php" ]] && _die "Usage: bin/mage project switch-php <domain> <php-version>"
+    require_project "$domain"
+
+    local old_php app
+    old_php=$(project_get "$domain" "php")
+    app=$(project_get "$domain" "app")
+
+    if [[ "$old_php" == "$new_php" ]]; then
+        _warning "Project '$domain' already uses $new_php"
+        return
+    fi
+
+    _arrow "Switching $domain: $old_php → $new_php"
+
+    project_update "$domain" "php" "$new_php"
+
+    # Recreate vhost with new PHP
+    if [[ -f "${NGINX_CONF_DIR}/${domain}.conf" ]]; then
+        rm -f "${NGINX_CONF_DIR}/${domain}.conf"
+        "${SCRIPTS_DIR}/create-vhost" --domain="$domain" --app="$app" --root-dir="$domain" --php-version="$new_php" 2>&1 || true
+    fi
+
+    _success "Project '$domain' switched to $new_php"
+    _arrow "Make sure $new_php is running: bin/mage up"
+}
+
+# ── Command: up (smart start) ────────────────────────────────────────────────
 cmd_up() {
     local profiles=()
     local services=()
+    local explicit=false
 
     for arg in "$@"; do
         case "$arg" in
             --profile=*) profiles+=("--profile" "${arg#*=}") ;;
-            -*)          _die "Unknown option: $arg. Use --profile=<name> for profiles." ;;
-            *)           services+=("$arg") ;;
+            -*)          _die "Unknown option: $arg" ;;
+            *)           services+=("$arg"); explicit=true ;;
         esac
     done
 
+    if [[ "$explicit" == false ]]; then
+        local proj_services proj_profiles
+        proj_services=$(project_compute_services)
+        proj_profiles=$(project_compute_profiles)
+
+        if [[ -n "$proj_services" && "$proj_services" != "nginx redis mailpit" ]]; then
+            _arrow "Smart start from projects.json..."
+            for p in $proj_profiles; do
+                profiles+=("--profile" "$p")
+            done
+            read -ra services <<< "$proj_services"
+            _arrow "Services: ${services[*]}"
+            [[ -n "$proj_profiles" ]] && _arrow "Profiles: $proj_profiles"
+        else
+            _arrow "No projects registered. Starting default stack..."
+            _arrow "Tip: ${_bold}bin/mage project add <domain>${_reset}"
+        fi
+    fi
+
     _arrow "Starting services..."
     if [[ ${#services[@]} -gt 0 ]]; then
-        dc "${profiles[@]}" up -d "${services[@]}"
+        dc "${profiles[@]}" up -d "${services[@]}" 2>&1
     else
-        dc "${profiles[@]}" up -d
+        dc "${profiles[@]}" up -d 2>&1
     fi
     _success "Services started"
 }
 
-# ── Command: down ─────────────────────────────────────────────────────────────
-cmd_down() {
-    _arrow "Stopping and removing containers..."
-    dc down --remove-orphans
-    _success "All containers removed"
-}
+# ── Command: down/stop/restart ────────────────────────────────────────────────
+cmd_down()    { _arrow "Stopping..."; dc --profile legacy --profile mysql80 --profile mariadb --profile elasticsearch down --remove-orphans; _success "Done"; }
+cmd_stop()    { _arrow "Stopping..."; dc stop; _success "Done"; }
+cmd_restart() { if [[ -n "${1:-}" ]]; then dc restart "$1"; else dc restart; fi; _success "Restarted"; }
 
-# ── Command: restart ──────────────────────────────────────────────────────────
-cmd_restart() {
-    if [[ -n "${1:-}" ]]; then
-        _arrow "Restarting ${1}..."
-        dc restart "$1"
-        _success "${1} restarted"
-    else
-        _arrow "Restarting all services..."
-        dc restart
-        _success "All services restarted"
-    fi
-}
-
-# ── Command: stop ─────────────────────────────────────────────────────────────
-cmd_stop() {
-    _arrow "Stopping all services..."
-    dc stop
-    _success "All services stopped"
-}
-
-# ── Command: shell ────────────────────────────────────────────────────────────
+# ── Command: shell (project-aware) ───────────────────────────────────────────
 cmd_shell() {
-    if [[ -z "${1:-}" ]]; then
-        _error "Usage: bin/mage shell <php-version>"
-        _arrow "Example: bin/mage shell php83"
-        _arrow "Available: $(get_available_php_versions | tr '\n' ', ' | sed 's/,$//')"
-        exit 1
+    local arg="${1:-}"
+    [[ -z "$arg" ]] && { _error "Usage: bin/mage shell <domain|php-version>"; exit 1; }
+    local php
+    php=$(resolve_php "$arg")
+    validate_php_version "$php"
+    require_service "$php"
+    if [[ "$arg" == *"."* ]] && project_exists "$arg"; then
+        dc exec --user nginx "$php" bash -c "cd /home/public_html/${arg} && exec bash"
+    else
+        dc exec --user nginx "$php" bash
     fi
-    exec "${SCRIPTS_DIR}/shell" "$@"
 }
 
-# ── Command: db ───────────────────────────────────────────────────────────────
+# ── Command: composer (project-aware) ─────────────────────────────────────────
+cmd_composer() {
+    local arg="${1:-}"
+    [[ -z "$arg" ]] && { _error "Usage: bin/mage composer <domain|php-version> [args...]"; exit 1; }
+    local php
+    php=$(resolve_php "$arg")
+    validate_php_version "$php"
+    require_service "$php"
+    shift
+    if [[ "$arg" == *"."* ]] && project_exists "$arg"; then
+        dc exec --user nginx "$php" bash -c "cd /home/public_html/${arg} && composer $*"
+    else
+        dc exec --user nginx "$php" composer "$@"
+    fi
+}
+
+# ── Command: magento (project-aware) ──────────────────────────────────────────
+cmd_magento() {
+    local domain="${1:-}"
+    [[ -z "$domain" ]] && { _error "Usage: bin/mage magento <domain> [magento-args...]"; exit 1; }
+
+    local php
+    if project_exists "$domain"; then
+        php=$(project_get "$domain" "php")
+    else
+        _die "Project '$domain' not found. Register it with: bin/mage project add $domain"
+    fi
+
+    validate_php_version "$php"
+    require_service "$php"
+    shift
+    dc exec --user nginx "$php" php "/home/public_html/${domain}/bin/magento" "$@"
+}
+
+# ── Command: db (project-aware) ───────────────────────────────────────────────
 cmd_db() {
     local action="${1:-}"
-
-    if [[ -z "$action" ]]; then
-        _error "Usage: bin/mage db <action> [args]"
-        echo ""
-        _arrow "Actions: list, create, drop, export, import"
-        echo ""
-        echo "  bin/mage db list"
-        echo "  bin/mage db create <name>"
-        echo "  bin/mage db drop <name>"
-        echo "  bin/mage db export <name>"
-        echo "  bin/mage db import <file.sql> <target_db>"
-        exit 1
-    fi
-
+    [[ -z "$action" ]] && { _error "Usage: bin/mage db <list|create|drop|export|import> [args]"; exit 1; }
     shift
 
     case "$action" in
         list)
-            exec "${SCRIPTS_DIR}/database" list
+            local db_svc="mysql"
+            for arg in "$@"; do
+                case $arg in --db-service=*) db_svc="${arg#*=}" ;; esac
+            done
+            exec "${SCRIPTS_DIR}/database" list --db-service="$db_svc"
             ;;
         create)
-            local name="${1:-}"
-            [[ -z "$name" ]] && _die "Usage: bin/mage db create <name>"
-            exec "${SCRIPTS_DIR}/database" create --database-name="$name"
+            local target="${1:-}"
+            [[ -z "$target" ]] && _die "Usage: bin/mage db create <domain|db_name>"
+            if project_exists "$target"; then
+                local db_svc db_name
+                db_svc=$(project_get "$target" "db_service")
+                db_name=$(project_get "$target" "db_name")
+                _arrow "Project '$target': creating '${db_name}' on ${db_svc}"
+                exec "${SCRIPTS_DIR}/database" create --database-name="$db_name" --db-service="$db_svc"
+            else
+                exec "${SCRIPTS_DIR}/database" create --database-name="$target" "${@:2}"
+            fi
             ;;
         drop)
-            local name="${1:-}"
-            [[ -z "$name" ]] && _die "Usage: bin/mage db drop <name>"
-            exec "${SCRIPTS_DIR}/database" drop --database-name="$name"
+            local target="${1:-}"
+            [[ -z "$target" ]] && _die "Usage: bin/mage db drop <domain|db_name>"
+            if project_exists "$target"; then
+                local db_svc db_name
+                db_svc=$(project_get "$target" "db_service")
+                db_name=$(project_get "$target" "db_name")
+                _arrow "Project '$target': dropping '${db_name}' on ${db_svc}"
+                exec "${SCRIPTS_DIR}/database" drop --database-name="$db_name" --db-service="$db_svc"
+            else
+                exec "${SCRIPTS_DIR}/database" drop --database-name="$target" "${@:2}"
+            fi
             ;;
         export)
-            local name="${1:-}"
-            [[ -z "$name" ]] && _die "Usage: bin/mage db export <name>"
-            exec "${SCRIPTS_DIR}/database" export --database-name="$name"
+            local target="${1:-}"
+            [[ -z "$target" ]] && _die "Usage: bin/mage db export <domain|db_name>"
+            if project_exists "$target"; then
+                local db_svc db_name
+                db_svc=$(project_get "$target" "db_service")
+                db_name=$(project_get "$target" "db_name")
+                _arrow "Project '$target': exporting '${db_name}' from ${db_svc}"
+                exec "${SCRIPTS_DIR}/database" export --database-name="$db_name" --db-service="$db_svc"
+            else
+                exec "${SCRIPTS_DIR}/database" export --database-name="$target" "${@:2}"
+            fi
             ;;
         import)
-            local source="${1:-}"
-            local target="${2:-}"
-            [[ -z "$source" || -z "$target" ]] && _die "Usage: bin/mage db import <file.sql> <target_db>"
-            exec "${SCRIPTS_DIR}/database" import --source="$source" --target="$target"
+            local target="${1:-}" source="${2:-}"
+            [[ -z "$target" || -z "$source" ]] && _die "Usage: bin/mage db import <domain> <file.sql>"
+            if project_exists "$target"; then
+                local db_svc db_name
+                db_svc=$(project_get "$target" "db_service")
+                db_name=$(project_get "$target" "db_name")
+                _arrow "Project '$target': importing '${source}' into '${db_name}' on ${db_svc}"
+                exec "${SCRIPTS_DIR}/database" import --source="$source" --target="$db_name" --db-service="$db_svc"
+            else
+                _die "For non-project import, use: ./scripts/database import --source=<file> --target=<db> --db-service=<svc>"
+            fi
             ;;
-        *)
-            _die "Unknown db action: $action. Use: list, create, drop, export, import"
-            ;;
+        *)  _die "Unknown db action: $action" ;;
     esac
 }
 
 # ── Command: vhost ────────────────────────────────────────────────────────────
 cmd_vhost() {
-    local domain="${1:-}"
-    local app="${2:-}"
-    local php="${3:-}"
-
-    if [[ -z "$domain" || -z "$app" || -z "$php" ]]; then
-        _error "Usage: bin/mage vhost <domain> <app-type> <php-version>"
-        echo ""
-        _arrow "App types: magento1, magento2, wordpress, laravel, default"
-        echo ""
-        echo "  bin/mage vhost mysite.com magento2 php83"
-        echo "  bin/mage vhost blog.local wordpress php84"
-        exit 1
-    fi
-
-    exec "${SCRIPTS_DIR}/create-vhost" \
-        --domain="$domain" \
-        --app="$app" \
-        --root-dir="$domain" \
-        --php-version="$php"
+    local domain="${1:-}" app="${2:-}" php="${3:-}"
+    [[ -z "$domain" || -z "$app" || -z "$php" ]] && { _error "Usage: bin/mage vhost <domain> <app> <php>"; exit 1; }
+    exec "${SCRIPTS_DIR}/create-vhost" --domain="$domain" --app="$app" --root-dir="$domain" --php-version="$php"
 }
 
 # ── Command: xdebug ──────────────────────────────────────────────────────────
 cmd_xdebug() {
-    local action="${1:-}"
-    local php="${2:-}"
-
-    if [[ -z "$action" ]]; then
-        _error "Usage: bin/mage xdebug <on|off|status> <php-version>"
-        echo ""
-        echo "  bin/mage xdebug on php83"
-        echo "  bin/mage xdebug off php83"
-        echo "  bin/mage xdebug status php83"
-        exit 1
-    fi
-
-    # Translate on/off to enable/disable
-    local cmd
-    case "$action" in
-        on|enable)   cmd="enable" ;;
-        off|disable) cmd="disable" ;;
-        status)      cmd="status" ;;
-        *)           _die "Unknown xdebug action: $action. Use: on, off, status" ;;
-    esac
-
-    if [[ -z "$php" ]]; then
-        _error "PHP version required."
-        _arrow "Example: bin/mage xdebug $action php83"
-        _arrow "Available: $(get_available_php_versions | tr '\n' ', ' | sed 's/,$//')"
-        exit 1
-    fi
-
+    local action="${1:-}" php="${2:-}"
+    [[ -z "$action" ]] && { _error "Usage: bin/mage xdebug <on|off|status> <php>"; exit 1; }
+    local cmd; case "$action" in on|enable) cmd="enable";; off|disable) cmd="disable";; status) cmd="status";; *) _die "Unknown: $action";; esac
+    [[ -z "$php" ]] && { _error "PHP version required. Example: bin/mage xdebug $action php83"; exit 1; }
     exec "${SCRIPTS_DIR}/xdebug" "$cmd" --php-version="$php"
 }
 
 # ── Command: ssl ──────────────────────────────────────────────────────────────
-cmd_ssl() {
-    local domain="${1:-}"
+cmd_ssl()     { [[ -z "${1:-}" ]] && _die "Usage: bin/mage ssl <domain>"; exec "${SCRIPTS_DIR}/ssl" --domain="$1"; }
 
-    if [[ -z "$domain" ]]; then
-        _error "Usage: bin/mage ssl <domain>"
-        echo ""
-        echo "  bin/mage ssl mysite.com"
-        exit 1
-    fi
-
-    exec "${SCRIPTS_DIR}/ssl" --domain="$domain"
-}
-
-# ── Command: varnish ─────────────────────────────────────────────────────────
+# ── Command: varnish ──────────────────────────────────────────────────────────
 cmd_varnish() {
-    local action="${1:-}"
-    local domain="${2:-}"
-
-    if [[ -z "$action" ]]; then
-        _error "Usage: bin/mage varnish <on|off|status> <domain>"
-        echo ""
-        echo "  bin/mage varnish on mysite.com"
-        echo "  bin/mage varnish off mysite.com"
-        echo "  bin/mage varnish status mysite.com"
-        exit 1
-    fi
-
-    # Translate on/off to enable/disable
-    local cmd
-    case "$action" in
-        on|enable)   cmd="enable" ;;
-        off|disable) cmd="disable" ;;
-        status)      cmd="status" ;;
-        *)           _die "Unknown varnish action: $action. Use: on, off, status" ;;
-    esac
-
-    if [[ -z "$domain" ]]; then
-        _error "Domain required."
-        _arrow "Example: bin/mage varnish $action mysite.com"
-        exit 1
-    fi
-
+    local action="${1:-}" domain="${2:-}"
+    [[ -z "$action" ]] && { _error "Usage: bin/mage varnish <on|off|status> <domain>"; exit 1; }
+    local cmd; case "$action" in on|enable) cmd="enable";; off|disable) cmd="disable";; status) cmd="status";; *) _die "Unknown: $action";; esac
+    [[ -z "$domain" ]] && _die "Domain required."
     exec "${SCRIPTS_DIR}/varnish" "$cmd" --domain="$domain"
-}
-
-# ── Command: composer ─────────────────────────────────────────────────────────
-cmd_composer() {
-    local php="${1:-}"
-
-    if [[ -z "$php" ]]; then
-        _error "Usage: bin/mage composer <php-version> [composer-args...]"
-        echo ""
-        echo "  bin/mage composer php83 install"
-        echo "  bin/mage composer php83 require monolog/monolog"
-        echo "  bin/mage composer php83 update --dry-run"
-        exit 1
-    fi
-
-    validate_php_version "$php"
-    require_service "$php"
-    shift
-    dc exec --user nginx "$php" composer "$@"
-}
-
-# ── Command: magento ──────────────────────────────────────────────────────────
-cmd_magento() {
-    local php="${1:-}"
-    local dir="${2:-}"
-
-    if [[ -z "$php" || -z "$dir" ]]; then
-        _error "Usage: bin/mage magento <php-version> <project-dir> [magento-args...]"
-        echo ""
-        echo "  bin/mage magento php83 mysite.com cache:flush"
-        echo "  bin/mage magento php83 mysite.com setup:upgrade"
-        echo "  bin/mage magento php83 mysite.com indexer:reindex"
-        exit 1
-    fi
-
-    validate_php_version "$php"
-    require_service "$php"
-    shift 2
-    dc exec --user nginx "$php" php "/home/public_html/${dir}/bin/magento" "$@"
 }
 
 # ── Command: install ──────────────────────────────────────────────────────────
 cmd_install() {
-    local version="${1:-}"
-    local edition="${2:-}"
-    local domain="${3:-}"
-    local php="${4:-}"
-
-    if [[ -z "$version" || -z "$edition" || -z "$domain" || -z "$php" ]]; then
-        _error "Usage: bin/mage install <version> <edition> <domain> <php-version>"
-        echo ""
-        _arrow "Editions: community, enterprise"
-        echo ""
-        echo "  bin/mage install 2.4.7 community mysite.com php83"
-        echo "  bin/mage install 2.4.6-p4 enterprise shop.local php82"
-        exit 1
-    fi
-
-    exec "${SCRIPTS_DIR}/init-magento" \
-        --magento-version="$version" \
-        --magento-edition="$edition" \
-        --domain="$domain" \
-        --php-version="$php"
+    local ver="${1:-}" edition="${2:-}" domain="${3:-}" php="${4:-}"
+    [[ -z "$ver" || -z "$edition" || -z "$domain" || -z "$php" ]] && { _error "Usage: bin/mage install <version> <edition> <domain> <php>"; exit 1; }
+    exec "${SCRIPTS_DIR}/init-magento" --magento-version="$ver" --magento-edition="$edition" --domain="$domain" --php-version="$php"
 }
 
-# ── Command: status ───────────────────────────────────────────────────────────
+# ── Command: status (with projects) ──────────────────────────────────────────
 cmd_status() {
     _header "Docker Magento Stack Status"
 
-    echo ""
+    # Projects table
+    local proj_count
+    proj_count=$(project_list_raw | wc -l)
+    if [[ $proj_count -gt 0 ]]; then
+        echo ""
+        _arrow "${_bold}Registered Projects${_reset}"
+        echo ""
+        printf "  %-25s %-8s %-10s %-10s %s\n" "DOMAIN" "PHP" "DB" "SEARCH" "STATUS"
+        printf "  %-25s %-8s %-10s %-10s %s\n" "─────────────────────────" "────────" "──────────" "──────────" "──────"
+        while IFS='|' read -r domain php app db_svc db_name search enabled; do
+            [[ -z "$domain" ]] && continue
+            local st
+            if [[ "$enabled" == "true" ]]; then st="${_green}● on${_reset}"; else st="${_red}○ off${_reset}"; fi
+            printf "  %-25s %-8s %-10s %-10s %b\n" "$domain" "$php" "$db_svc" "$search" "$st"
+        done < <(project_list_raw)
+        echo ""
+    fi
+
+    # Running containers
     _arrow "${_bold}Running Containers${_reset}"
     echo ""
     dc ps --format "table {{.Name}}\t{{.Service}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || dc ps
     echo ""
-
-    # Show PHP versions
-    local running_php
-    running_php=$(list_running_services 2>/dev/null | grep '^php' | sort || true)
-    if [[ -n "$running_php" ]]; then
-        _arrow "${_bold}Active PHP Versions${_reset}"
-        for svc in $running_php; do
-            local ver
-            ver="$(get_php_numeric_version "$svc")"
-            _success "  ${svc} (PHP ${ver})"
-        done
-        echo ""
-    fi
-
-    # Show configured domains
-    local conf_dir="${CONF_DIR}/nginx/conf.d"
-    if [[ -d "$conf_dir" ]]; then
-        local domain_confs
-        domain_confs=$(find "$conf_dir" -maxdepth 1 -name "*.conf" ! -name "*-ssl.conf" ! -name "default.conf" -printf "%f\n" 2>/dev/null | sort || true)
-        if [[ -n "$domain_confs" ]]; then
-            _arrow "${_bold}Configured Domains${_reset}"
-            while IFS= read -r conf; do
-                local domain="${conf%.conf}"
-                local has_ssl=""
-                if [[ -f "${conf_dir}/${domain}-ssl.conf" ]]; then
-                    has_ssl=" ${_green}[SSL]${_reset}"
-                fi
-                echo "    ${_blue}${domain}${_reset}${has_ssl}"
-            done <<< "$domain_confs"
-            echo ""
-        fi
-    fi
 }
 
 # ── Command: logs ─────────────────────────────────────────────────────────────
-cmd_logs() {
-    if [[ -n "${1:-}" ]]; then
-        dc logs -f "$1"
-    else
-        dc logs -f
-    fi
-}
+cmd_logs() { if [[ -n "${1:-}" ]]; then dc logs -f "$1"; else dc logs -f; fi; }
 
 # ── Command: setup ────────────────────────────────────────────────────────────
 cmd_setup() {
     _print_banner
     _header "First-Time Setup"
     echo ""
-
-    # 1. Check Docker
     _arrow "Checking Docker..."
-    if ! command -v docker &>/dev/null; then
-        _die "Docker is not installed. Please install Docker first: https://docs.docker.com/get-docker/"
-    fi
-    if ! docker info &>/dev/null; then
-        _die "Docker daemon is not running. Please start Docker."
-    fi
+    command -v docker &>/dev/null || _die "Docker not installed."
+    docker info &>/dev/null || _die "Docker not running."
     _success "Docker is ready"
 
-    # 2. Copy .env
     if [[ ! -f "${MAGE_ROOT}/.env" ]]; then
-        _arrow "Creating .env from env-example..."
         cp "${MAGE_ROOT}/env-example" "${MAGE_ROOT}/.env"
-        _success ".env created — edit it to customize ports and versions"
+        _success ".env created"
     else
-        _success ".env already exists"
+        _success ".env exists"
     fi
 
-    # 3. Select PHP versions
     echo ""
-    _arrow "Available PHP versions:"
-    echo ""
-
-    local all_php=()
-    local modern_php=()
-    local legacy_php=()
-
-    while IFS= read -r svc; do
-        all_php+=("$svc")
-        local ver="${svc#php}"
-        local major="${ver:0:1}"
-        if [[ "$major" -lt 8 ]]; then
-            legacy_php+=("$svc")
-        else
-            modern_php+=("$svc")
-        fi
-    done < <(dc config --services 2>/dev/null | grep '^php' | sort)
-
-    echo "  ${_bold}Modern (always available):${_reset}"
-    for svc in "${modern_php[@]}"; do
-        _success "    ${svc} (PHP $(get_php_numeric_version "$svc"))"
-    done
-    echo ""
-
-    if [[ ${#legacy_php[@]} -gt 0 ]]; then
-        echo "  ${_bold}Legacy (opt-in with --profile=legacy):${_reset}"
-        for svc in "${legacy_php[@]}"; do
-            _warning "    ${svc} (PHP $(get_php_numeric_version "$svc"))"
-        done
-        echo ""
+    if ask_yes_no "Build PHP images now?"; then
+        local build_legacy=false
+        if ask_yes_no "Include legacy PHP 7.x?"; then build_legacy=true; fi
+        if [[ "$build_legacy" == true ]]; then dc --profile legacy build; else dc build; fi
+        _success "Images built"
     fi
 
-    local build_legacy=false
-    if [[ ${#legacy_php[@]} -gt 0 ]]; then
-        if ask_yes_no "Build legacy PHP versions too? (PHP 7.x)"; then
-            build_legacy=true
-        fi
-    fi
-
-    # 4. Build images
     echo ""
-    _arrow "Building PHP images (this may take a while on first run)..."
+    _arrow "Add your first project:"
+    echo "  bin/mage project add mysite.com"
     echo ""
-
-    if [[ "$build_legacy" == true ]]; then
-        dc --profile legacy build
-    else
-        dc build
-    fi
-    _success "Images built"
-
-    # 5. Start the stack
-    echo ""
-    _arrow "Starting the stack..."
-    if [[ "$build_legacy" == true ]]; then
-        dc --profile legacy up -d
-    else
-        dc up -d
-    fi
-    _success "Stack is running"
-
-    # 6. Print summary
-    echo ""
-    _header "Setup Complete"
-    echo ""
-    echo "  ${_bold}Web${_reset}            http://localhost:${HTTP_PORT:-80}"
-    echo "  ${_bold}Mailpit${_reset}        http://localhost:${MAILPIT_PORT:-8025}"
-    echo "  ${_bold}RabbitMQ${_reset}       http://localhost:${RABBITMQ_MGMT_PORT:-15672}"
-    echo "  ${_bold}MySQL${_reset}          localhost:${MYSQL_PORT:-3306}"
-    echo "  ${_bold}Redis${_reset}          localhost:${REDIS_PORT:-6379}"
-    echo "  ${_bold}OpenSearch${_reset}     http://localhost:${OPENSEARCH_PORT:-9200}"
-    echo ""
-    echo "  ${_bold}Next steps:${_reset}"
-    echo "    1. Create a virtual host:   bin/mage vhost mysite.com magento2 php83"
-    echo "    2. Install Magento:         bin/mage install 2.4.7 community mysite.com php83"
-    echo "    3. Open a shell:            bin/mage shell php83"
-    echo ""
-    _success "Happy coding! Run ${_bold}bin/mage help${_reset} for all commands."
+    _success "Setup complete! Run ${_bold}bin/mage help${_reset} for all commands."
 }
 
-# ── Main dispatch ─────────────────────────────────────────────────────────────
+# ── Main ──────────────────────────────────────────────────────────────────────
 main() {
     require_root_dir
-
     local command="${1:-help}"
     shift 2>/dev/null || true
 
     case "$command" in
-        up)        cmd_up "$@" ;;
-        down)      cmd_down ;;
-        restart)   cmd_restart "$@" ;;
-        stop)      cmd_stop ;;
-        shell|sh)  cmd_shell "$@" ;;
-        db)        cmd_db "$@" ;;
-        vhost)     cmd_vhost "$@" ;;
-        xdebug)    cmd_xdebug "$@" ;;
-        ssl)       cmd_ssl "$@" ;;
-        varnish)   cmd_varnish "$@" ;;
-        composer)  cmd_composer "$@" ;;
-        magento)   cmd_magento "$@" ;;
-        install)   cmd_install "$@" ;;
-        status|ps) cmd_status ;;
-        logs)      cmd_logs "$@" ;;
-        setup)     cmd_setup ;;
+        up)             cmd_up "$@" ;;
+        down)           cmd_down ;;
+        stop)           cmd_stop ;;
+        restart)        cmd_restart "$@" ;;
+        status|ps)      cmd_status ;;
+        logs)           cmd_logs "$@" ;;
+        project|proj|p) cmd_project "$@" ;;
+        shell|sh)       cmd_shell "$@" ;;
+        composer)       cmd_composer "$@" ;;
+        magento)        cmd_magento "$@" ;;
+        db)             cmd_db "$@" ;;
+        vhost)          cmd_vhost "$@" ;;
+        xdebug)         cmd_xdebug "$@" ;;
+        ssl)            cmd_ssl "$@" ;;
+        varnish)        cmd_varnish "$@" ;;
+        install)        cmd_install "$@" ;;
+        setup)          cmd_setup ;;
         help|-h|--help) show_help ;;
-        version|-v|--version) echo "mage v${MAGE_VERSION}" ;;
-        *)
-            _error "Unknown command: $command"
-            echo ""
-            echo "Run ${_bold}bin/mage help${_reset} for available commands."
-            exit 1
-            ;;
+        version|-v)     echo "mage v${MAGE_VERSION}" ;;
+        *)              _error "Unknown command: $command"; echo "Run ${_bold}bin/mage help${_reset}"; exit 1 ;;
     esac
 }
 
