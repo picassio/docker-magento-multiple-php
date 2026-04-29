@@ -183,7 +183,7 @@ bin/mage magento mysite.com cache:flush
 | `ssl <domain>` | `bin/mage ssl shop.test` |
 | `xdebug <on\|off\|status> <php>` | `bin/mage xdebug on php83` |
 | `varnish <on\|off\|status> <domain>` | `bin/mage varnish on shop.test` |
-| `install <ver> <ed> <domain> <php>` | `bin/mage install 2.4.7 community shop.test php83` |
+| `install <ver> <ed> <domain> [php]` | `bin/mage install 2.4.7 community shop.test` |
 
 ---
 
@@ -288,17 +288,31 @@ docker compose -f docker-compose.yml -f compose/debug.yml up -d
 # → Redis Commander at http://localhost:8081
 ```
 
-### Fresh Magento install
+### Fresh Magento install (one command)
 
 ```bash
-# Install Magento 2.4.7 community edition
-bin/mage install 2.4.7 community shop.test php83
+# Magento 2.4.7 — auto-detects: php83 + mysql + opensearch
+bin/mage install 2.4.7 community shop.test
+# → Registers project in projects.json
+# → Starts required services automatically
+# → Creates database, vhost, downloads Magento, runs setup:install
+# → Prints admin URL + credentials
 
-# Install with specific DB
-bin/mage project add enterprise.test
-# → Choose: php84, mariadb, opensearch
-bin/mage up
-bin/mage install 2.4.8 enterprise enterprise.test php84
+# Magento 2.4.8 with explicit PHP
+bin/mage install 2.4.8 enterprise new-shop.test php84
+
+# Legacy Magento 2.3.7 — auto-detects: php74 + mysql80 + elasticsearch7
+bin/mage install 2.3.7 community legacy.test
+# → Loads compose/legacy.yml + compose/mysql80.yml + compose/elasticsearch7.yml
+
+# What gets auto-detected per version:
+#   2.4.8  → php84 + mysql    + opensearch
+#   2.4.7  → php83 + mysql    + opensearch
+#   2.4.6  → php82 + mysql    + opensearch
+#   2.4.4  → php81 + mysql    + opensearch
+#   2.4.0  → php74 + mysql80  + elasticsearch7
+#   2.3.x  → php73 + mysql80  + elasticsearch7
+#   2.2.x  → php71 + mysql80  + none
 ```
 
 ### SSL & Xdebug

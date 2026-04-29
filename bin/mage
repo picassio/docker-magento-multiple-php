@@ -68,7 +68,7 @@ ${_bold}HOSTING${_reset}
     ${_green}varnish${_reset} <on|off|status> <domain>     Toggle Varnish
 
 ${_bold}INSTALL${_reset}
-    ${_green}install${_reset} <ver> <edition> <domain> <php>  Install fresh Magento
+    ${_green}install${_reset} <ver> <edition> <domain> [php]  Install fresh Magento (auto-detects stack)
 
 ${_bold}EXAMPLES${_reset}
     bin/mage project add mysite.com                # Add project (interactive)
@@ -79,8 +79,11 @@ ${_bold}EXAMPLES${_reset}
     bin/mage db create mysite.com                   # Create DB on project's DB service
     bin/mage db import mysite.com backup.sql        # Import into right DB
     bin/mage project disable oldsite.com            # Disable without data loss
-    bin/mage project switch-php mysite.com php84    # Upgrade PHP
-    bin/mage project switch-db mysite.com mariadb    # Switch to MariaDB
+    bin/mage install 2.4.7 community shop.test      # Auto: php83+mysql+opensearch
+    bin/mage install 2.4.8 enterprise new.test php84  # Override PHP
+    bin/mage install 2.3.7 community legacy.test      # Auto: php74+mysql80+es7
+    bin/mage project switch-php mysite.com php84       # Upgrade PHP
+    bin/mage project switch-db mysite.com mariadb      # Switch to MariaDB
     bin/mage project switch-search mysite.com elasticsearch
 
 EOF
@@ -613,10 +616,91 @@ cmd_varnish() {
 }
 
 # ── Command: install ──────────────────────────────────────────────────────────
+# ── Magento version → recommended stack mapping ──────────────────────────────
+get_recommended_stack() {
+    local ver="$1"
+    # Returns: php db_service search
+    case "$ver" in
+        2.4.8*) echo "php84 mysql opensearch" ;;
+        2.4.7*) echo "php83 mysql opensearch" ;;
+        2.4.6*) echo "php82 mysql opensearch" ;;
+        2.4.5*|2.4.4*) echo "php81 mysql opensearch" ;;
+        2.4.3*|2.4.2*|2.4.1*|2.4.0*) echo "php74 mysql80 elasticsearch7" ;;
+        2.3.7*|2.3.6*|2.3.5*) echo "php74 mysql80 elasticsearch7" ;;
+        2.3.4*|2.3.3*) echo "php73 mysql80 elasticsearch7" ;;
+        2.3.2*|2.3.1*|2.3.0*) echo "php72 mysql80 elasticsearch7" ;;
+        2.2*) echo "php71 mysql80 none" ;;
+        2.1*) echo "php70 mysql80 none" ;;
+        *) echo "php83 mysql opensearch" ;;
+    esac
+}
+
 cmd_install() {
     local ver="${1:-}" edition="${2:-}" domain="${3:-}" php="${4:-}"
-    [[ -z "$ver" || -z "$edition" || -z "$domain" || -z "$php" ]] && { _error "Usage: bin/mage install <version> <edition> <domain> <php>"; exit 1; }
-    exec "${SCRIPTS_DIR}/init-magento" --magento-version="$ver" --magento-edition="$edition" --domain="$domain" --php-version="$php"
+
+    if [[ -z "$ver" || -z "$edition" || -z "$domain" ]]; then
+        _error "Usage: bin/mage install <version> <edition> <domain> [php]"
+        echo ""
+        echo "  ${_bold}version${_reset}:  Magento version (e.g. 2.4.7, 2.4.8, 2.3.7)"
+        echo "  ${_bold}edition${_reset}:  community or enterprise"
+        echo "  ${_bold}domain${_reset}:   Domain name (e.g. shop.test)"
+        echo "  ${_bold}php${_reset}:      PHP version (optional — auto-detected from Magento version)"
+        echo ""
+        echo "  Examples:"
+        echo "    bin/mage install 2.4.7 community shop.test"
+        echo "    bin/mage install 2.4.8 enterprise new-shop.test php84"
+        echo "    bin/mage install 2.3.7 community legacy.test php74"
+        exit 1
+    fi
+
+    # Auto-detect recommended stack if PHP not specified
+    local rec_php rec_db rec_search
+    read -r rec_php rec_db rec_search <<< "$(get_recommended_stack "$ver")"
+
+    php="${php:-$rec_php}"
+    local db_service="$rec_db"
+    local search="$rec_search"
+    local db_name
+    db_name=$(echo "$domain" | tr '.' '_' | tr '-' '_')
+
+    _header "Installing Magento ${edition} ${ver}"
+    echo ""
+    echo "  Domain:    ${_bold}${domain}${_reset}"
+    echo "  PHP:       ${_bold}${php}${_reset}"
+    echo "  Database:  ${_bold}${db_service}${_reset} → ${db_name}"
+    echo "  Search:    ${_bold}${search}${_reset}"
+    echo ""
+
+    # 1. Register project
+    if project_exists "$domain"; then
+        _warning "Project '$domain' already registered — updating config"
+        project_update "$domain" "php" "$php"
+        project_update "$domain" "db_service" "$db_service"
+        project_update "$domain" "db_name" "$db_name"
+        project_update "$domain" "search" "$search"
+    else
+        project_set "$domain" "$php" "magento2" "$db_service" "$db_name" "$search" "true"
+        _success "Project registered in projects.json"
+    fi
+
+    # 2. Start needed services
+    _arrow "Starting required services..."
+    cmd_up
+    echo ""
+
+    # 3. Wait for DB health
+    _arrow "Waiting for ${db_service} to be ready..."
+    for i in $(seq 1 30); do
+        if dc exec -T -e MYSQL_PWD=root "$db_service" mysqladmin ping -u root &>/dev/null; then break; fi
+        sleep 2
+    done
+
+    # 4. Run init-magento
+    exec "${SCRIPTS_DIR}/init-magento" \
+        --magento-version="$ver" \
+        --magento-edition="$edition" \
+        --domain="$domain" \
+        --php-version="$php"
 }
 
 # ── Command: status (with projects) ──────────────────────────────────────────
