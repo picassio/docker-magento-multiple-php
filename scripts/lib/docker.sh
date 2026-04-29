@@ -114,6 +114,20 @@ validate_db_service() {
     fi
 }
 
+validate_search_service() {
+    local svc="$1"
+    if [[ "$svc" != @(opensearch|opensearch1|elasticsearch|elasticsearch7|none) ]]; then
+        _die "Invalid search: $svc. Must be: opensearch, opensearch1, elasticsearch, elasticsearch7, or none"
+    fi
+}
+
+validate_redis_service() {
+    local svc="$1"
+    if [[ "$svc" != @(redis|redis6|none) ]]; then
+        _die "Invalid redis: $svc. Must be: redis, redis6, or none"
+    fi
+}
+
 # ── Composer auth helpers ─────────────────────────────────────────────────────
 
 # Check and setup Composer auth for repo.magento.com

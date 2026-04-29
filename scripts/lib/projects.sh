@@ -136,31 +136,22 @@ with open('${PROJECTS_FILE}', 'w') as f:
 # Returns space-separated list of docker compose services to start
 project_compute_services() {
     _ensure_projects_file
-    local services="nginx redis mailpit"
-    local php_versions=""
-    local db_services=""
-    local search_services=""
+    local services="nginx mailpit"
+    local php_versions="" db_services="" search_services="" redis_services=""
 
     while IFS='|' read -r domain php app db_svc db_name search enabled; do
         [[ -z "$domain" ]] && continue
-
-        # Collect unique PHP versions
-        if ! echo "$php_versions" | grep -qw "$php"; then
-            php_versions="${php_versions} ${php}"
-        fi
-
-        # Collect unique DB services
-        if ! echo "$db_services" | grep -qw "$db_svc"; then
-            db_services="${db_services} ${db_svc}"
-        fi
-
-        # Collect unique search services
-        if ! echo "$search_services" | grep -qw "$search"; then
-            search_services="${search_services} ${search}"
-        fi
+        echo "$php_versions"    | grep -qw "$php"    || php_versions="$php_versions $php"
+        echo "$db_services"     | grep -qw "$db_svc" || db_services="$db_services $db_svc"
+        [[ "$search" != "none" ]] && { echo "$search_services" | grep -qw "$search" || search_services="$search_services $search"; }
+        local r; r=$(project_get "$domain" "redis"); r="${r:-redis}"
+        [[ "$r" != "none" ]] && { echo "$redis_services" | grep -qw "$r" || redis_services="$redis_services $r"; }
     done < <(project_list_enabled)
 
-    echo "${services}${php_versions}${db_services}${search_services}" | tr -s ' '
+    # Default redis if projects exist but none specify it
+    [[ -z "$redis_services" && -n "$php_versions" ]] && redis_services=" redis"
+
+    echo "${services}${php_versions}${db_services}${search_services}${redis_services}" | tr -s ' '
 }
 
 # ── Compute required docker compose profiles ──────────────────────────────────
@@ -177,26 +168,22 @@ project_compute_profiles() {
             fi
         fi
 
-        # MariaDB needs mariadb profile
-        if [[ "$db_svc" == "mariadb" ]]; then
-            if ! echo "$profiles" | grep -qw "mariadb"; then
-                profiles="${profiles} mariadb"
-            fi
-        fi
-
-        # MySQL 8.0 needs mysql80 profile
-        if [[ "$db_svc" == "mysql80" ]]; then
-            if ! echo "$profiles" | grep -qw "mysql80"; then
-                profiles="${profiles} mysql80"
-            fi
-        fi
-
-        # Elasticsearch needs elasticsearch profile
-        if [[ "$search" == "elasticsearch" ]]; then
-            if ! echo "$profiles" | grep -qw "elasticsearch"; then
-                profiles="${profiles} elasticsearch"
-            fi
-        fi
+        # DB profiles
+        case "$db_svc" in
+            mariadb) echo "$profiles" | grep -qw mariadb || profiles="$profiles mariadb" ;;
+            mysql80) echo "$profiles" | grep -qw mysql80 || profiles="$profiles mysql80" ;;
+        esac
+        # Search profiles
+        case "$search" in
+            elasticsearch)  echo "$profiles" | grep -qw elasticsearch  || profiles="$profiles elasticsearch" ;;
+            elasticsearch7) echo "$profiles" | grep -qw elasticsearch7 || profiles="$profiles elasticsearch7" ;;
+            opensearch1)    echo "$profiles" | grep -qw opensearch1    || profiles="$profiles opensearch1" ;;
+        esac
+        # Redis profiles
+        local r; r=$(project_get "$domain" "redis"); r="${r:-redis}"
+        case "$r" in
+            redis6) echo "$profiles" | grep -qw redis6 || profiles="$profiles redis6" ;;
+        esac
     done < <(project_list_enabled)
 
     echo "$profiles" | tr -s ' '

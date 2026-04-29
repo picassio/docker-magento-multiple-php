@@ -1,36 +1,67 @@
 # =============================================================================
 # Docker Magento - Environment Configuration
 # =============================================================================
+# Each service variant has its own version + port. Multiple instances can run
+# simultaneously (e.g. mysql + mysql80 + mariadb on different ports).
+# =============================================================================
 
 # ── Database ──────────────────────────────────────────────────────────────────
+# MySQL 8.4 (default) — Magento 2.4.7+
 MYSQL_VERSION=8.4
+MYSQL_PORT=3306
+
+# MySQL 8.0 (profile: mysql80) — Magento 2.3–2.4.6
+MYSQL80_VERSION=8.0
+MYSQL80_PORT=3307
+
+# MariaDB 11.4 (profile: mariadb) — Magento 2.4.8+
+MARIADB_VERSION=11.4
+MARIADB_PORT=3308
+
+# Shared DB credentials (used by all DB services)
 MYSQL_DATABASE=magento
 MYSQL_USER=magento
 MYSQL_PASSWORD=magento
 MYSQL_ROOT_PASSWORD=root
-# Uncomment for MariaDB (start with: docker compose --profile mariadb up -d)
-# MARIADB_VERSION=11.4
 
 # ── Search Engine ─────────────────────────────────────────────────────────────
+# OpenSearch 2.x (default) — Magento 2.4.6+
 OPENSEARCH_VERSION=2.19.1
-# Uncomment for Elasticsearch (start with: docker compose --profile elasticsearch up -d)
-# ELASTICSEARCH_VERSION=8.17.0
+OPENSEARCH_PORT=9200
+
+# OpenSearch 1.x (profile: opensearch1) — Magento 2.4.4–2.4.5
+OPENSEARCH1_VERSION=1.3.19
+OPENSEARCH1_PORT=9201
+
+# Elasticsearch 8.x (profile: elasticsearch) — Magento 2.4.6+
+ELASTICSEARCH_VERSION=8.17.0
+ELASTICSEARCH_PORT=9202
+
+# Elasticsearch 7.x (profile: elasticsearch7) — Magento 2.3–2.4.5
+ELASTICSEARCH7_VERSION=7.17.27
+ELASTICSEARCH7_PORT=9203
+
+# ── Cache ─────────────────────────────────────────────────────────────────────
+# Redis 7.x (default) — Magento 2.4.6+
+REDIS_VERSION=7.4
+REDIS_PORT=6379
+
+# Redis 6.x (profile: redis6) — Magento 2.4.0–2.4.5
+REDIS6_VERSION=6.2
+REDIS6_PORT=6380
 
 # ── Services ──────────────────────────────────────────────────────────────────
-REDIS_VERSION=7.4
 RABBITMQ_VERSION=4.1
 RABBITMQ_ERLANG_COOKIE=RABBITMQ_ERLANG_COOKIE
 RABBITMQ_DEFAULT_USER=admin
 RABBITMQ_DEFAULT_PASS=admin
+RABBITMQ_MGMT_PORT=15672
+
 VARNISH_VERSION=7.6
 
-# ── Ports (change if conflicts on your host) ──────────────────────────────────
+# ── Web & Tools ───────────────────────────────────────────────────────────────
 HTTP_PORT=80
 HTTPS_PORT=443
-MYSQL_PORT=3306
-PHPMYADMIN_PORT=8080
 MAILPIT_PORT=8025
-RABBITMQ_MGMT_PORT=15672
-OPENSEARCH_PORT=9200
-REDIS_PORT=6379
+PHPMYADMIN_PORT=8080
 REDISCMD_PORT=8081

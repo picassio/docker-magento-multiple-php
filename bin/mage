@@ -354,9 +354,7 @@ cmd_project_switch_search() {
     [[ -z "$domain" || -z "$new_search" ]] && _die "Usage: bin/mage project switch-search <domain> <opensearch|elasticsearch|none>"
     require_project "$domain"
 
-    if [[ "$new_search" != @(opensearch|elasticsearch|none) ]]; then
-        _die "Invalid search engine. Must be: opensearch, elasticsearch, or none"
-    fi
+    validate_search_service "$new_search"
 
     local old_search
     old_search=$(project_get "$domain" "search")
@@ -388,7 +386,8 @@ cmd_project_set_field() {
         php)        validate_php_version "$value" ;;
         db_service) validate_db_service "$value" ;;
         app)        [[ "$value" != @(magento1|magento2|wordpress|laravel|default) ]] && _die "Invalid app: $value" ;;
-        search)     [[ "$value" != @(opensearch|elasticsearch|none) ]] && _die "Invalid search: $value" ;;
+        search)     validate_search_service "$value" ;;
+        redis)      validate_redis_service "$value" ;;
         db_name|enabled) ;; # no validation needed
         *)          _die "Unknown field: $field. Valid: php, app, db_service, db_name, search, enabled" ;;
     esac
