@@ -148,7 +148,8 @@ server {
 
     location ~ \.php$ {
         if (!-e \$request_filename) { rewrite / /index.php last; }
-        fastcgi_pass   ${APP_PHP}:9001;
+        set \$backend "${APP_PHP}:9001";
+        fastcgi_pass   \$backend;
         fastcgi_index  index.php;
         fastcgi_param  SCRIPT_FILENAME  \$document_root\$fastcgi_script_name;
         fastcgi_param  MAGE_IS_DEVELOPER_MODE true;
@@ -184,7 +185,8 @@ server {
     location ~* ^/setup(\$|/) {
         root \$MAGE_ROOT;
         location ~ ^/setup/index.php {
-            fastcgi_pass   ${APP_PHP}:9001;
+            set \$backend "${APP_PHP}:9001";
+            fastcgi_pass   \$backend;
             fastcgi_param  PHP_FLAG  "session.auto_start=off \n suhosin.session.cryptua=off";
             fastcgi_param  PHP_VALUE "memory_limit=756M \n max_execution_time=600";
             fastcgi_param  PHP_VALUE "error_log=/home/public_html/${VHOST_ROOT_DIR}/var/log/php-error.log";
@@ -206,7 +208,8 @@ server {
         root \$MAGE_ROOT;
         location ~ ^/update/index.php {
             fastcgi_split_path_info ^(/update/index.php)(/.+)\$;
-            fastcgi_pass   ${APP_PHP}:9001;
+            set \$backend "${APP_PHP}:9001";
+            fastcgi_pass   \$backend;
             fastcgi_param  PHP_VALUE "error_log=/home/public_html/${VHOST_ROOT_DIR}/var/log/php-error.log";
             fastcgi_index  index.php;
             fastcgi_param  SCRIPT_FILENAME  \$document_root\$fastcgi_script_name;
@@ -290,7 +293,8 @@ server {
 
     location ~ ^/(index|get|static|errors/report|errors/404|errors/503|health_check)\.php$ {
         try_files \$uri =404;
-        fastcgi_pass   ${APP_PHP}:9001;
+        set \$backend "${APP_PHP}:9001";
+        fastcgi_pass   \$backend;
         fastcgi_param  PHP_VALUE "error_log=/home/public_html/${VHOST_ROOT_DIR}/var/log/php-error.log";
         fastcgi_buffers 16 16k;
         fastcgi_buffer_size 32k;
@@ -361,7 +365,8 @@ server {
 
     location ~ \.php$ {
         if (!-e \$request_filename) { rewrite / /index.php last; }
-        fastcgi_pass   ${APP_PHP}:9001;
+        set \$backend "${APP_PHP}:9001";
+        fastcgi_pass   \$backend;
         fastcgi_param  SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
         include        fastcgi_params;
         fastcgi_read_timeout 300;
@@ -391,7 +396,8 @@ server {
     location ~ \.php$ {
         try_files \$uri =404;
         fastcgi_split_path_info ^(.+\.php)(/.+)\$;
-        fastcgi_pass ${APP_PHP}:9001;
+        set \$backend "${APP_PHP}:9001";
+        fastcgi_pass \$backend;
         fastcgi_index index.php;
         fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
         include fastcgi_params;
