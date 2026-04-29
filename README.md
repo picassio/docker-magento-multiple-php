@@ -396,9 +396,29 @@ See `env-example` for the full list including credentials and other ports.
 - **Linux** (Ubuntu 22.04+ recommended) — works on macOS/WSL2 with caveats
 - **mkcert** — optional, for local SSL certificates
 
+### System Health Check
+
+Run the doctor command to verify your system is ready:
+
 ```bash
-docker compose version   # needs v2.x
+bin/mage doctor        # Check system settings
+bin/mage doctor fix    # Auto-fix all issues (requires sudo)
 ```
+
+The doctor checks and fixes:
+
+| Check | Why | Required by |
+|---|---|---|
+| `vm.max_map_count ≥ 262144` | Memory-mapped files | OpenSearch, Elasticsearch |
+| `vm.overcommit_memory = 1` | Prevent BGSAVE failures | Redis |
+| Transparent Huge Pages disabled | Prevent latency spikes | Redis |
+| `net.core.somaxconn ≥ 65535` | Connection backlog | Redis |
+| Docker log rotation | Prevent disk fill | All containers |
+| `vm.swappiness ≤ 10` | Reduce swap pressure | Databases |
+| Disk space ≥ 20GB | Build + run images | Docker |
+| User in `docker` group | No sudo for docker | Docker |
+
+All fixes persist across reboots (written to `/etc/sysctl.conf` + systemd services).
 
 ---
 

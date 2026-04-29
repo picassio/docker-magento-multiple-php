@@ -187,7 +187,7 @@ bash -c 'source scripts/lib/projects.sh; project_remove "test.local"' 2>/dev/nul
 section "5. SCRIPT SYNTAX CHECKS"
 # ══════════════════════════════════════════════════════════════════════════════
 
-for f in scripts/lib/*.sh scripts/create-vhost scripts/database scripts/ssl scripts/varnish scripts/xdebug scripts/setup-composer scripts/init-magento scripts/list-services scripts/shell scripts/mysql scripts/fixowner bin/mage; do
+for f in scripts/lib/*.sh scripts/create-vhost scripts/database scripts/ssl scripts/varnish scripts/xdebug scripts/setup-composer scripts/init-magento scripts/list-services scripts/shell scripts/mysql scripts/fixowner scripts/doctor bin/mage; do
     assert_exit_0 "syntax: $f" bash -n "$f"
 done
 
@@ -197,6 +197,15 @@ section "6. BIN/MAGE CLI — Help & Errors"
 
 OUT=$(./bin/mage help 2>&1)
 assert_contains "help shows PROJECT MANAGEMENT" "$OUT" "PROJECT MANAGEMENT"
+assert_contains "help shows doctor" "$OUT" "doctor"
+
+# Doctor command
+OUT=$(./scripts/doctor check 2>&1)
+assert_contains "doctor checks Docker" "$OUT" "Docker Engine"
+assert_contains "doctor checks sysctl" "$OUT" "vm.max_map_count"
+assert_contains "doctor checks THP" "$OUT" "Transparent Huge Pages"
+assert_contains "doctor checks logs" "$OUT" "Log Rotation"
+assert_contains "doctor checks disk" "$OUT" "Disk Space"
 assert_contains "help shows switch-db" "$OUT" "switch-db"
 assert_contains "help shows switch-search" "$OUT" "switch-search"
 assert_contains "help shows project set" "$OUT" "project set"

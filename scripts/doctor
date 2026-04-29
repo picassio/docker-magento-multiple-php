@@ -1,0 +1,342 @@
+#!/usr/bin/env bash
+#
+# doctor — Check and fix system settings for Docker + Magento development
+# Checks: Docker, sysctl, THP, Docker log rotation, file limits, disk space
+#
+source "$(dirname "$0")/lib/docker.sh"
+
+MODE="${1:-check}"  # check or fix
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+ISSUES=0
+FIXED=0
+WARNINGS=0
+
+check_pass() { _success "$1"; }
+check_fail() { ISSUES=$((ISSUES+1)); _error "$1"; }
+check_warn() { WARNINGS=$((WARNINGS+1)); _warning "$1"; }
+check_fixed() { FIXED=$((FIXED+1)); _success "$1 (fixed)"; }
+
+needs_fix() { [[ "$MODE" == "fix" ]]; }
+
+_printUsage() {
+    echo "System Doctor — check and tune your VM for Docker + Magento"
+    echo ""
+    echo "Usage:"
+    echo "  ./scripts/doctor          # Check only (report issues)"
+    echo "  ./scripts/doctor check    # Same as above"
+    echo "  ./scripts/doctor fix      # Auto-fix all issues (requires sudo)"
+    echo ""
+    echo "Checks:"
+    echo "  • Docker Engine & Compose installed and running"
+    echo "  • vm.max_map_count ≥ 262144 (OpenSearch/Elasticsearch)"
+    echo "  • vm.overcommit_memory = 1 (Redis background saves)"
+    echo "  • Transparent Huge Pages disabled (Redis latency)"
+    echo "  • net.core.somaxconn ≥ 65535 (Redis connections)"
+    echo "  • fs.file-max ≥ 65536 (file descriptor limit)"
+    echo "  • Docker log rotation configured (prevents disk fill)"
+    echo "  • Docker default storage driver"
+    echo "  • Disk space > 10GB free"
+    echo "  • User in docker group (no sudo needed)"
+    _print_banner
+    exit 0
+}
+
+[[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && _printUsage
+
+# ══════════════════════════════════════════════════════════════════════════════
+_header "System Doctor"
+echo ""
+[[ "$MODE" == "fix" ]] && _warning "Fix mode — will apply changes (may require sudo password)"
+echo ""
+
+# ── 1. Docker Engine ─────────────────────────────────────────────────────────
+_arrow "Docker Engine"
+
+if command -v docker &>/dev/null; then
+    DOCKER_VER=$(docker --version 2>/dev/null | grep -oP '[\d.]+' | head -1)
+    check_pass "Docker Engine installed: v${DOCKER_VER}"
+else
+    check_fail "Docker Engine not installed"
+    echo "  Install: https://docs.docker.com/engine/install/ubuntu/"
+fi
+
+if docker info &>/dev/null 2>&1; then
+    check_pass "Docker daemon running"
+else
+    check_fail "Docker daemon not running"
+    if needs_fix; then
+        sudo systemctl start docker && check_fixed "Docker daemon started" || check_fail "Cannot start Docker"
+    fi
+fi
+
+# Docker Compose
+if docker compose version &>/dev/null 2>&1; then
+    COMPOSE_VER=$(docker compose version --short 2>/dev/null)
+    check_pass "Docker Compose plugin: v${COMPOSE_VER}"
+else
+    check_fail "Docker Compose v2 not found (need 'docker compose', not 'docker-compose')"
+fi
+
+# User in docker group
+if groups | grep -qw docker; then
+    check_pass "User '$(whoami)' in docker group"
+else
+    check_warn "User '$(whoami)' not in docker group (requires sudo for docker commands)"
+    if needs_fix; then
+        sudo usermod -aG docker "$(whoami)" && check_fixed "Added to docker group (re-login required)" || check_fail "Cannot add to docker group"
+    else
+        echo "    Fix: sudo usermod -aG docker \$(whoami) && newgrp docker"
+    fi
+fi
+
+# ── 2. Kernel Parameters ─────────────────────────────────────────────────────
+echo ""
+_arrow "Kernel Parameters (sysctl)"
+
+# vm.max_map_count — OpenSearch/Elasticsearch needs ≥ 262144
+CURRENT=$(sysctl -n vm.max_map_count 2>/dev/null || echo "0")
+if [[ "$CURRENT" -ge 262144 ]]; then
+    check_pass "vm.max_map_count = ${CURRENT} (≥ 262144)"
+else
+    check_fail "vm.max_map_count = ${CURRENT} (need ≥ 262144 for OpenSearch/Elasticsearch)"
+    if needs_fix; then
+        sudo sysctl -w vm.max_map_count=262144 >/dev/null
+        grep -q "^vm.max_map_count" /etc/sysctl.conf 2>/dev/null \
+            && sudo sed -i 's/^vm.max_map_count.*/vm.max_map_count=262144/' /etc/sysctl.conf \
+            || echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf >/dev/null
+        check_fixed "vm.max_map_count = 262144 (persistent)"
+    else
+        echo "    Fix: sudo sysctl -w vm.max_map_count=262144"
+        echo "    Persist: echo 'vm.max_map_count=262144' | sudo tee -a /etc/sysctl.conf"
+    fi
+fi
+
+# vm.overcommit_memory — Redis needs 1 to prevent BGSAVE failures
+CURRENT=$(sysctl -n vm.overcommit_memory 2>/dev/null || echo "0")
+if [[ "$CURRENT" -eq 1 ]]; then
+    check_pass "vm.overcommit_memory = 1"
+else
+    check_fail "vm.overcommit_memory = ${CURRENT} (need 1 for Redis background saves)"
+    if needs_fix; then
+        sudo sysctl -w vm.overcommit_memory=1 >/dev/null
+        grep -q "^vm.overcommit_memory" /etc/sysctl.conf 2>/dev/null \
+            && sudo sed -i 's/^vm.overcommit_memory.*/vm.overcommit_memory=1/' /etc/sysctl.conf \
+            || echo "vm.overcommit_memory=1" | sudo tee -a /etc/sysctl.conf >/dev/null
+        check_fixed "vm.overcommit_memory = 1 (persistent)"
+    else
+        echo "    Fix: sudo sysctl -w vm.overcommit_memory=1"
+    fi
+fi
+
+# net.core.somaxconn — Redis needs ≥ 65535
+CURRENT=$(sysctl -n net.core.somaxconn 2>/dev/null || echo "0")
+if [[ "$CURRENT" -ge 65535 ]]; then
+    check_pass "net.core.somaxconn = ${CURRENT} (≥ 65535)"
+else
+    check_warn "net.core.somaxconn = ${CURRENT} (Redis recommends ≥ 65535)"
+    if needs_fix; then
+        sudo sysctl -w net.core.somaxconn=65535 >/dev/null
+        grep -q "^net.core.somaxconn" /etc/sysctl.conf 2>/dev/null \
+            && sudo sed -i 's/^net.core.somaxconn.*/net.core.somaxconn=65535/' /etc/sysctl.conf \
+            || echo "net.core.somaxconn=65535" | sudo tee -a /etc/sysctl.conf >/dev/null
+        check_fixed "net.core.somaxconn = 65535 (persistent)"
+    fi
+fi
+
+# fs.file-max
+CURRENT=$(sysctl -n fs.file-max 2>/dev/null || echo "0")
+if [[ "$CURRENT" -ge 65536 ]]; then
+    check_pass "fs.file-max = ${CURRENT} (≥ 65536)"
+else
+    check_warn "fs.file-max = ${CURRENT} (recommend ≥ 65536)"
+    if needs_fix; then
+        sudo sysctl -w fs.file-max=262144 >/dev/null
+        grep -q "^fs.file-max" /etc/sysctl.conf 2>/dev/null \
+            && sudo sed -i 's/^fs.file-max.*/fs.file-max=262144/' /etc/sysctl.conf \
+            || echo "fs.file-max=262144" | sudo tee -a /etc/sysctl.conf >/dev/null
+        check_fixed "fs.file-max = 262144 (persistent)"
+    fi
+fi
+
+# ── 3. Transparent Huge Pages ─────────────────────────────────────────────────
+echo ""
+_arrow "Transparent Huge Pages (THP)"
+
+THP_FILE="/sys/kernel/mm/transparent_hugepage/enabled"
+if [[ -f "$THP_FILE" ]]; then
+    THP_STATUS=$(cat "$THP_FILE" 2>/dev/null)
+    if echo "$THP_STATUS" | grep -q '\[never\]'; then
+        check_pass "THP disabled: $THP_STATUS"
+    else
+        check_fail "THP enabled: $THP_STATUS (causes Redis latency spikes)"
+        if needs_fix; then
+            echo never | sudo tee "$THP_FILE" >/dev/null
+            # Persist via rc.local or systemd
+            if [[ ! -f /etc/rc.local ]] || ! grep -q "transparent_hugepage" /etc/rc.local 2>/dev/null; then
+                sudo mkdir -p /etc/rc.d
+                cat <<'THPEOF' | sudo tee /etc/systemd/system/disable-thp.service >/dev/null
+[Unit]
+Description=Disable Transparent Huge Pages
+DefaultDependencies=no
+After=sysinit.target local-fs.target
+Before=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'echo never > /sys/kernel/mm/transparent_hugepage/enabled && echo never > /sys/kernel/mm/transparent_hugepage/defrag'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+THPEOF
+                sudo systemctl daemon-reload
+                sudo systemctl enable disable-thp.service 2>/dev/null
+            fi
+            check_fixed "THP disabled (persistent via systemd service)"
+        else
+            echo "    Fix: echo never | sudo tee /sys/kernel/mm/transparent_hugepage/enabled"
+        fi
+    fi
+else
+    check_pass "THP not available on this system"
+fi
+
+# ── 4. Docker Log Rotation ───────────────────────────────────────────────────
+echo ""
+_arrow "Docker Log Rotation"
+
+DAEMON_JSON="/etc/docker/daemon.json"
+if [[ -f "$DAEMON_JSON" ]]; then
+    if grep -q "max-size" "$DAEMON_JSON" 2>/dev/null; then
+        MAX_SIZE=$(python3 -c "import json; d=json.load(open('$DAEMON_JSON')); print(d.get('log-opts',{}).get('max-size','not set'))" 2>/dev/null || echo "configured")
+        MAX_FILE=$(python3 -c "import json; d=json.load(open('$DAEMON_JSON')); print(d.get('log-opts',{}).get('max-file','not set'))" 2>/dev/null || echo "?")
+        check_pass "Log rotation configured: max-size=${MAX_SIZE}, max-file=${MAX_FILE}"
+    else
+        check_fail "Docker log rotation NOT configured (logs will fill disk)"
+        if needs_fix; then
+            _apply_docker_log_rotation
+        else
+            echo "    Fix: Add to /etc/docker/daemon.json:"
+            echo '    { "log-driver": "json-file", "log-opts": { "max-size": "10m", "max-file": "3" } }'
+        fi
+    fi
+else
+    check_fail "No /etc/docker/daemon.json — log rotation not configured"
+    if needs_fix; then
+        _apply_docker_log_rotation
+    else
+        echo "    Fix: Create /etc/docker/daemon.json with log rotation settings"
+    fi
+fi
+
+_apply_docker_log_rotation() {
+    local config='{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3",
+    "compress": "true"
+  }
+}'
+    if [[ -f "$DAEMON_JSON" ]]; then
+        # Merge with existing config
+        python3 -c "
+import json
+with open('$DAEMON_JSON') as f:
+    data = json.load(f)
+data['log-driver'] = 'json-file'
+data['log-opts'] = {'max-size': '10m', 'max-file': '3', 'compress': 'true'}
+print(json.dumps(data, indent=2))
+" 2>/dev/null | sudo tee "$DAEMON_JSON" >/dev/null
+    else
+        echo "$config" | sudo tee "$DAEMON_JSON" >/dev/null
+    fi
+    sudo systemctl restart docker 2>/dev/null && check_fixed "Docker log rotation enabled (daemon restarted)" \
+        || check_warn "Config written but Docker restart needed: sudo systemctl restart docker"
+}
+
+# ── 5. Docker Storage Driver ─────────────────────────────────────────────────
+echo ""
+_arrow "Docker Storage"
+
+DRIVER=$(docker info --format '{{.Driver}}' 2>/dev/null || echo "unknown")
+if [[ "$DRIVER" == "overlay2" ]]; then
+    check_pass "Storage driver: overlay2 (recommended)"
+else
+    check_warn "Storage driver: $DRIVER (overlay2 is recommended)"
+fi
+
+# ── 6. Disk Space ────────────────────────────────────────────────────────────
+echo ""
+_arrow "Disk Space"
+
+AVAIL_KB=$(df -k / | tail -1 | awk '{print $4}')
+AVAIL_GB=$((AVAIL_KB / 1024 / 1024))
+AVAIL_HUMAN=$(df -h / | tail -1 | awk '{print $4}')
+
+if [[ "$AVAIL_GB" -ge 20 ]]; then
+    check_pass "Free disk space: ${AVAIL_HUMAN} (≥ 20GB)"
+elif [[ "$AVAIL_GB" -ge 10 ]]; then
+    check_warn "Free disk space: ${AVAIL_HUMAN} (low — recommend ≥ 20GB)"
+else
+    check_fail "Free disk space: ${AVAIL_HUMAN} (critically low!)"
+    echo "    Fix: docker system prune -af --volumes"
+fi
+
+# Docker disk usage
+DOCKER_USAGE=$(docker system df --format "{{.Size}}" 2>/dev/null | head -1 || echo "?")
+echo "    Docker disk usage: images=$(docker system df --format '{{.Type}}: {{.Size}}' 2>/dev/null | tr '\n' ', ' | sed 's/,$//')"
+
+# ── 7. Swap ──────────────────────────────────────────────────────────────────
+echo ""
+_arrow "Swap & Memory"
+
+TOTAL_MEM=$(free -g | awk '/^Mem:/{print $2}')
+SWAP=$(free -g | awk '/^Swap:/{print $2}')
+check_pass "RAM: ${TOTAL_MEM}GB, Swap: ${SWAP}GB"
+
+if [[ "$TOTAL_MEM" -lt 4 ]]; then
+    check_warn "Less than 4GB RAM — OpenSearch/Elasticsearch may struggle"
+fi
+
+SWAPPINESS=$(sysctl -n vm.swappiness 2>/dev/null || echo "?")
+if [[ "$SWAPPINESS" -le 10 ]]; then
+    check_pass "vm.swappiness = ${SWAPPINESS} (good for databases)"
+else
+    check_warn "vm.swappiness = ${SWAPPINESS} (recommend ≤ 10 for DB workloads)"
+    if needs_fix; then
+        sudo sysctl -w vm.swappiness=10 >/dev/null
+        grep -q "^vm.swappiness" /etc/sysctl.conf 2>/dev/null \
+            && sudo sed -i 's/^vm.swappiness.*/vm.swappiness=10/' /etc/sysctl.conf \
+            || echo "vm.swappiness=10" | sudo tee -a /etc/sysctl.conf >/dev/null
+        check_fixed "vm.swappiness = 10 (persistent)"
+    fi
+fi
+
+# ── 8. Optional Tools ────────────────────────────────────────────────────────
+echo ""
+_arrow "Optional Tools"
+
+command -v mkcert &>/dev/null && check_pass "mkcert installed (SSL)" || check_warn "mkcert not installed (needed for local SSL)"
+command -v git &>/dev/null && check_pass "git installed" || check_fail "git not installed"
+command -v python3 &>/dev/null && check_pass "python3 installed (used by projects.json)" || check_fail "python3 not installed"
+
+# ── Summary ───────────────────────────────────────────────────────────────────
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+if [[ $ISSUES -eq 0 && $WARNINGS -eq 0 ]]; then
+    _success "All checks passed! Your system is ready."
+elif [[ $ISSUES -eq 0 ]]; then
+    _success "No critical issues. ${WARNINGS} warning(s)."
+else
+    _error "${ISSUES} issue(s) found, ${WARNINGS} warning(s)."
+    if [[ "$MODE" != "fix" ]]; then
+        echo ""
+        _arrow "Run ${_bold}./scripts/doctor fix${_reset} to auto-fix (requires sudo)"
+        _arrow "Or ${_bold}bin/mage doctor fix${_reset}"
+    else
+        [[ $FIXED -gt 0 ]] && _success "${FIXED} issue(s) auto-fixed"
+    fi
+fi
+echo ""

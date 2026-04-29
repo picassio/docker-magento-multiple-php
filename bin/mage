@@ -29,6 +29,7 @@ ${_bold}USAGE${_reset}
 
 ${_bold}LIFECYCLE${_reset}
     ${_green}setup${_reset}                              Interactive first-time setup
+    ${_green}doctor${_reset} [fix]                         Check/fix system settings (sysctl, THP, logs)
     ${_green}up${_reset} [services...]                    Smart start (auto from projects.json)
     ${_green}down${_reset}                                Stop & remove containers
     ${_green}stop${_reset}                                Stop all services
@@ -706,6 +707,7 @@ main() {
         varnish)        cmd_varnish "$@" ;;
         install)        cmd_install "$@" ;;
         setup)          cmd_setup ;;
+        doctor)         exec "${SCRIPTS_DIR}/doctor" "$@" ;;
         help|-h|--help) show_help ;;
         version|-v)     echo "mage v${MAGE_VERSION}" ;;
         *)              _error "Unknown command: $command"; echo "Run ${_bold}bin/mage help${_reset}"; exit 1 ;;
