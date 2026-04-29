@@ -1,0 +1,8 @@
+.git
+data/
+databases/
+logs/
+sources/
+images/
+*.md
+REFACTOR_PLAN.md
