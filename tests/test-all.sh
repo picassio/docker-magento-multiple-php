@@ -595,7 +595,118 @@ assert_contains "status shows containers" "$OUT" "nginx"
 assert_contains "status shows projects" "$OUT" "Registered Projects"
 
 # ══════════════════════════════════════════════════════════════════════════════
-section "16. NGINX RESILIENCE — Stopped backends"
+section "16. MULTI-FRAMEWORK SUPPORT"
+# ══════════════════════════════════════════════════════════════════════════════
+
+echo '{}' > projects.json
+
+# Help shows new commands
+OUT=$(./bin/mage help 2>&1)
+assert_contains "help shows artisan" "$OUT" "artisan"
+assert_contains "help shows wp command" "$OUT" "wp-cli"
+assert_contains "help shows install-laravel" "$OUT" "install-laravel"
+assert_contains "help shows install-wp" "$OUT" "install-wp"
+
+# Project add with different app types
+bash -c 'source scripts/lib/projects.sh; project_set "laravel.test" "php83" "laravel" "mysql" "laravel_db" "none" "true"' 2>/dev/null
+bash -c 'source scripts/lib/projects.sh; project_set "wp.test" "php83" "wordpress" "mysql" "wp_db" "none" "true"' 2>/dev/null
+bash -c 'source scripts/lib/projects.sh; project_set "mage.test" "php83" "magento2" "mysql" "mage_db" "opensearch" "true"' 2>/dev/null
+bash -c 'source scripts/lib/projects.sh; project_set "blank.test" "php83" "default" "mysql" "blank_db" "none" "true"' 2>/dev/null
+
+# Verify app types stored correctly
+OUT=$(bash -c 'source scripts/lib/projects.sh; project_get "laravel.test" "app"' 2>&1)
+assert_eq "laravel app type stored" "laravel" "$OUT"
+OUT=$(bash -c 'source scripts/lib/projects.sh; project_get "wp.test" "app"' 2>&1)
+assert_eq "wordpress app type stored" "wordpress" "$OUT"
+OUT=$(bash -c 'source scripts/lib/projects.sh; project_get "blank.test" "app"' 2>&1)
+assert_eq "default app type stored" "default" "$OUT"
+
+# project set validates app type
+OUT=$(./bin/mage project set laravel.test app wordpress 2>&1)
+assert_contains "project set app switch" "$OUT" "changed"
+OUT=$(bash -c 'source scripts/lib/projects.sh; project_get "laravel.test" "app"' 2>&1)
+assert_eq "app type switched" "wordpress" "$OUT"
+
+# Switch back
+bash -c 'source scripts/lib/projects.sh; project_update "laravel.test" "app" "laravel"' 2>/dev/null
+
+# project list shows all types
+OUT=$(./bin/mage project list 2>&1)
+assert_contains "list shows laravel project" "$OUT" "laravel.test"
+assert_contains "list shows wp project" "$OUT" "wp.test"
+assert_contains "list shows laravel type" "$OUT" "laravel"
+assert_contains "list shows wordpress type" "$OUT" "wordpress"
+assert_contains "list shows default type" "$OUT" "default"
+
+# artisan without args shows usage
+OUT=$(./bin/mage artisan 2>&1 || true)
+assert_contains "artisan no args shows usage" "$OUT" "Usage"
+
+# wp without args shows usage
+OUT=$(./bin/mage wp 2>&1 || true)
+assert_contains "wp no args shows usage" "$OUT" "Usage"
+
+# artisan with non-existent project
+OUT=$(./bin/mage artisan nonexist.test 2>&1 || true)
+assert_contains "artisan missing project error" "$OUT" "not found"
+
+# wp with non-existent project
+OUT=$(./bin/mage wp nonexist.test 2>&1 || true)
+assert_contains "wp missing project error" "$OUT" "not found"
+
+# install-laravel without args shows usage
+OUT=$(./bin/mage install-laravel 2>&1 || true)
+assert_contains "install-laravel no args shows usage" "$OUT" "Usage"
+
+# install-wp without args shows usage
+OUT=$(./bin/mage install-wp 2>&1 || true)
+assert_contains "install-wp no args shows usage" "$OUT" "Usage"
+
+# Vhost templates: create vhosts for each type and verify structure
+mkdir -p sources/laravel.test/public sources/wp.test sources/blank.test
+
+OUT=$(./bin/mage vhost laravel.test laravel php83 2>&1)
+assert_contains "laravel vhost created" "$OUT" "Laravel vhost created"
+assert_file_exists "laravel vhost file" "conf/nginx/conf.d/laravel.test.conf"
+CONF=$(cat conf/nginx/conf.d/laravel.test.conf)
+assert_contains "laravel vhost has try_files query_string" "$CONF" 'query_string'
+assert_contains "laravel vhost has fastcgi_split_path_info" "$CONF" 'fastcgi_split_path_info'
+
+OUT=$(./bin/mage vhost wp.test wordpress php83 2>&1)
+assert_contains "wordpress vhost created" "$OUT" "WordPress vhost created"
+assert_file_exists "wordpress vhost file" "conf/nginx/conf.d/wp.test.conf"
+CONF=$(cat conf/nginx/conf.d/wp.test.conf)
+assert_contains "wp vhost has try_files args" "$CONF" '/index.php?$args'
+
+OUT=$(./bin/mage vhost blank.test default php83 2>&1)
+assert_contains "default vhost created" "$OUT" "Default vhost created"
+assert_file_exists "default vhost file" "conf/nginx/conf.d/blank.test.conf"
+
+# All vhosts use runtime DNS (set $backend)
+for vf in laravel.test wp.test blank.test; do
+    CONF=$(cat "conf/nginx/conf.d/${vf}.conf")
+    assert_contains "${vf} vhost uses runtime DNS" "$CONF" 'set \$backend'
+done
+
+# Nginx config test with all vhosts
+OUT=$(docker compose exec nginx nginx -t 2>&1)
+assert_contains "nginx valid with multi-framework vhosts" "$OUT" "syntax is ok"
+
+# Cleanup vhosts
+rm -rf sources/laravel.test sources/wp.test sources/blank.test
+rm -f conf/nginx/conf.d/laravel.test.conf conf/nginx/conf.d/wp.test.conf conf/nginx/conf.d/blank.test.conf
+docker compose exec nginx nginx -s reload 2>/dev/null
+
+# Smart up: search=none projects don't require opensearch
+bash -c 'source scripts/lib/projects.sh; project_remove "mage.test"' 2>/dev/null
+OUT=$(bash -c 'source scripts/lib/projects.sh; project_compute_services' 2>&1)
+assert_not_contains "no-search projects skip opensearch" "$OUT" "opensearch"
+
+# Cleanup
+echo '{}' > projects.json
+
+# ══════════════════════════════════════════════════════════════════════════════
+section "17. NGINX RESILIENCE — Stopped backends"
 # ══════════════════════════════════════════════════════════════════════════════
 
 # Create vhost for a PHP version that's NOT running
