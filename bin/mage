@@ -30,6 +30,7 @@ ${_bold}USAGE${_reset}
 ${_bold}LIFECYCLE${_reset}
     ${_green}setup${_reset}                              Interactive first-time setup
     ${_green}doctor${_reset} [fix]                         Check/fix system settings (sysctl, THP, logs)
+    ${_green}build${_reset} [php...]                       Build PHP images (or all if no args)
     ${_green}up${_reset} [services...]                    Smart start (auto from projects.json)
     ${_green}down${_reset}                                Stop & remove containers
     ${_green}stop${_reset}                                Stop all services
@@ -408,6 +409,50 @@ cmd_project_set_field() {
         rm -f "${NGINX_CONF_DIR}/${domain}.conf"
         "${SCRIPTS_DIR}/create-vhost" --domain="$domain" --app="$app" --root-dir="$domain" --php-version="$value" 2>&1 || true
     fi
+}
+
+# ── Command: build ──────────────────────────────────────────────────────
+cmd_build() {
+    local overrides=()
+    local services=()
+    local no_cache=false
+
+    for arg in "$@"; do
+        case "$arg" in
+            --with=*)    overrides+=("${arg#*=}") ;;
+            --no-cache)  no_cache=true ;;
+            -*)          _die "Unknown option: $arg" ;;
+            *)           services+=("$arg") ;;
+        esac
+    done
+
+    # If no services specified, build from projects.json
+    if [[ ${#services[@]} -eq 0 ]]; then
+        local proj_overrides
+        proj_overrides=$(project_compute_profiles)
+        if [[ -n "$proj_overrides" ]]; then
+            read -ra overrides <<< "$proj_overrides"
+        fi
+    fi
+
+    local file_flags
+    file_flags=$(dc_file_flags "${overrides[@]}")
+
+    local cache_flag=""
+    [[ "$no_cache" == true ]] && cache_flag="--no-cache"
+
+    _arrow "Building PHP images..."
+    _note "Pre-built images (nginx, mysql, redis, etc.) are pulled automatically on 'up'"
+    echo ""
+
+    export DC_FILE_FLAGS="$file_flags"
+    if [[ ${#services[@]} -gt 0 ]]; then
+        dc build $cache_flag "${services[@]}"
+    else
+        dc build $cache_flag
+    fi
+    unset DC_FILE_FLAGS
+    _success "Build complete"
 }
 
 # ── Command: up (smart start) ────────────────────────────────────────────────
@@ -791,6 +836,7 @@ main() {
         varnish)        cmd_varnish "$@" ;;
         install)        cmd_install "$@" ;;
         setup)          cmd_setup ;;
+        build)          cmd_build "$@" ;;
         doctor)         exec "${SCRIPTS_DIR}/doctor" "$@" ;;
         help|-h|--help) show_help ;;
         version|-v)     echo "mage v${MAGE_VERSION}" ;;
