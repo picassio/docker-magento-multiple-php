@@ -509,6 +509,19 @@ bash tests/test-stacks.sh      # Magento stack connectivity: 6 scenarios
 
 ---
 
+## WSL / Windows
+
+If `bin/mage` fails with `bash\r: No such file or directory`, line endings are wrong:
+
+```bash
+# Fix existing clone (re-normalize line endings)
+git rm --cached -r .
+git reset --hard
+```
+
+For new clones, `.gitattributes` enforces LF automatically.
+
+---
 
 ## License
 
