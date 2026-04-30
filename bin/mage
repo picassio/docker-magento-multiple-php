@@ -685,7 +685,7 @@ get_recommended_stack() {
     local ver="$1"
     # Returns: php db_service search
     case "$ver" in
-        2.4.8*) echo "php84 mysql opensearch" ;;
+        2.4.8*) echo "php84 mariadb opensearch" ;;
         2.4.7*) echo "php83 mysql opensearch" ;;
         2.4.6*) echo "php82 mysql opensearch" ;;
         2.4.5*|2.4.4*) echo "php81 mysql opensearch" ;;
