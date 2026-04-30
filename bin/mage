@@ -838,34 +838,71 @@ cmd_install_laravel() {
 
     _header "Installing Laravel: $domain (${php})"
 
-    # Register project
+    # Detect running DB service
+    local db_svc="mysql"
+    for svc in mysql mariadb mysql80; do
+        if is_service_running "$svc" 2>/dev/null; then db_svc="$svc"; break; fi
+    done
     local db_name
     db_name=$(echo "$domain" | tr '.' '_' | tr '-' '_')
+
+    # Register project — Laravel uses Redis (cache+sessions), no search engine
     if ! project_exists "$domain"; then
-        project_set "$domain" "$php" "laravel" "mysql" "$db_name" "none" "true"
-        _success "Project registered as Laravel"
+        project_set "$domain" "$php" "laravel" "$db_svc" "$db_name" "none" "true"
+        _success "Project registered (type: laravel, db: ${db_svc})"
     fi
 
-    # Create source dir and install
+    # Create DB
+    if is_service_running "$db_svc" 2>/dev/null; then
+        "${SCRIPTS_DIR}/database" create --database-name="$db_name" --db-service="$db_svc" 2>&1 || true
+    fi
+
+    # Install Laravel via Composer
+    _arrow "Creating Laravel project..."
     mkdir -p "${SOURCE_DIR}/${domain}"
     dc exec --user nginx "$php" bash -c "
         cd /home/public_html && \
-        composer create-project laravel/laravel ${domain} && \
-        cd ${domain} && \
-        php artisan key:generate
+        composer create-project laravel/laravel ${domain}
     "
 
-    # Create vhost (Laravel uses public/ as webroot)
+    # Configure .env for Docker services
+    _arrow "Configuring .env for Docker services..."
+    dc exec --user nginx "$php" bash -c "
+        cd /home/public_html/${domain}
+        sed -i 's|^DB_HOST=.*|DB_HOST=${db_svc}|' .env
+        sed -i 's|^DB_PORT=.*|DB_PORT=3306|' .env
+        sed -i 's|^DB_DATABASE=.*|DB_DATABASE=${db_name}|' .env
+        sed -i 's|^DB_USERNAME=.*|DB_USERNAME=magento|' .env
+        sed -i 's|^DB_PASSWORD=.*|DB_PASSWORD=magento|' .env
+        sed -i 's|^CACHE_STORE=.*|CACHE_STORE=redis|' .env
+        sed -i 's|^SESSION_DRIVER=.*|SESSION_DRIVER=redis|' .env
+        sed -i 's|^QUEUE_CONNECTION=.*|QUEUE_CONNECTION=redis|' .env
+        sed -i 's|^REDIS_HOST=.*|REDIS_HOST=redis|' .env
+        sed -i 's|^MAIL_MAILER=.*|MAIL_MAILER=smtp|' .env
+        sed -i 's|^MAIL_HOST=.*|MAIL_HOST=mailpit|' .env
+        sed -i 's|^MAIL_PORT=.*|MAIL_PORT=1025|' .env
+        sed -i 's|^APP_URL=.*|APP_URL=http://${domain}|' .env
+        php artisan key:generate
+    "
+    _success ".env configured (DB: ${db_svc}, Redis, Mailpit)"
+
+    # Run migrations
+    _arrow "Running migrations..."
+    dc exec --user nginx "$php" bash -c "cd /home/public_html/${domain} && php artisan migrate --force" 2>&1 || true
+
+    # Create nginx vhost (Laravel webroot = public/)
     "${SCRIPTS_DIR}/create-vhost" --domain="$domain" --app=laravel --root-dir="${domain}/public" --php-version="$php" 2>&1 || true
 
-    # Create DB
-    if is_service_running mysql 2>/dev/null; then
-        "${SCRIPTS_DIR}/database" create --database-name="$db_name" --db-service=mysql 2>&1 || true
-    fi
-
-    _success "Laravel installed at sources/${domain}/"
-    _arrow "Access: http://${domain}"
-    _arrow "Artisan: bin/mage artisan ${domain} migrate"
+    echo ""
+    _success "Laravel installed!"
+    echo ""
+    echo "  ${_bold}URL:${_reset}       http://${domain}"
+    echo "  ${_bold}DB:${_reset}        ${db_name} on ${db_svc}"
+    echo "  ${_bold}Redis:${_reset}     cache + sessions + queue"
+    echo "  ${_bold}Mail:${_reset}      mailpit (http://localhost:${MAILPIT_PORT:-8025})"
+    echo "  ${_bold}Artisan:${_reset}   bin/mage artisan ${domain} [command]"
+    echo "  ${_bold}Composer:${_reset}  bin/mage composer ${domain} [command]"
+    echo ""
 }
 
 # ── Command: install-wp ───────────────────────────────────────────────────
@@ -878,39 +915,95 @@ cmd_install_wp() {
 
     _header "Installing WordPress: $domain (${php})"
 
-    # Register project
+    # Detect running DB service
+    local db_svc="mysql"
+    for svc in mysql mariadb mysql80; do
+        if is_service_running "$svc" 2>/dev/null; then db_svc="$svc"; break; fi
+    done
     local db_name
     db_name=$(echo "$domain" | tr '.' '_' | tr '-' '_')
+
+    # Register project — WordPress uses Redis for object cache, no search engine
     if ! project_exists "$domain"; then
-        project_set "$domain" "$php" "wordpress" "mysql" "$db_name" "none" "true"
-        _success "Project registered as WordPress"
+        project_set "$domain" "$php" "wordpress" "$db_svc" "$db_name" "none" "true"
+        _success "Project registered (type: wordpress, db: ${db_svc})"
     fi
 
-    # Create source dir, install WP-CLI and download WordPress
+    # Create DB
+    if is_service_running "$db_svc" 2>/dev/null; then
+        "${SCRIPTS_DIR}/database" create --database-name="$db_name" --db-service="$db_svc" 2>&1 || true
+    fi
+
+    # Install WP-CLI + download WordPress
+    _arrow "Downloading WordPress + WP-CLI..."
     mkdir -p "${SOURCE_DIR}/${domain}"
     dc exec --user nginx "$php" bash -c "
-        # Install WP-CLI if missing
         if ! command -v wp &>/dev/null; then
             curl -sO https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
             chmod +x wp-cli.phar
             mv wp-cli.phar /usr/local/bin/wp 2>/dev/null || sudo mv wp-cli.phar /usr/local/bin/wp
         fi
-        cd /home/public_html/${domain} && \
+        cd /home/public_html/${domain}
         wp core download --allow-root
     "
 
-    # Create vhost (WordPress uses root as webroot)
+    # Generate wp-config.php with Docker service connections
+    _arrow "Generating wp-config.php..."
+    dc exec --user nginx "$php" bash -c "
+        cd /home/public_html/${domain}
+        wp config create --allow-root \\
+            --dbname=${db_name} \\
+            --dbuser=magento \\
+            --dbpass=magento \\
+            --dbhost=${db_svc} \\
+            --extra-php <<'WPEXTRA'
+define('WP_DEBUG', true);
+define('WP_DEBUG_LOG', true);
+define('WP_DEBUG_DISPLAY', false);
+define('DISALLOW_FILE_EDIT', true);
+define('WP_MEMORY_LIMIT', '256M');
+define('WP_MAX_MEMORY_LIMIT', '512M');
+
+// Redis object cache (install redis-cache plugin)
+define('WP_REDIS_HOST', 'redis');
+define('WP_REDIS_PORT', 6379);
+define('WP_REDIS_DATABASE', 0);
+
+// Mailpit SMTP (install wp-mail-smtp plugin or use wp_mail hook)
+define('WPMS_MAILER', 'smtp');
+define('WPMS_SMTP_HOST', 'mailpit');
+define('WPMS_SMTP_PORT', 1025);
+WPEXTRA
+    "
+    _success "wp-config.php generated (DB: ${db_svc}, Redis, Mailpit)"
+
+    # Run WordPress install
+    _arrow "Running WordPress installation..."
+    dc exec --user nginx "$php" bash -c "
+        cd /home/public_html/${domain}
+        wp core install --allow-root \\
+            --url='http://${domain}' \\
+            --title='${domain}' \\
+            --admin_user=admin \\
+            --admin_password=admin \\
+            --admin_email='admin@${domain}' \\
+            --skip-email
+    " 2>&1 || _warning "WP install failed — run manually via the web installer"
+
+    # Create nginx vhost
     "${SCRIPTS_DIR}/create-vhost" --domain="$domain" --app=wordpress --root-dir="$domain" --php-version="$php" 2>&1 || true
 
-    # Create DB
-    if is_service_running mysql 2>/dev/null; then
-        "${SCRIPTS_DIR}/database" create --database-name="$db_name" --db-service=mysql 2>&1 || true
-    fi
-
-    _success "WordPress downloaded to sources/${domain}/"
-    _arrow "Access: http://${domain}"
-    _arrow "Run installer: http://${domain}/wp-admin/install.php"
-    _arrow "Or CLI: bin/mage wp ${domain} core install --url=${domain} --title=Site --admin_user=admin --admin_password=admin --admin_email=admin@${domain}"
+    echo ""
+    _success "WordPress installed!"
+    echo ""
+    echo "  ${_bold}URL:${_reset}       http://${domain}"
+    echo "  ${_bold}Admin:${_reset}     http://${domain}/wp-admin"
+    echo "  ${_bold}Login:${_reset}     admin / admin"
+    echo "  ${_bold}DB:${_reset}        ${db_name} on ${db_svc}"
+    echo "  ${_bold}Redis:${_reset}     object cache (install redis-cache plugin)"
+    echo "  ${_bold}Mail:${_reset}      mailpit (http://localhost:${MAILPIT_PORT:-8025})"
+    echo "  ${_bold}WP-CLI:${_reset}    bin/mage wp ${domain} [command]"
+    echo ""
 }
 
 # ── Command: status (with projects) ──────────────────────────────────────────

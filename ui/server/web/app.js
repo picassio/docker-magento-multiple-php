@@ -538,9 +538,7 @@ async function renderSettings() {
   state.env = envData || [];
   state.doctor = doctorData;
 
-  let html = `<div class="page-header"><h1>Settings</h1><div class="actions">
-    <button class="btn btn-primary" onclick="showInstallModal()">🚀 Install Project</button>
-  </div></div>`;
+  let html = `<div class="page-header"><h1>Settings</h1><div class="actions"><button class="btn btn-primary" onclick="showInstallModal()">🚀 Install Project</button></div></div>`;
 
   // ── Doctor ──
   html += '<div class="card" style="margin-bottom:16px"><div class="card-header">System Health <button class="btn btn-sm btn-success" onclick="runDoctorFix()">🔧 Auto-fix</button></div>';
@@ -625,10 +623,11 @@ async function toggleVarnish(domain, action) {
 }
 
 function showInstallModal() {
-  showModal(`<h2>Install Project</h2>
+  showModal(`<h2>🚀 Install Project</h2>
     <div class="form-group"><label>Type</label><select id="inst-type" style="width:100%" onchange="updateInstallForm()">
-      <option value="magento">Magento</option><option value="laravel">Laravel</option><option value="wordpress">WordPress</option>
+      <option value="magento">Magento 2</option><option value="laravel">Laravel</option><option value="wordpress">WordPress</option>
     </select></div>
+    <div id="inst-type-info" style="padding:10px 12px;background:var(--bg);border-radius:var(--radius-sm);margin-bottom:12px;font-size:12px;color:var(--text2);line-height:1.6"></div>
     <div id="inst-magento-fields">
       <div class="form-row">
         <div class="form-group"><label>Version</label><input id="inst-version" value="2.4.8" style="width:100%"></div>
@@ -643,11 +642,19 @@ function showInstallModal() {
       <button class="btn" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="runInstall()">Install</button>
     </div>`);
+  updateInstallForm();
 }
 function updateInstallForm() {
   const t = document.getElementById('inst-type').value;
   const mf = document.getElementById('inst-magento-fields');
+  const info = document.getElementById('inst-type-info');
   if (mf) mf.style.display = t === 'magento' ? '' : 'none';
+  const desc = {
+    magento: '📦 <b>Magento 2</b> — Full ecommerce stack<br>Services: PHP + MySQL/MariaDB + OpenSearch + Redis + RabbitMQ + Mailpit<br>Creates project, DB, vhost, runs setup:install',
+    laravel: '⚡ <b>Laravel</b> — Modern PHP framework<br>Services: PHP + MySQL/MariaDB + Redis (cache+sessions+queue) + Mailpit<br>composer create-project, configures .env, runs migrations',
+    wordpress: '📝 <b>WordPress</b> — CMS / Blog<br>Services: PHP + MySQL/MariaDB + Redis (object cache) + Mailpit<br>Downloads WP, generates wp-config.php, runs wp core install<br>Admin: admin / admin',
+  };
+  if (info) info.innerHTML = desc[t] || '';
 }
 async function runInstall() {
   const type = document.getElementById('inst-type').value;

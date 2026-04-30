@@ -340,37 +340,69 @@ prepareWpVhostContent() {
     cat > "$conf_file" <<WPEOF || _die "Cannot write to: ${conf_file}"
 server {
     listen 80;
+    server_name ${VHOST_DOMAIN};
+    root /home/public_html/${VHOST_ROOT_DIR};
+    index index.php index.html;
 
     access_log /var/log/nginx/${VHOST_DOMAIN}.access.log;
     error_log /var/log/nginx/${VHOST_DOMAIN}.error.log;
 
-    server_name ${VHOST_DOMAIN};
-    root /home/public_html/${VHOST_ROOT_DIR};
+    client_max_body_size 64m;
 
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    # WordPress permalinks
     location / {
-        index index.html index.php;
         try_files \$uri \$uri/ /index.php?\$args;
     }
 
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico)$ {
-        expires max;
-        log_not_found off;
+    # PHP handler
+    location ~ \.php\$ {
+        try_files \$uri =404;
+        set \$backend "${APP_PHP}:9001";
+        fastcgi_pass   \$backend;
+        fastcgi_index  index.php;
+        fastcgi_param  SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+        include        fastcgi_params;
+        fastcgi_read_timeout 300;
+        fastcgi_buffers 16 16k;
+        fastcgi_buffer_size 32k;
     }
 
+    # Static assets
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|webp|woff|woff2|ttf|eot)\$ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+        log_not_found off;
+        access_log off;
+    }
+
+    # Block xmlrpc.php (brute force target)
+    location = /xmlrpc.php { deny all; }
+
+    # Protect wp-config.php
+    location = /wp-config.php { deny all; }
+
+    # Deny access to hidden files (.git, .env, .htaccess)
     location ~ /\. {
         deny all;
         access_log off;
         log_not_found off;
     }
 
-    location ~ \.php$ {
-        if (!-e \$request_filename) { rewrite / /index.php last; }
-        set \$backend "${APP_PHP}:9001";
-        fastcgi_pass   \$backend;
-        fastcgi_param  SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
-        include        fastcgi_params;
-        fastcgi_read_timeout 300;
-    }
+    # Deny access to sensitive WP files
+    location ~* /(wp-config\.php|readme\.html|license\.txt)\$ { deny all; }
+
+    # Uploads: deny PHP execution
+    location ~* /wp-content/uploads/.*\.php\$ { deny all; }
+
+    # Gzip
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml image/svg+xml;
+    gzip_vary on;
 }
 WPEOF
     _success "WordPress vhost created: ${conf_file}"
@@ -381,27 +413,62 @@ prepareLaravelVhostContent() {
     cat > "$conf_file" <<LAEOF || _die "Cannot write to: ${conf_file}"
 server {
     listen 80;
+    server_name ${VHOST_DOMAIN};
+    root /home/public_html/${VHOST_ROOT_DIR};
+    index index.php index.html;
 
     access_log /var/log/nginx/${VHOST_DOMAIN}.access.log;
     error_log /var/log/nginx/${VHOST_DOMAIN}.error.log;
 
-    root /home/public_html/${VHOST_ROOT_DIR};
-    index index.php index.html index.htm;
-    server_name ${VHOST_DOMAIN};
+    client_max_body_size 64m;
+    charset utf-8;
 
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    # Laravel routes
     location / {
         try_files \$uri \$uri/ /index.php?\$query_string;
     }
 
-    location ~ \.php$ {
+    # PHP handler
+    location ~ \.php\$ {
         try_files \$uri =404;
         fastcgi_split_path_info ^(.+\.php)(/.+)\$;
         set \$backend "${APP_PHP}:9001";
-        fastcgi_pass \$backend;
-        fastcgi_index index.php;
-        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
-        include fastcgi_params;
+        fastcgi_pass   \$backend;
+        fastcgi_index  index.php;
+        fastcgi_param  SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+        include        fastcgi_params;
+        fastcgi_read_timeout 300;
+        fastcgi_buffers 16 16k;
+        fastcgi_buffer_size 32k;
     }
+
+    # Static assets
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|webp|woff|woff2|ttf|eot)\$ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+        log_not_found off;
+        access_log off;
+    }
+
+    # Laravel storage — deny direct access
+    location ~ ^/storage/ { deny all; }
+
+    # Deny dotfiles (.env, .git, etc.)
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    # Gzip
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml image/svg+xml;
+    gzip_vary on;
 }
 LAEOF
     _success "Laravel vhost created: ${conf_file}"
