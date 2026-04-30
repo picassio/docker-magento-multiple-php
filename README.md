@@ -34,6 +34,7 @@ bin/mage magento mysite.com cache:flush
 
 ## Features
 
+- **Multi-framework** — Magento 1/2, Laravel, WordPress, and generic PHP projects in one stack
 - **Project management** — register projects with `bin/mage project add`, switch PHP/DB/search per project, enable/disable without data loss
 - **Smart start** — `bin/mage up` reads `projects.json`, starts only the services your projects need, auto-loads the right compose override files
 - **Multi-PHP** — PHP 7.0–8.4 simultaneously (PPA for 7.4+, compiled from source for 7.0–7.3)
@@ -165,6 +166,8 @@ bin/mage magento mysite.com cache:flush
 | `shell <domain\|php>` | `bin/mage shell mysite.com` |
 | `composer <domain\|php> [args]` | `bin/mage composer mysite.com install` |
 | `magento <domain> [args]` | `bin/mage magento mysite.com cache:flush` |
+| `artisan <domain> [args]` | `bin/mage artisan myapp.test migrate` |
+| `wp <domain> [args]` | `bin/mage wp blog.test plugin list` |
 
 ### Database
 
@@ -185,6 +188,8 @@ bin/mage magento mysite.com cache:flush
 | `xdebug <on\|off\|status> <php>` | `bin/mage xdebug on php83` |
 | `varnish <on\|off\|status> <domain>` | `bin/mage varnish on shop.test` |
 | `install <ver> <ed> <domain> [php]` | `bin/mage install 2.4.7 community shop.test` |
+| `install-laravel <domain> [php]` | `bin/mage install-laravel myapp.test php83` |
+| `install-wp <domain> [php]` | `bin/mage install-wp blog.test php83` |
 
 ---
 
@@ -287,6 +292,23 @@ docker compose -f docker-compose.yml -f compose/legacy.yml -f compose/mariadb.ym
 docker compose -f docker-compose.yml -f compose/debug.yml up -d
 # → phpMyAdmin at http://localhost:8080
 # → Redis Commander at http://localhost:8081
+```
+
+### Fresh Laravel install
+
+```bash
+bin/mage install-laravel myapp.test php83
+# → composer create-project, artisan key:generate, nginx vhost (public/), DB created
+bin/mage artisan myapp.test migrate
+bin/mage artisan myapp.test serve  # or just use nginx
+```
+
+### Fresh WordPress install
+
+```bash
+bin/mage install-wp blog.test php83
+# → wp core download, nginx vhost, DB created
+bin/mage wp blog.test core install --url=blog.test --title="My Blog" --admin_user=admin --admin_password=admin --admin_email=admin@blog.test
 ```
 
 ### Fresh Magento install (one command)
