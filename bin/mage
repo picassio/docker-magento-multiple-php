@@ -194,7 +194,9 @@ cmd_project_add() {
     # Offer to create vhost and DB now
     echo ""
     if ask_yes_no "Create nginx vhost now?"; then
-        "${SCRIPTS_DIR}/create-vhost" --domain="$domain" --app="$app" --root-dir="$domain" --php-version="$php" 2>&1 || true
+        local root_dir="$domain"
+        [[ "$app" == "laravel" ]] && root_dir="${domain}/public"
+        "${SCRIPTS_DIR}/create-vhost" --domain="$domain" --app="$app" --root-dir="$root_dir" --php-version="$php" 2>&1 || true
     fi
 
     if ask_yes_no "Create database '${db_name}' on ${db_svc} now?"; then
