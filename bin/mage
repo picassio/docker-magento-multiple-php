@@ -441,13 +441,32 @@ cmd_build() {
     local cache_flag=""
     [[ "$no_cache" == true ]] && cache_flag="--no-cache"
 
+    # Pre-built services that don't need building
+    local prebuilt="nginx mysql mysql80 mariadb redis redis6 opensearch opensearch1 elasticsearch elasticsearch7 rabbitmq mailpit varnish phpmyadmin redis-commander opensearch-dashboards"
+
+    # Filter: warn about pre-built, keep buildable
+    local buildable=()
+    for svc in "${services[@]}"; do
+        if echo " $prebuilt " | grep -q " $svc "; then
+            _warning "'$svc' uses a pre-built image — nothing to build. It pulls automatically on 'bin/mage up'."
+        else
+            buildable+=("$svc")
+        fi
+    done
+
+    # If user only asked for pre-built services, exit early
+    if [[ ${#services[@]} -gt 0 && ${#buildable[@]} -eq 0 ]]; then
+        _arrow "No custom images to build."
+        _arrow "Run ${_bold}bin/mage up${_reset} to pull and start pre-built images."
+        return
+    fi
+
     _arrow "Building PHP images..."
-    _note "Pre-built images (nginx, mysql, redis, etc.) are pulled automatically on 'up'"
     echo ""
 
     export DC_FILE_FLAGS="$file_flags"
-    if [[ ${#services[@]} -gt 0 ]]; then
-        dc build $cache_flag "${services[@]}"
+    if [[ ${#buildable[@]} -gt 0 ]]; then
+        dc build $cache_flag "${buildable[@]}"
     else
         dc build $cache_flag
     fi
