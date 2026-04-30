@@ -150,6 +150,7 @@ bin/mage magento mysite.com cache:flush
 |---|---|
 | `setup` | Interactive first-time setup |
 | `doctor [fix]` | Check/fix system settings (sysctl, THP, Docker logs) |
+| `build [php...]` | Build PHP images (or all). Use `--with=legacy` for PHP 7.x, `--no-cache` to rebuild |
 | `up [services...]` | Smart start from projects.json (or explicit services) |
 | `up --with=<override>` | Start with specific compose override |
 | `down` | Stop & remove all containers |
@@ -337,6 +338,29 @@ bin/mage up --with=varnish
 bin/mage varnish on shop.test     # Enable FPC + proxy
 bin/mage varnish status shop.test # Check
 bin/mage varnish off shop.test    # Disable
+```
+
+### Building images
+
+```bash
+# Build all PHP images (core PHP 8.1–8.4)
+bin/mage build
+
+# Build specific PHP version
+bin/mage build php83
+
+# Build including legacy PHP 7.x
+bin/mage build --with=legacy
+
+# Force rebuild without Docker cache
+bin/mage build --no-cache
+bin/mage build php83 --no-cache
+
+# Pre-built images (nginx, mysql, redis, opensearch, etc.) are pulled
+# automatically on 'bin/mage up' — no build needed:
+bin/mage build nginx
+# → ⚠ 'nginx' uses a pre-built image — nothing to build.
+#   Run bin/mage up to pull and start.
 ```
 
 ### System tuning (first-time setup)
