@@ -92,6 +92,13 @@ func main() {
 	mux.HandleFunc("GET /api/xdebug/{php}", handlers.XdebugStatus)
 	mux.HandleFunc("POST /api/xdebug/{php}/{action}", handlers.XdebugToggle)
 
+	// Commands (shell, composer, magento, artisan, wp, ssl, varnish, install)
+	mux.HandleFunc("POST /api/exec", handlers.ExecCommand)
+	mux.HandleFunc("GET /api/exec/ws", handlers.ExecCommandWS)
+	mux.HandleFunc("POST /api/ssl/{domain}", handlers.EnableSSL)
+	mux.HandleFunc("POST /api/varnish/{domain}/{action}", handlers.VarnishToggle)
+	mux.HandleFunc("POST /api/install", handlers.Install)
+
 	// ── Static files (embedded frontend) ────────────────────────────────
 	webFS, err := fs.Sub(embeddedWeb, "web")
 	if err != nil {

@@ -231,7 +231,11 @@ async function renderProjects() {
         <td>${mkSel('db_service', dbOpts, p.db_service)}</td>
         <td>${mkSel('search', searchOpts, p.search)}</td>
         <td><label class="toggle"><input type="checkbox" ${p.enabled?'checked':''} onchange="toggleProject('${p.domain}',this.checked)"><span class="slider"></span></label></td>
-        <td><button class="btn-icon" style="color:var(--red)" title="Remove" onclick="removeProject('${p.domain}')">✕</button></td>
+        <td style="white-space:nowrap">
+          <button class="btn-icon" title="Shell" onclick="runProjectCmd('${p.domain}','shell')">⌨</button>
+          <button class="btn-icon" title="SSL" onclick="enableSSL('${p.domain}')">🔒</button>
+          <button class="btn-icon" style="color:var(--red)" title="Remove" onclick="removeProject('${p.domain}')">✕</button>
+        </td>
       </tr>`;
     }
     html += '</tbody></table></div>';
@@ -298,6 +302,15 @@ async function removeProject(domain) {
   await DELETE(`/api/projects/${domain}`);
   toast(`${domain} removed`, 'success');
   renderProjects();
+}
+
+async function runProjectCmd(domain, cmd, ...args) {
+  showModal(`<h2>Running: ${cmd} ${domain} ${args.join(' ')}</h2>
+    <div class="log-viewer" id="cmd-output" style="min-height:200px">Running...</div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal()">Close</button></div>`);
+  const res = await POST('/api/exec', { command: cmd, args: [domain, ...args] });
+  const el = document.getElementById('cmd-output');
+  if (el) el.textContent = (res.stdout || '') + '\n' + (res.stderr || '');
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -525,7 +538,9 @@ async function renderSettings() {
   state.env = envData || [];
   state.doctor = doctorData;
 
-  let html = `<div class="page-header"><h1>Settings</h1></div>`;
+  let html = `<div class="page-header"><h1>Settings</h1><div class="actions">
+    <button class="btn btn-primary" onclick="showInstallModal()">🚀 Install Project</button>
+  </div></div>`;
 
   // ── Doctor ──
   html += '<div class="card" style="margin-bottom:16px"><div class="card-header">System Health <button class="btn btn-sm btn-success" onclick="runDoctorFix()">🔧 Auto-fix</button></div>';
@@ -550,6 +565,24 @@ async function renderSettings() {
     </div>`;
   }
   html += '</div></div>';
+
+  // ── Varnish ──
+  html += '<div class="card" style="margin-bottom:16px"><div class="card-header">Varnish</div>';
+  html += '<div style="padding:8px 12px;color:var(--text2);font-size:13px">Toggle Varnish per domain (requires running project)</div>';
+  if (state.projects.length > 0) {
+    html += '<div style="display:flex;gap:12px;flex-wrap:wrap;padding:0 12px 12px">';
+    for (const p of state.projects) {
+      html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg);border-radius:var(--radius-sm)">
+        <strong>${p.domain}</strong>
+        <button class="btn btn-sm btn-success" onclick="toggleVarnish('${p.domain}','on')">On</button>
+        <button class="btn btn-sm" onclick="toggleVarnish('${p.domain}','off')">Off</button>
+      </div>`;
+    }
+    html += '</div>';
+  } else {
+    html += '<div style="padding:12px;color:var(--text2)">No projects registered</div>';
+  }
+  html += '</div>';
 
   // ── Environment ──
   html += '<div class="card"><div class="card-header">.env Configuration <button class="btn btn-sm btn-primary" onclick="saveEnv()">💾 Save</button></div>';
@@ -577,6 +610,63 @@ async function xdebugToggle(php, action) {
   toast(`Xdebug ${action} for ${php}...`, 'info');
   await POST(`/api/xdebug/${php}/${action}`);
   toast(`Xdebug ${action} for ${php}`, 'success');
+}
+
+async function enableSSL(domain) {
+  toast(`Enabling SSL for ${domain}...`, 'info');
+  const res = await POST(`/api/ssl/${domain}`);
+  toast(res.error || `SSL enabled for ${domain}`, res.error ? 'error' : 'success');
+}
+
+async function toggleVarnish(domain, action) {
+  toast(`Varnish ${action} for ${domain}...`, 'info');
+  const res = await POST(`/api/varnish/${domain}/${action}`);
+  toast(res.error || `Varnish ${action} for ${domain}`, res.error ? 'error' : 'success');
+}
+
+function showInstallModal() {
+  showModal(`<h2>Install Project</h2>
+    <div class="form-group"><label>Type</label><select id="inst-type" style="width:100%" onchange="updateInstallForm()">
+      <option value="magento">Magento</option><option value="laravel">Laravel</option><option value="wordpress">WordPress</option>
+    </select></div>
+    <div id="inst-magento-fields">
+      <div class="form-row">
+        <div class="form-group"><label>Version</label><input id="inst-version" value="2.4.8" style="width:100%"></div>
+        <div class="form-group"><label>Edition</label><select id="inst-edition" style="width:100%"><option>community</option><option>enterprise</option></select></div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Domain</label><input id="inst-domain" placeholder="shop.test" style="width:100%"></div>
+      <div class="form-group"><label>PHP</label><select id="inst-php" style="width:100%"><option>php84</option><option selected>php83</option><option>php82</option><option>php81</option></select></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="runInstall()">Install</button>
+    </div>`);
+}
+function updateInstallForm() {
+  const t = document.getElementById('inst-type').value;
+  const mf = document.getElementById('inst-magento-fields');
+  if (mf) mf.style.display = t === 'magento' ? '' : 'none';
+}
+async function runInstall() {
+  const type = document.getElementById('inst-type').value;
+  const domain = document.getElementById('inst-domain').value.trim();
+  if (!domain) { toast('Domain required', 'error'); return; }
+  const body = { type, domain, php: document.getElementById('inst-php').value };
+  if (type === 'magento') {
+    body.version = document.getElementById('inst-version').value;
+    body.edition = document.getElementById('inst-edition').value;
+  }
+  closeModal();
+  showModal(`<h2>Installing ${type}: ${domain}</h2>
+    <div class="log-viewer" id="install-output" style="min-height:300px">Starting installation... This may take several minutes.</div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal()">Close</button></div>`);
+  toast(`Installing ${type} ${domain}...`, 'info');
+  const res = await POST('/api/install', body);
+  const el = document.getElementById('install-output');
+  if (el) el.textContent = (res.stdout || res.error || '') + '\n' + (res.stderr || '');
+  toast(res.error || `${type} installed: ${domain}`, res.error ? 'error' : 'success');
 }
 
 async function saveEnv() {
