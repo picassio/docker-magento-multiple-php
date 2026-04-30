@@ -1,0 +1,22 @@
+# Force LF line endings for all scripts and config files
+* text=auto eol=lf
+
+# Ensure shell scripts always use LF (critical for WSL/Linux)
+*.sh text eol=lf
+bin/mage text eol=lf
+
+# Config files
+*.yml text eol=lf
+*.yaml text eol=lf
+*.conf text eol=lf
+*.cnf text eol=lf
+*.env text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+Makefile text eol=lf
+Dockerfile text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.gif binary
