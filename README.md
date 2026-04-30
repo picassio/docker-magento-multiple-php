@@ -294,13 +294,28 @@ docker compose -f docker-compose.yml -f compose/debug.yml up -d
 # → Redis Commander at http://localhost:8081
 ```
 
+### Blank project (no framework pre-installed)
+
+```bash
+bin/mage project add mysite.com
+# Interactive wizard:
+#   PHP version [php83]: php83
+#   App type (magento1/magento2/wordpress/laravel/default): laravel
+#   Database service (mysql/mysql80/mariadb): mysql
+#   Search engine (opensearch/elasticsearch/none): none
+#   Create nginx vhost now? y
+#   Create database now? y
+#
+# → Registers project, creates vhost + DB, sources/mysite.com/ ready
+# → Clone or copy your own code into sources/mysite.com/
+```
+
 ### Fresh Laravel install
 
 ```bash
 bin/mage install-laravel myapp.test php83
 # → composer create-project, artisan key:generate, nginx vhost (public/), DB created
 bin/mage artisan myapp.test migrate
-bin/mage artisan myapp.test serve  # or just use nginx
 ```
 
 ### Fresh WordPress install
@@ -308,7 +323,8 @@ bin/mage artisan myapp.test serve  # or just use nginx
 ```bash
 bin/mage install-wp blog.test php83
 # → wp core download, nginx vhost, DB created
-bin/mage wp blog.test core install --url=blog.test --title="My Blog" --admin_user=admin --admin_password=admin --admin_email=admin@blog.test
+bin/mage wp blog.test core install --url=blog.test --title="My Blog" \
+    --admin_user=admin --admin_password=admin --admin_email=admin@blog.test
 ```
 
 ### Fresh Magento install (one command)
