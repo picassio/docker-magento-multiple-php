@@ -53,7 +53,9 @@ ${_bold}PROJECT MANAGEMENT${_reset}
 ${_bold}DEVELOPMENT (accepts domain name — auto-resolves PHP/DB)${_reset}
     ${_green}shell${_reset} <domain|php>                  Open bash in PHP container
     ${_green}composer${_reset} <domain|php> [args...]     Run composer
-    ${_green}magento${_reset} <domain> [args...]           Run bin/magento
+    ${_green}magento${_reset} <domain> [args...]           Run bin/magento (Magento projects)
+    ${_green}artisan${_reset} <domain> [args...]           Run php artisan (Laravel projects)
+    ${_green}wp${_reset} <domain> [args...]                Run wp-cli (WordPress projects)
 
 ${_bold}DATABASE (project-aware — auto-routes to correct DB service)${_reset}
     ${_green}db list${_reset} [--db-service=...]           List databases
@@ -70,6 +72,8 @@ ${_bold}HOSTING${_reset}
 
 ${_bold}INSTALL${_reset}
     ${_green}install${_reset} <ver> <edition> <domain> [php]  Install fresh Magento (auto-detects stack)
+    ${_green}install-laravel${_reset} <domain> [php]         Install fresh Laravel project
+    ${_green}install-wp${_reset} <domain> [php]               Install fresh WordPress project
 
 ${_bold}EXAMPLES${_reset}
     bin/mage project add mysite.com                # Add project (interactive)
@@ -77,6 +81,8 @@ ${_bold}EXAMPLES${_reset}
     bin/mage shell mysite.com                      # Shell into project's PHP
     bin/mage composer mysite.com install            # Composer in right container
     bin/mage magento mysite.com cache:flush         # bin/magento for project
+    bin/mage artisan myapp.test migrate               # Laravel artisan
+    bin/mage wp blog.test plugin list                  # WordPress wp-cli
     bin/mage db create mysite.com                   # Create DB on project's DB service
     bin/mage db import mysite.com backup.sql        # Import into right DB
     bin/mage project disable oldsite.com            # Disable without data loss
@@ -581,6 +587,56 @@ cmd_magento() {
     dc exec --user nginx "$php" php "/home/public_html/${domain}/bin/magento" "$@"
 }
 
+# ── Command: artisan (Laravel, project-aware) ─────────────────────────────
+cmd_artisan() {
+    local domain="${1:-}"
+    [[ -z "$domain" ]] && { _error "Usage: bin/mage artisan <domain> [artisan-args...]"; exit 1; }
+
+    local php app
+    if project_exists "$domain"; then
+        php=$(project_get "$domain" "php")
+        app=$(project_get "$domain" "app")
+        [[ "$app" != "laravel" ]] && _warning "Project '$domain' is type '$app', not laravel"
+    else
+        _die "Project '$domain' not found. Register it with: bin/mage project add $domain"
+    fi
+
+    validate_php_version "$php"
+    require_service "$php"
+    shift
+    dc exec --user nginx "$php" php "/home/public_html/${domain}/artisan" "$@"
+}
+
+# ── Command: wp (WordPress, project-aware) ────────────────────────────────
+cmd_wp() {
+    local domain="${1:-}"
+    [[ -z "$domain" ]] && { _error "Usage: bin/mage wp <domain> [wp-cli-args...]"; exit 1; }
+
+    local php app
+    if project_exists "$domain"; then
+        php=$(project_get "$domain" "php")
+        app=$(project_get "$domain" "app")
+        [[ "$app" != "wordpress" ]] && _warning "Project '$domain' is type '$app', not wordpress"
+    else
+        _die "Project '$domain' not found. Register it with: bin/mage project add $domain"
+    fi
+
+    validate_php_version "$php"
+    require_service "$php"
+    shift
+
+    # Install wp-cli if not present
+    dc exec --user nginx "$php" bash -c "
+        if ! command -v wp &>/dev/null; then
+            echo 'Installing WP-CLI...'
+            curl -sO https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+            chmod +x wp-cli.phar
+            mv wp-cli.phar /usr/local/bin/wp 2>/dev/null || sudo mv wp-cli.phar /usr/local/bin/wp
+        fi
+        cd /home/public_html/${domain} && wp --allow-root \"\$@\"
+    " -- "$@"
+}
+
 # ── Command: db (project-aware) ───────────────────────────────────────────────
 cmd_db() {
     local action="${1:-}"
@@ -767,6 +823,91 @@ cmd_install() {
         --php-version="$php"
 }
 
+# ── Command: install-laravel ───────────────────────────────────────────────
+cmd_install_laravel() {
+    local domain="${1:-}" php="${2:-php83}"
+    [[ -z "$domain" ]] && { _error "Usage: bin/mage install-laravel <domain> [php]"; echo "  Example: bin/mage install-laravel myapp.test php83"; exit 1; }
+
+    validate_php_version "$php"
+    require_service "$php"
+
+    _header "Installing Laravel: $domain (${php})"
+
+    # Register project
+    local db_name
+    db_name=$(echo "$domain" | tr '.' '_' | tr '-' '_')
+    if ! project_exists "$domain"; then
+        project_set "$domain" "$php" "laravel" "mysql" "$db_name" "none" "true"
+        _success "Project registered as Laravel"
+    fi
+
+    # Create source dir and install
+    mkdir -p "${SOURCE_DIR}/${domain}"
+    dc exec --user nginx "$php" bash -c "
+        cd /home/public_html && \
+        composer create-project laravel/laravel ${domain} && \
+        cd ${domain} && \
+        php artisan key:generate
+    "
+
+    # Create vhost (Laravel uses public/ as webroot)
+    "${SCRIPTS_DIR}/create-vhost" --domain="$domain" --app=laravel --root-dir="${domain}/public" --php-version="$php" 2>&1 || true
+
+    # Create DB
+    if is_service_running mysql 2>/dev/null; then
+        "${SCRIPTS_DIR}/database" create --database-name="$db_name" --db-service=mysql 2>&1 || true
+    fi
+
+    _success "Laravel installed at sources/${domain}/"
+    _arrow "Access: http://${domain}"
+    _arrow "Artisan: bin/mage artisan ${domain} migrate"
+}
+
+# ── Command: install-wp ───────────────────────────────────────────────────
+cmd_install_wp() {
+    local domain="${1:-}" php="${2:-php83}"
+    [[ -z "$domain" ]] && { _error "Usage: bin/mage install-wp <domain> [php]"; echo "  Example: bin/mage install-wp blog.test php83"; exit 1; }
+
+    validate_php_version "$php"
+    require_service "$php"
+
+    _header "Installing WordPress: $domain (${php})"
+
+    # Register project
+    local db_name
+    db_name=$(echo "$domain" | tr '.' '_' | tr '-' '_')
+    if ! project_exists "$domain"; then
+        project_set "$domain" "$php" "wordpress" "mysql" "$db_name" "none" "true"
+        _success "Project registered as WordPress"
+    fi
+
+    # Create source dir, install WP-CLI and download WordPress
+    mkdir -p "${SOURCE_DIR}/${domain}"
+    dc exec --user nginx "$php" bash -c "
+        # Install WP-CLI if missing
+        if ! command -v wp &>/dev/null; then
+            curl -sO https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+            chmod +x wp-cli.phar
+            mv wp-cli.phar /usr/local/bin/wp 2>/dev/null || sudo mv wp-cli.phar /usr/local/bin/wp
+        fi
+        cd /home/public_html/${domain} && \
+        wp core download --allow-root
+    "
+
+    # Create vhost (WordPress uses root as webroot)
+    "${SCRIPTS_DIR}/create-vhost" --domain="$domain" --app=wordpress --root-dir="$domain" --php-version="$php" 2>&1 || true
+
+    # Create DB
+    if is_service_running mysql 2>/dev/null; then
+        "${SCRIPTS_DIR}/database" create --database-name="$db_name" --db-service=mysql 2>&1 || true
+    fi
+
+    _success "WordPress downloaded to sources/${domain}/"
+    _arrow "Access: http://${domain}"
+    _arrow "Run installer: http://${domain}/wp-admin/install.php"
+    _arrow "Or CLI: bin/mage wp ${domain} core install --url=${domain} --title=Site --admin_user=admin --admin_password=admin --admin_email=admin@${domain}"
+}
+
 # ── Command: status (with projects) ──────────────────────────────────────────
 cmd_status() {
     _header "Docker Magento Stack Status"
@@ -848,12 +989,16 @@ main() {
         shell|sh)       cmd_shell "$@" ;;
         composer)       cmd_composer "$@" ;;
         magento)        cmd_magento "$@" ;;
+        artisan)        cmd_artisan "$@" ;;
+        wp)             cmd_wp "$@" ;;
         db)             cmd_db "$@" ;;
         vhost)          cmd_vhost "$@" ;;
         xdebug)         cmd_xdebug "$@" ;;
         ssl)            cmd_ssl "$@" ;;
         varnish)        cmd_varnish "$@" ;;
         install)        cmd_install "$@" ;;
+        install-laravel) cmd_install_laravel "$@" ;;
+        install-wp)     cmd_install_wp "$@" ;;
         setup)          cmd_setup ;;
         build)          cmd_build "$@" ;;
         doctor)         exec "${SCRIPTS_DIR}/doctor" "$@" ;;
