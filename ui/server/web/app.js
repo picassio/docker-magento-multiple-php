@@ -45,21 +45,30 @@ const appBadge = a => ({magento2:['M2','blue'],magento1:['M1','orange'],wordpres
 // ── Sidebar ──────────────────────────────────────────────────────────────────
 function Sidebar({ page, setPage }) {
   const theme = getTheme();
+  const I = (d) => html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" dangerouslySetInnerHTML=${{__html:d}}/>`;
   const items = [
-    ['/', 'Dashboard', '⊞'], ['/projects', 'Projects', '📁'], ['/db', 'Database', '🗄'],
-    ['/build', 'Build', '📦'], ['/logs', 'Logs', '📋'], ['/files', 'Files', '📄'],
-    ['/sql', 'SQL', '💻'], ['/terminal', 'Terminal', '⌨'], ['/settings', 'Settings', '⚙'],
+    ['/', 'Dashboard', I('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>')],
+    ['/projects', 'Projects', I('<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>')],
+    ['/db', 'Database', I('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/>')],
+    ['/build', 'Build', I('<path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>')],
+    ['/logs', 'Logs', I('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/>')],
+    ['/files', 'Files', I('<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M13 2v7h7"/>')],
+    ['/sql', 'SQL', I('<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>')],
+    ['/terminal', 'Terminal', I('<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>')],
+    ['/settings', 'Settings', I('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.2.65.77 1.09 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>')],
   ];
+  const logoSvg = html`<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>`;
   return html`<nav class="sidebar">
-    <div class="logo" onClick=${() => setPage('/')} style="cursor:pointer">⬡ Mage UI</div>
+    <div class="logo" onClick=${() => setPage('/')}>${logoSvg} <span>Mage UI</span></div>
     ${items.map(([path, label, icon]) => html`
       <a class="nav-item ${page === path ? 'active' : ''}" onClick=${e => { e.preventDefault(); setPage(path); }} href="#">
-        <span>${icon}</span> <span>${label}</span>
+        ${icon} <span>${label}</span>
       </a>
     `)}
     <div class="sidebar-footer">
       <div class="theme-toggle" onClick=${() => { setTheme(theme === 'dark' ? 'light' : 'dark'); location.reload(); }}>
-        ${theme === 'dark' ? '🌙' : '☀️'} ${theme === 'dark' ? 'Dark' : 'Light'}
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><${() => theme === 'dark' ? html`<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>` : html`<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>`}/></svg>
+        <span>${theme === 'dark' ? 'Dark' : 'Light'}</span>
       </div>
     </div>
   </nav>`;
@@ -262,7 +271,7 @@ function FilesPage() {
   };
 
   const breadcrumbs = path.split('/');
-  const icon = name => { const e = name.split('.').pop().toLowerCase(); return ({php:'🐘',js:'🟡',css:'🟣',json:'🟢',xml:'🟤',sql:'🗃️',log:'📄',env:'🔒',yml:'⚙️',yaml:'⚙️',conf:'⚙️',sh:'📜'})[e]||'📄'; };
+  const icon = name => { const e = name.split('.').pop().toLowerCase(); const colors = {php:'#777BB3',js:'#F0DB4F',css:'#264de4',json:'#5B9BD5',xml:'#E44D26',sql:'#336791',log:'#6B7280',env:'#EAB308',yml:'#CB171E',yaml:'#CB171E',conf:'#94A3B8',sh:'#4EAA25',md:'#083FA1',html:'#E44D26',txt:'#6B7280'}; return html`<span style="color:${colors[e]||'var(--text3)'};font-weight:700;font-size:10px;width:20px;display:inline-block;text-align:center;font-family:var(--mono)">${(e||'?').toUpperCase().slice(0,3)}</span>`; };
 
   return html`<div>
     <div class="page-header"><h1>Files</h1></div>
@@ -279,7 +288,7 @@ function FilesPage() {
       <div class="card" style="width:320px;min-height:400px;overflow-y:auto;max-height:70vh;flex-shrink:0">
         ${path!=='sources' && html`<div style="padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer" onClick=${()=>setPath(path.split('/').slice(0,-1).join('/')||'sources')}>← ..</div>`}
         ${files.map(f => html`<div style="padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between" onClick=${()=>f.isDir ? setPath(f.path) : viewFile(f.path)}>
-          <span>${f.isDir?'📁':icon(f.name)} ${f.name}</span><span style="color:var(--text2);font-size:11px">${f.isDir?'':fmtSize(f.size)}</span>
+          <span>${f.isDir ? html`<svg viewBox="0 0 24 24" width="16" height="16" fill="var(--accent)" stroke="none" style="vertical-align:-2px;margin-right:4px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>` : icon(f.name)} ${f.name}</span><span style="color:var(--text2);font-size:11px">${f.isDir?'':fmtSize(f.size)}</span>
         </div>`)}
       </div>
       <div class="card" style="flex:1;min-height:400px;position:relative">
