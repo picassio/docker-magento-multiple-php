@@ -275,7 +275,7 @@ function FilesPage() {
         ${breadcrumbs.map((p,i)=>html`<a href="#" style="color:var(--accent)" onClick=${e=>{e.preventDefault();setPath(breadcrumbs.slice(0,i+1).join('/'))}}>${p}</a>${i<breadcrumbs.length-1?' / ':''}`)}
       </div>
     </div>
-    <div style="display:flex;gap:16px">
+    <div class="split-layout" style="display:flex;gap:16px">
       <div class="card" style="width:320px;min-height:400px;overflow-y:auto;max-height:70vh;flex-shrink:0">
         ${path!=='sources' && html`<div style="padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer" onClick=${()=>setPath(path.split('/').slice(0,-1).join('/')||'sources')}>← ..</div>`}
         ${files.map(f => html`<div style="padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between" onClick=${()=>f.isDir ? setPath(f.path) : viewFile(f.path)}>
@@ -336,7 +336,7 @@ function SQLPage() {
     <div class="card" style="margin-bottom:16px">
       <textarea value=${query} onInput=${e=>setQuery(e.target.value)} spellcheck="false" placeholder="SELECT * FROM ... LIMIT 50;" style="width:100%;min-height:80px;background:var(--bg);color:var(--text);border:none;padding:12px;font-family:var(--mono);font-size:13px;resize:vertical;outline:none"></textarea>
     </div>
-    <div style="display:flex;gap:16px">
+    <div class="split-layout" style="display:flex;gap:16px">
       <div class="card" style="width:280px;min-height:300px;overflow-y:auto;max-height:60vh;flex-shrink:0">
         <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-weight:600;font-size:12px;color:var(--text2)">${tables.length} tables</div>
         ${tables.map(t=>html`<div style="padding:6px 12px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px;display:flex;justify-content:space-between" onClick=${()=>selectTable(t.name)}>
