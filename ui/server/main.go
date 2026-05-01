@@ -92,6 +92,21 @@ func main() {
 	mux.HandleFunc("GET /api/xdebug/{php}", handlers.XdebugStatus)
 	mux.HandleFunc("POST /api/xdebug/{php}/{action}", handlers.XdebugToggle)
 
+	// Files
+	mux.HandleFunc("GET /api/files", handlers.ListFiles)
+	mux.HandleFunc("GET /api/files/read", handlers.ReadFile)
+	mux.HandleFunc("POST /api/files/write", handlers.WriteFile)
+	mux.HandleFunc("GET /api/files/logs", handlers.ListLogs)
+	mux.HandleFunc("GET /api/files/tail", handlers.TailFile)
+	mux.HandleFunc("GET /api/files/tail/ws", handlers.TailFileWS)
+	mux.HandleFunc("GET /api/files/download", handlers.DownloadFile)
+
+	// DB Manager
+	mux.HandleFunc("GET /api/dbmanager/tables", handlers.ListTables)
+	mux.HandleFunc("GET /api/dbmanager/columns", handlers.DescribeTable)
+	mux.HandleFunc("GET /api/dbmanager/data", handlers.TableData)
+	mux.HandleFunc("POST /api/dbmanager/query", handlers.RunQuery)
+
 	// Commands (shell, composer, magento, artisan, wp, ssl, varnish, install)
 	mux.HandleFunc("POST /api/exec", handlers.ExecCommand)
 	mux.HandleFunc("GET /api/exec/ws", handlers.ExecCommandWS)

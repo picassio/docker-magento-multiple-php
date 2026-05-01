@@ -59,6 +59,8 @@ const routes = {
   '/db': renderDatabase,
   '/build': renderBuild,
   '/logs': renderLogs,
+  '/files': renderFiles,
+  '/dbmanager': renderDBManager,
   '/settings': renderSettings,
 };
 
@@ -683,6 +685,313 @@ async function saveEnv() {
   });
   await PATCH('/api/env', updates);
   toast('.env saved', 'success');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FILES
+// ══════════════════════════════════════════════════════════════════════════════
+let currentFilePath = 'sources';
+
+async function renderFiles() {
+  await loadProjects();
+  let html = `<div class="page-header"><h1>Files</h1></div>`;
+
+  // Project selector + path breadcrumb
+  const projOpts = state.projects.map(p => `<option value="sources/${p.domain}">${p.domain}</option>`).join('');
+  html += `<div style="display:flex;gap:12px;margin-bottom:16px;align-items:center">`;
+  html += `<select id="file-project" onchange="browseDir(this.value)" style="min-width:180px"><option value="sources">All Projects</option>${projOpts}</select>`;
+  html += `<div id="file-breadcrumb" style="font-family:var(--mono);font-size:13px;color:var(--text2);flex:1"></div>`;
+  html += `<button class="btn btn-sm" onclick="showLogViewer()">📋 Logs</button>`;
+  html += `</div>`;
+
+  html += `<div style="display:flex;gap:16px;">`;
+  // File list
+  html += `<div class="card" id="file-list" style="width:320px;min-height:400px;overflow-y:auto;max-height:70vh;flex-shrink:0"></div>`;
+  // File content
+  html += `<div class="card" id="file-content" style="flex:1;min-height:400px;position:relative">`;
+  html += `<div class="empty"><div class="icon">📄</div><p>Select a file to view</p></div></div>`;
+  html += `</div>`;
+
+  content().innerHTML = html;
+  browseDir(currentFilePath);
+}
+
+async function browseDir(path) {
+  currentFilePath = path;
+  const files = await GET('/api/files?path=' + encodeURIComponent(path));
+  const listEl = document.getElementById('file-list');
+  const breadEl = document.getElementById('file-breadcrumb');
+
+  // Breadcrumb
+  if (breadEl) {
+    const parts = path.split('/');
+    let bc = '';
+    let accumulated = '';
+    parts.forEach((p, i) => {
+      accumulated += (i > 0 ? '/' : '') + p;
+      const a = accumulated;
+      bc += `<a href="#" onclick="event.preventDefault();browseDir('${a}')" style="color:var(--accent)">${p}</a>`;
+      if (i < parts.length - 1) bc += ' / ';
+    });
+    breadEl.innerHTML = bc;
+  }
+
+  if (!listEl) return;
+  if (!files || files.length === 0) {
+    listEl.innerHTML = '<div style="padding:16px;color:var(--text2)">Empty directory</div>';
+    return;
+  }
+
+  // Parent dir link
+  let html = '';
+  if (path !== 'sources') {
+    const parent = path.split('/').slice(0, -1).join('/') || 'sources';
+    html += `<div style="padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer" onclick="browseDir('${parent}')">
+      <span style="color:var(--text2)">← ..</span></div>`;
+  }
+
+  for (const f of files) {
+    const icon = f.isDir ? '📁' : fileIcon(f.name);
+    const size = f.isDir ? '' : formatSize(f.size);
+    if (f.isDir) {
+      html += `<div style="padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between" onclick="browseDir('${f.path}')">
+        <span>${icon} ${f.name}</span><span style="color:var(--text2);font-size:11px">${size}</span></div>`;
+    } else {
+      html += `<div style="padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between" onclick="viewFile('${f.path}')">
+        <span>${icon} ${f.name}</span><span style="color:var(--text2);font-size:11px">${size}</span></div>`;
+    }
+  }
+  listEl.innerHTML = html;
+}
+
+async function viewFile(path) {
+  const el = document.getElementById('file-content');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:16px"><div class="spinner"></div></div>';
+
+  const res = await GET('/api/files/read?path=' + encodeURIComponent(path));
+  if (res.error) {
+    el.innerHTML = `<div style="padding:16px;color:var(--red)">${res.error}</div>`;
+    return;
+  }
+
+  const ext = path.split('.').pop().toLowerCase();
+  const isEditable = ['php','html','css','js','json','xml','env','yml','yaml','conf','ini','htaccess','txt','md','sh','sql','log'].includes(ext);
+
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--bg3)">`;
+  html += `<span style="font-family:var(--mono);font-size:12px;color:var(--text2)">${path}</span>`;
+  html += `<div style="display:flex;gap:6px">`;
+  if (isEditable) html += `<button class="btn btn-sm btn-primary" onclick="saveFile('${path}')">💾 Save</button>`;
+  html += `<a class="btn btn-sm" href="/api/files/download?path=${encodeURIComponent(path)}" target="_blank">⬇ Download</a>`;
+  html += `</div></div>`;
+
+  if (isEditable) {
+    html += `<textarea id="file-editor" spellcheck="false" style="width:100%;height:calc(70vh - 60px);background:var(--bg);color:var(--text);border:none;padding:12px;font-family:var(--mono);font-size:12px;line-height:1.6;resize:none;outline:none">${escapeHtml(res.content)}</textarea>`;
+  } else {
+    html += `<pre style="padding:12px;font-family:var(--mono);font-size:12px;overflow:auto;max-height:calc(70vh - 60px)">${escapeHtml(res.content)}</pre>`;
+  }
+  el.innerHTML = html;
+}
+
+async function saveFile(path) {
+  const editor = document.getElementById('file-editor');
+  if (!editor) return;
+  const res = await POST('/api/files/write', { path, content: editor.value });
+  toast(res.error || 'File saved', res.error ? 'error' : 'success');
+}
+
+function showLogViewer() {
+  const projSel = document.getElementById('file-project');
+  const project = projSel ? projSel.value.replace('sources/', '') : '';
+  showModal(`<h2>📋 Log Viewer</h2>
+    <div id="log-file-list" style="margin-bottom:12px"><div class="spinner"></div></div>
+    <div class="log-viewer" id="log-file-content" style="min-height:300px"></div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal()">Close</button></div>`);
+  loadLogFiles(project);
+}
+
+async function loadLogFiles(project) {
+  const logs = await GET('/api/files/logs?project=' + encodeURIComponent(project));
+  const el = document.getElementById('log-file-list');
+  if (!el) return;
+  if (!logs || logs.length === 0) {
+    el.innerHTML = '<div style="color:var(--text2)">No log files found</div>';
+    return;
+  }
+  let html = '<div style="display:flex;gap:6px;flex-wrap:wrap">';
+  for (const log of logs) {
+    html += `<button class="btn btn-sm" onclick="tailLogFile('${log.path}')">${log.name} <span style="color:var(--text2)">(${formatSize(log.size)})</span></button>`;
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+async function tailLogFile(path) {
+  const el = document.getElementById('log-file-content');
+  if (!el) return;
+  const res = await GET('/api/files/tail?path=' + encodeURIComponent(path) + '&lines=200');
+  el.textContent = res.content || res.error || 'Empty';
+  el.scrollTop = el.scrollHeight;
+}
+
+function fileIcon(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  const map = {php:'🐘',js:'🟡',css:'🟣',html:'🟠',json:'🟢',xml:'🟤',sql:'🗃️',log:'📄',md:'📘',env:'🔒',yml:'⚙️',yaml:'⚙️',conf:'⚙️',sh:'📜',png:'🖼️',jpg:'🖼️',gif:'🖼️',svg:'🖼️'};
+  return map[ext] || '📄';
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DB MANAGER
+// ══════════════════════════════════════════════════════════════════════════════
+let dbmState = { db: '', service: 'mysql', table: '' };
+
+async function renderDBManager() {
+  await loadDatabases();
+
+  let html = `<div class="page-header"><h1>SQL Manager</h1></div>`;
+
+  // DB + Service selector
+  const dbOpts = state.databases.map(d => `<option value="${d.name}" data-svc="${d.service}">${d.name} (${d.service})</option>`).join('');
+  html += `<div style="display:flex;gap:12px;margin-bottom:16px;align-items:center">`;
+  html += `<label style="margin:0">Database:</label>`;
+  html += `<select id="dbm-db" onchange="dbmSelectDB(this)" style="min-width:200px">${dbOpts || '<option>No databases</option>'}</select>`;
+  html += `<button class="btn btn-sm btn-primary" onclick="dbmRunQuery()">▶ Run Query</button>`;
+  html += `</div>`;
+
+  // Query editor
+  html += `<div class="card" style="margin-bottom:16px">`;
+  html += `<textarea id="dbm-query" spellcheck="false" placeholder="SELECT * FROM ... LIMIT 50;" style="width:100%;min-height:80px;background:var(--bg);color:var(--text);border:none;padding:12px;font-family:var(--mono);font-size:13px;resize:vertical;outline:none"></textarea>`;
+  html += `</div>`;
+
+  html += `<div style="display:flex;gap:16px;">`;
+  // Table list
+  html += `<div class="card" id="dbm-tables" style="width:280px;min-height:300px;overflow-y:auto;max-height:60vh;flex-shrink:0"></div>`;
+  // Data/Results
+  html += `<div class="card" id="dbm-results" style="flex:1;min-height:300px;overflow:auto;max-height:60vh">`;
+  html += `<div class="empty"><div class="icon">🗃️</div><p>Select a table or run a query</p></div></div>`;
+  html += `</div>`;
+
+  content().innerHTML = html;
+
+  // Auto-select first DB
+  if (state.databases.length > 0) {
+    dbmState.db = state.databases[0].name;
+    dbmState.service = state.databases[0].service;
+    dbmLoadTables();
+  }
+}
+
+function dbmSelectDB(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  dbmState.db = sel.value;
+  dbmState.service = opt.dataset.svc || 'mysql';
+  dbmLoadTables();
+}
+
+async function dbmLoadTables() {
+  const el = document.getElementById('dbm-tables');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:12px"><div class="spinner"></div></div>';
+
+  const tables = await GET(`/api/dbmanager/tables?db=${dbmState.db}&service=${dbmState.service}`);
+  if (!tables || tables.length === 0) {
+    el.innerHTML = '<div style="padding:16px;color:var(--text2)">No tables</div>';
+    return;
+  }
+
+  let html = `<div style="padding:8px 12px;border-bottom:1px solid var(--border);font-weight:600;font-size:12px;color:var(--text2)">${tables.length} tables</div>`;
+  for (const t of tables) {
+    const active = t.name === dbmState.table ? 'background:var(--bg3);' : '';
+    html += `<div style="padding:6px 12px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px;display:flex;justify-content:space-between;${active}" onclick="dbmSelectTable('${t.name}')">`;
+    html += `<span>🗃️ ${t.name}</span>`;
+    html += `<span style="color:var(--text2);font-size:11px">${t.rows || ''} rows</span>`;
+    html += `</div>`;
+  }
+  el.innerHTML = html;
+}
+
+async function dbmSelectTable(table) {
+  dbmState.table = table;
+  // Highlight in list
+  dbmLoadTables();
+  // Set query
+  const q = document.getElementById('dbm-query');
+  if (q) q.value = `SELECT * FROM \`${table}\` LIMIT 50;`;
+  // Load data
+  await dbmLoadData(table, 1);
+}
+
+async function dbmLoadData(table, page) {
+  const el = document.getElementById('dbm-results');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:16px"><div class="spinner"></div></div>';
+
+  const res = await GET(`/api/dbmanager/data?db=${dbmState.db}&service=${dbmState.service}&table=${table}&page=${page}&limit=50`);
+  if (!res || !res.columns) {
+    el.innerHTML = '<div style="padding:16px;color:var(--red)">Failed to load data</div>';
+    return;
+  }
+
+  let html = renderResultTable(res.columns, res.rows);
+
+  // Pagination
+  if (res.pages > 1) {
+    html += `<div style="padding:8px 12px;display:flex;gap:8px;align-items:center;border-top:1px solid var(--border)">`;
+    html += `<span style="font-size:12px;color:var(--text2)">${res.total} rows, page ${res.page}/${res.pages}</span>`;
+    if (res.page > 1) html += `<button class="btn btn-sm" onclick="dbmLoadData('${table}',${res.page-1})">← Prev</button>`;
+    if (res.page < res.pages) html += `<button class="btn btn-sm" onclick="dbmLoadData('${table}',${res.page+1})">Next →</button>`;
+    html += `</div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+async function dbmRunQuery() {
+  const q = document.getElementById('dbm-query');
+  if (!q || !q.value.trim()) { toast('Enter a query', 'error'); return; }
+  const el = document.getElementById('dbm-results');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:16px"><div class="spinner"></div></div>';
+
+  const res = await POST('/api/dbmanager/query', {
+    db: dbmState.db, service: dbmState.service, query: q.value.trim()
+  });
+
+  if (res.error) {
+    el.innerHTML = `<div style="padding:16px;color:var(--red);font-family:var(--mono);font-size:13px">${escapeHtml(res.error)}</div>`;
+    return;
+  }
+
+  let html = renderResultTable(res.columns || [], res.rows || []);
+  html += `<div style="padding:8px 12px;font-size:12px;color:var(--text2);border-top:1px solid var(--border)">${res.count} row(s) returned</div>`;
+  el.innerHTML = html;
+}
+
+function renderResultTable(columns, rows) {
+  if (!columns.length) return '<div style="padding:16px;color:var(--text2)">No results</div>';
+  let html = '<div class="table-wrap" style="max-height:calc(60vh - 80px);overflow:auto"><table><thead><tr>';
+  for (const col of columns) html += `<th>${escapeHtml(col)}</th>`;
+  html += '</tr></thead><tbody>';
+  for (const row of rows) {
+    html += '<tr>';
+    for (const cell of row) {
+      const val = cell === null ? '<span style="color:var(--text2);font-style:italic">NULL</span>' : escapeHtml(String(cell)).substring(0, 200);
+      html += `<td style="font-family:var(--mono);font-size:12px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${val}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
