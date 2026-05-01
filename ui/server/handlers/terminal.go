@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"strings"
 	osexec "os/exec"
 	"sync"
 
@@ -13,6 +14,24 @@ import (
 	"github.com/picassio/docker-magento-multiple-php/ui/server/exec"
 	"nhooyr.io/websocket"
 )
+
+// findContainerName finds the running container for a PHP service
+func findContainerName(php string) string {
+	// Try docker compose ps to get the actual container name
+	res, _ := exec.DockerCompose("ps", "--format", "{{.Name}}", php)
+	if res != nil && res.Stdout != "" {
+		lines := strings.Split(strings.TrimSpace(res.Stdout), "\n")
+		if len(lines) > 0 && lines[0] != "" {
+			return lines[0]
+		}
+	}
+	// Fallback: conventional name
+	pn := os.Getenv("COMPOSE_PROJECT_NAME")
+	if pn == "" {
+		pn = "docker-magento-multiple-php"
+	}
+	return pn + "-" + php + "-1"
+}
 
 // GET /api/terminal/ws?project=shop.test — WebSocket PTY terminal
 // If project is set, opens shell inside the project's PHP container
@@ -42,21 +61,18 @@ func TerminalWS(c echo.Context) error {
 			php = p.PHP
 		}
 
-		// Get compose project name for docker exec
-		composeProjName := os.Getenv("COMPOSE_PROJECT_NAME")
-		containerName := composeProjName + "-" + php + "-1"
-		if composeProjName == "" {
-			containerName = "docker-magento-multiple-php-" + php + "-1"
-		}
+		// Find the actual container name by querying docker
+		containerName := findContainerName(php)
 
 		// Open bash inside the PHP container, cd to project dir
+		// Use -i only (not -it) — creack/pty provides the TTY
 		cmd = osexec.CommandContext(ctx,
-			"docker", "exec", "-it",
+			"docker", "exec", "-i",
 			"-e", "TERM=xterm-256color",
 			"-u", "nginx",
 			"-w", "/home/public_html/"+project,
 			containerName,
-			"bash", "--login",
+			"bash",
 		)
 	} else {
 		// Host shell in project root
@@ -68,33 +84,7 @@ func TerminalWS(c echo.Context) error {
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
 		// Fallback: try without -it flag for docker exec
-		if project != "" {
-			projects, _ := readProjects()
-			p, exists := projects[project]
-			php := "php83"
-			if exists {
-				php = p.PHP
-			}
-			composeProjName := os.Getenv("COMPOSE_PROJECT_NAME")
-			containerName := composeProjName + "-" + php + "-1"
-			if composeProjName == "" {
-				containerName = "docker-magento-multiple-php-" + php + "-1"
-			}
-			cmd = osexec.CommandContext(ctx,
-				"docker", "exec", "-i",
-				"-e", "TERM=xterm-256color",
-				"-u", "nginx",
-				"-w", "/home/public_html/"+project,
-				containerName,
-				"bash",
-			)
-			ptmx, err = pty.Start(cmd)
-			if err != nil {
-				return err
-			}
-		} else {
-			return err
-		}
+		return err
 	}
 	defer ptmx.Close()
 
