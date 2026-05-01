@@ -279,3 +279,27 @@ cmd_ui() {
 4. **WebSocket** — logs + build streaming
 5. **Polish** — error handling, loading states, mobile responsive
 6. **CI** — GitHub Actions cross-compile + release
+
+## Tech Stack Update (Post-Grilling v2)
+
+### Go Backend
+| Component | Before | After |
+|-----------|--------|-------|
+| Router | net/http stdlib | **Echo v4** — middleware, JSON binding, groups |
+| WebSocket | gorilla/websocket | **nhooyr/websocket** — modern, context-aware |
+| Docker | shell out (keep) | shell out (keep) |
+| File browser | custom (keep) | custom (keep) |
+| SQL client | custom (keep) | custom (keep) |
+
+### Frontend
+| Component | Before | After |
+|-----------|--------|-------|
+| Framework | vanilla JS | **Preact + HTM** (4KB CDN, React API, no build) |
+| Code editor | textarea | **Ace Editor** (150KB CDN, syntax highlighting) |
+| Terminal | none | **xterm.js** (200KB CDN, WebSocket PTY) |
+| Routing | custom hash router | Preact hash router |
+
+### Key Principle
+- Go backend: custom handlers, no admin-panel frameworks (they're all standalone apps)
+- Frontend: CDN-loaded micro-libs (Ace, xterm.js, Preact), no build step
+- File browser + SQL client: our custom code is better than available Go libs
