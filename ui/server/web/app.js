@@ -122,6 +122,7 @@ function Dashboard() {
 function Projects() {
   const [projects, setProjects] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
+  const [cmdProject, setCmdProject] = useState(null);
   const load = async () => setProjects(await GET('/api/projects') || []);
   useEffect(() => { load(); }, []);
   const phpOpts = ['php70','php71','php72','php73','php74','php81','php82','php83','php84'];
@@ -137,11 +138,89 @@ function Projects() {
           <td><select class="inline-select" value=${p.db_service} onChange=${e=>{PATCH('/api/projects/'+p.domain,{db_service:e.target.value});toast(p.domain+': DB → '+e.target.value,'success');}}>${dbOpts.map(o=>html`<option selected=${o===p.db_service}>${o}</option>`)}</select></td>
           <td><select class="inline-select" value=${p.search} onChange=${e=>{PATCH('/api/projects/'+p.domain,{search:e.target.value});toast(p.domain+': Search → '+e.target.value,'success');}}>${searchOpts.map(o=>html`<option selected=${o===p.search}>${o}</option>`)}</select></td>
           <td><label class="toggle"><input type="checkbox" checked=${p.enabled} onChange=${e=>{POST('/api/projects/'+p.domain+'/'+(e.target.checked?'enable':'disable'));toast(p.domain+' '+(e.target.checked?'enabled':'disabled'),'success');}}/><span class="slider"></span></label></td>
-          <td style="white-space:nowrap"><button class="btn-icon" title="SSL" onClick=${()=>{toast('SSL for '+p.domain);POST('/api/ssl/'+p.domain);}}>🔒</button><button class="btn-icon" style="color:var(--red)" title="Remove" onClick=${async()=>{if(confirm('Remove '+p.domain+'?')){await DELETE('/api/projects/'+p.domain);toast(p.domain+' removed','success');load();}}}>✕</button></td>
+          <td style="white-space:nowrap"><button class="btn btn-sm" title="Run command" onClick=${()=>setCmdProject(p)}>▶ Run</button> <button class="btn-icon" title="SSL" onClick=${()=>{toast('SSL for '+p.domain);POST('/api/ssl/'+p.domain);}}>🔒</button><button class="btn-icon" style="color:var(--red)" title="Remove" onClick=${async()=>{if(confirm('Remove '+p.domain+'?')){await DELETE('/api/projects/'+p.domain);toast(p.domain+' removed','success');load();}}}>✕</button></td>
         </tr>`; })}
       </tbody></table></div>`}
     <${AddProjectModal} show=${showAdd} onClose=${()=>{setShowAdd(false);load();}} />
+    <${RunCommandModal} show=${!!cmdProject} onClose=${()=>setCmdProject(null)} project=${cmdProject} />
   </div>`;
+}
+
+// ── Run Command Modal ────────────────────────────────────────────────────────
+function RunCommandModal({ show, onClose, project }) {
+  const [cmd, setCmd] = useState('');
+  const [output, setOutput] = useState('');
+  const [running, setRunning] = useState(false);
+  if (!show || !project) return null;
+
+  const shortcuts = [];
+  if (project.app === 'magento2') shortcuts.push(
+    { label: 'cache:flush', cmd: 'magento', args: 'cache:flush' },
+    { label: 'setup:upgrade', cmd: 'magento', args: 'setup:upgrade' },
+    { label: 'di:compile', cmd: 'magento', args: 'setup:di:compile' },
+    { label: 'deploy:static', cmd: 'magento', args: 'setup:static-content:deploy -f' },
+    { label: 'reindex', cmd: 'magento', args: 'indexer:reindex' },
+    { label: 'composer install', cmd: 'composer', args: 'install' },
+  );
+  if (project.app === 'laravel') shortcuts.push(
+    { label: 'migrate', cmd: 'artisan', args: 'migrate' },
+    { label: 'cache:clear', cmd: 'artisan', args: 'cache:clear' },
+    { label: 'config:cache', cmd: 'artisan', args: 'config:cache' },
+    { label: 'route:list', cmd: 'artisan', args: 'route:list' },
+    { label: 'queue:work', cmd: 'artisan', args: 'queue:work --once' },
+    { label: 'composer install', cmd: 'composer', args: 'install' },
+  );
+  if (project.app === 'wordpress') shortcuts.push(
+    { label: 'plugin list', cmd: 'wp', args: 'plugin list' },
+    { label: 'theme list', cmd: 'wp', args: 'theme list' },
+    { label: 'cache flush', cmd: 'wp', args: 'cache flush' },
+    { label: 'db check', cmd: 'wp', args: 'db check' },
+    { label: 'core update', cmd: 'wp', args: 'core update' },
+  );
+  // Always available
+  shortcuts.push(
+    { label: 'shell', cmd: 'shell', args: '' },
+  );
+
+  const run = async (command, argsStr) => {
+    const args = [project.domain, ...(argsStr ? argsStr.split(' ') : [])].filter(Boolean);
+    setRunning(true);
+    setOutput('Running: bin/mage ' + command + ' ' + args.join(' ') + '\n\n');
+    try {
+      const r = await POST('/api/exec', { command, args });
+      setOutput(prev => prev + (r.stdout || '') + (r.stderr ? '\n' + r.stderr : '') + '\n\nExit code: ' + (r.exitCode || 0));
+    } catch (e) {
+      setOutput(prev => prev + '\nError: ' + e.message);
+    }
+    setRunning(false);
+  };
+
+  const runCustom = () => {
+    if (!cmd.trim()) return;
+    const parts = cmd.trim().split(' ');
+    const command = parts[0];
+    const args = parts.slice(1).join(' ');
+    run(command, project.domain + (args ? ' ' + args : ''));
+  };
+
+  return html`<${Modal} show=${show} onClose=${onClose} title="Run Command — ${project.domain}">
+    <div style="margin-bottom:14px">
+      <label>Quick Commands</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${shortcuts.map(s => html`<button class="btn btn-sm" disabled=${running} onClick=${() => run(s.cmd, s.args)}>${s.label}</button>`)}
+      </div>
+    </div>
+    <div style="margin-bottom:14px">
+      <label>Custom Command</label>
+      <div style="display:flex;gap:8px">
+        <input value=${cmd} onInput=${e => setCmd(e.target.value)} onKeyDown=${e => e.key === 'Enter' && runCustom()} placeholder="composer require package/name" style="flex:1"/>
+        <button class="btn btn-primary btn-sm" disabled=${running} onClick=${runCustom}>${running ? html`<span class="spinner"/>` : 'Run'}</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Available: composer, magento, artisan, wp, shell</div>
+    </div>
+    ${output && html`<pre class="log-viewer" style="max-height:300px;margin-top:8px">${output}</pre>`}
+    <div class="modal-actions"><button class="btn" onClick=${onClose}>Close</button></div>
+  <//>`;
 }
 
 function AddProjectModal({ show, onClose }) {
