@@ -1,30 +1,23 @@
 /* ==========================================================================
-   Mage UI — Docker Magento Dashboard
-   Vanilla JS, hash routing, REST + WebSocket
+   Mage UI — Preact + HTM + Ace + xterm.js
+   CDN-loaded, no build step
    ========================================================================== */
 
-const API = '';  // same origin
-let state = { services: [], projects: [], databases: [], images: [], env: [], doctor: null };
-let pollTimer = null;
-let logWS = null;
-let buildWS = null;
+const { h, render, html, useState, useEffect, useRef, useCallback } = window._preact;
 
 // ── API helpers ──────────────────────────────────────────────────────────────
+const API = '';
 async function api(path, opts = {}) {
-  const url = API + path;
-  const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...opts.headers },
-    ...opts,
-  });
+  const res = await fetch(API + path, { headers: { 'Content-Type': 'application/json', ...opts.headers }, ...opts });
   if (opts.raw) return res;
   return res.json();
 }
-const GET = (p) => api(p);
+const GET = p => api(p);
 const POST = (p, body) => api(p, { method: 'POST', body: body ? JSON.stringify(body) : undefined });
 const PATCH = (p, body) => api(p, { method: 'PATCH', body: JSON.stringify(body) });
-const DELETE = (p) => api(p, { method: 'DELETE' });
+const DELETE = p => api(p, { method: 'DELETE' });
 
-// ── Toast notifications ──────────────────────────────────────────────────────
+// ── Toast ────────────────────────────────────────────────────────────────────
 function toast(msg, type = 'info') {
   const el = document.createElement('div');
   el.className = `toast toast-${type}`;
@@ -33,966 +26,430 @@ function toast(msg, type = 'info') {
   setTimeout(() => el.remove(), 4000);
 }
 
-// ── Modal ────────────────────────────────────────────────────────────────────
-function showModal(html) {
-  document.getElementById('modal-root').innerHTML =
-    `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">${html}</div></div>`;
-}
-function closeModal() { document.getElementById('modal-root').innerHTML = ''; }
-
 // ── Theme ────────────────────────────────────────────────────────────────────
-function toggleTheme() {
-  const isDark = !document.documentElement.hasAttribute('data-theme');
-  document.documentElement.setAttribute('data-theme', isDark ? 'light' : '');
-  if (!isDark) document.documentElement.removeAttribute('data-theme');
-  document.getElementById('theme-icon').textContent = isDark ? '☀️' : '🌙';
-  document.getElementById('theme-label').textContent = isDark ? 'Light' : 'Dark';
-  localStorage.setItem('theme', isDark ? 'light' : 'dark');
-}
-// Init theme
-if (localStorage.getItem('theme') === 'light') toggleTheme();
+function getTheme() { return localStorage.getItem('theme') || 'dark'; }
+function setTheme(t) { document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : ''); localStorage.setItem('theme', t); }
+setTheme(getTheme());
 
-// ── Router ───────────────────────────────────────────────────────────────────
-const routes = {
-  '/': renderDashboard,
-  '/projects': renderProjects,
-  '/db': renderDatabase,
-  '/build': renderBuild,
-  '/logs': renderLogs,
-  '/files': renderFiles,
-  '/dbmanager': renderDBManager,
-  '/settings': renderSettings,
-};
-
-function navigate() {
-  const hash = location.hash.replace('#', '') || '/';
-  const render = routes[hash] || routes['/'];
-
-  // Update nav
-  document.querySelectorAll('.nav-item').forEach(el => {
-    el.classList.toggle('active', el.getAttribute('href') === '#' + hash);
-  });
-
-  // Stop polling/ws
-  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-  if (logWS) { logWS.close(); logWS = null; }
-  if (buildWS) { buildWS.close(); buildWS = null; }
-
-  render();
-}
-window.addEventListener('hashchange', navigate);
-
-// ── Data loading ─────────────────────────────────────────────────────────────
-async function loadServices() { state.services = await GET('/api/services').catch(() => []) || []; }
-async function loadProjects() { state.projects = await GET('/api/projects').catch(() => []) || []; }
-async function loadDatabases() { state.databases = await GET('/api/databases').catch(() => []) || []; }
-async function loadImages() { state.images = await GET('/api/images').catch(() => []) || []; }
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-function $(sel) { return document.querySelector(sel); }
-function h(tag, attrs = {}, ...children) {
-  const el = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (k === 'onclick' || k === 'onchange' || k === 'oninput') el[k] = v;
-    else if (k === 'html') el.innerHTML = v;
-    else if (k === 'class') el.className = v;
-    else el.setAttribute(k, v);
-  }
-  for (const c of children) {
-    if (typeof c === 'string') el.appendChild(document.createTextNode(c));
-    else if (c) el.appendChild(c);
-  }
-  return el;
-}
-const content = () => document.getElementById('content');
-
-function serviceState(svc) {
-  const s = (svc.state || svc.State || '').toLowerCase();
-  if (s.includes('running') || s.includes('up')) return 'running';
-  if (s.includes('exit') || s.includes('dead') || s.includes('stop')) return 'stopped';
-  return 'other';
-}
-
-function appBadge(app) {
-  const map = { magento2: ['M2','blue'], magento1: ['M1','orange'], wordpress: ['WP','green'], laravel: ['LV','red'], default: ['—','purple'] };
-  const [label, color] = map[app] || ['?','purple'];
-  return `<span class="badge badge-${color}">${label}</span>`;
-}
-
-function portFromPorts(ports) {
-  if (!ports) return '';
-  const m = ports.match(/:(\d+)->/);
-  return m ? ':' + m[1] : '';
-}
+// ── Escape HTML ──────────────────────────────────────────────────────────────
+const esc = s => s ? s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : '';
+const fmtSize = b => b < 1024 ? b+' B' : b < 1048576 ? (b/1024).toFixed(1)+' KB' : (b/1048576).toFixed(1)+' MB';
+const portOf = ports => { const m = (ports||'').match(/:(\d+)->/); return m ? ':'+m[1] : ''; };
+const svcState = s => { const st = (s.state||s.State||'').toLowerCase(); return st.includes('running') ? 'running' : st.includes('exit')||st.includes('stop') ? 'stopped' : 'other'; };
+const appBadge = a => ({magento2:['M2','blue'],magento1:['M1','orange'],wordpress:['WP','green'],laravel:['LV','red']}[a]||['—','purple']);
 
 // ══════════════════════════════════════════════════════════════════════════════
-// DASHBOARD
+// COMPONENTS
 // ══════════════════════════════════════════════════════════════════════════════
-async function renderDashboard() {
-  content().innerHTML = '<div class="spinner" style="margin:40px auto;display:block;width:24px;height:24px"></div>';
-  await Promise.all([loadServices(), loadProjects()]);
 
-  const running = state.services.filter(s => serviceState(s) === 'running').length;
-  const total = state.services.length;
-
-  let html = `<div class="page-header"><h1>Dashboard</h1><div class="actions">
-    <button class="btn btn-success" onclick="dashAction('up')">▶ Start All</button>
-    <button class="btn btn-danger" onclick="dashAction('stop')">■ Stop</button>
-    <button class="btn" onclick="dashAction('down')">⏏ Down</button>
-  </div></div>`;
-
-  // Service cards
-  html += `<div class="card-header">Services <span class="badge badge-${running===total?'green':'orange'}">${running}/${total} running</span></div>`;
-  html += '<div class="card-grid">';
-  for (const svc of state.services) {
-    const st = serviceState(svc);
-    const port = portFromPorts(svc.ports);
-    html += `<div class="card service-card">
-      <div class="dot ${st}"></div>
-      <div class="info">
-        <div class="name">${svc.service || svc.name}${port ? ' <span style="color:var(--text2);font-weight:400">' + port + '</span>' : ''}</div>
-        <div class="meta">${svc.status || svc.state || 'unknown'}</div>
+// ── Sidebar ──────────────────────────────────────────────────────────────────
+function Sidebar({ page, setPage }) {
+  const theme = getTheme();
+  const items = [
+    ['/', 'Dashboard', '⊞'], ['/projects', 'Projects', '📁'], ['/db', 'Database', '🗄'],
+    ['/build', 'Build', '📦'], ['/logs', 'Logs', '📋'], ['/files', 'Files', '📄'],
+    ['/sql', 'SQL', '💻'], ['/terminal', 'Terminal', '⌨'], ['/settings', 'Settings', '⚙'],
+  ];
+  return html`<nav class="sidebar">
+    <div class="logo" onClick=${() => setPage('/')} style="cursor:pointer">⬡ Mage UI</div>
+    ${items.map(([path, label, icon]) => html`
+      <a class="nav-item ${page === path ? 'active' : ''}" onClick=${e => { e.preventDefault(); setPage(path); }} href="#">
+        <span>${icon}</span> <span>${label}</span>
+      </a>
+    `)}
+    <div class="sidebar-footer">
+      <div class="theme-toggle" onClick=${() => { setTheme(theme === 'dark' ? 'light' : 'dark'); location.reload(); }}>
+        ${theme === 'dark' ? '🌙' : '☀️'} ${theme === 'dark' ? 'Dark' : 'Light'}
       </div>
-      <button class="btn-icon" title="Restart" onclick="restartService('${svc.service}')">↻</button>
-    </div>`;
-  }
-  html += '</div>';
-
-  // Projects
-  html += `<div class="card-header" style="margin-top:24px">Projects <span class="badge badge-blue">${state.projects.length}</span></div>`;
-  if (state.projects.length === 0) {
-    html += '<div class="card empty"><div class="icon">📁</div><p>No projects registered</p><button class="btn btn-primary" onclick="location.hash=\'#/projects\'">Add Project</button></div>';
-  } else {
-    html += '<div class="card table-wrap"><table><thead><tr><th>Domain</th><th>Type</th><th>PHP</th><th>DB</th><th>Search</th><th>Status</th></tr></thead><tbody>';
-    for (const p of state.projects) {
-      html += `<tr><td><strong>${p.domain}</strong></td><td>${appBadge(p.app)}</td><td>${p.php}</td><td>${p.db_service}</td><td>${p.search}</td>
-        <td><span class="badge ${p.enabled ? 'badge-green' : 'badge-red'}">${p.enabled ? 'on' : 'off'}</span></td></tr>`;
-    }
-    html += '</tbody></table></div>';
-  }
-
-  content().innerHTML = html;
-
-  // Poll services every 5s
-  pollTimer = setInterval(async () => {
-    await loadServices();
-    const cards = document.querySelectorAll('.service-card');
-    state.services.forEach((svc, i) => {
-      if (cards[i]) {
-        const dot = cards[i].querySelector('.dot');
-        if (dot) { dot.className = 'dot ' + serviceState(svc); }
-        const meta = cards[i].querySelector('.meta');
-        if (meta) meta.textContent = svc.status || svc.state || '';
-      }
-    });
-  }, 5000);
-}
-
-async function dashAction(action) {
-  toast(`Running ${action}...`, 'info');
-  await POST(`/api/services/${action}`);
-  toast(`${action} complete`, 'success');
-  renderDashboard();
-}
-
-async function restartService(name) {
-  toast(`Restarting ${name}...`, 'info');
-  await POST(`/api/services/${name}/restart`);
-  toast(`${name} restarted`, 'success');
-  setTimeout(renderDashboard, 1000);
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// PROJECTS
-// ══════════════════════════════════════════════════════════════════════════════
-async function renderProjects() {
-  content().innerHTML = '<div class="spinner" style="margin:40px auto;display:block;width:24px;height:24px"></div>';
-  await loadProjects();
-
-  let html = `<div class="page-header"><h1>Projects</h1><div class="actions">
-    <button class="btn btn-primary" onclick="showAddProject()">+ Add Project</button>
-  </div></div>`;
-
-  if (state.projects.length === 0) {
-    html += '<div class="card empty"><div class="icon">📁</div><p>No projects yet</p><button class="btn btn-primary" onclick="showAddProject()">Add your first project</button></div>';
-  } else {
-    html += '<div class="card table-wrap"><table><thead><tr><th>Domain</th><th>Type</th><th>PHP</th><th>DB</th><th>Search</th><th>Enabled</th><th></th></tr></thead><tbody>';
-    const phpOpts = ['php70','php71','php72','php73','php74','php81','php82','php83','php84'];
-    const dbOpts = ['mysql','mysql80','mariadb'];
-    const searchOpts = ['opensearch','opensearch1','elasticsearch','elasticsearch7','none'];
-
-    for (const p of state.projects) {
-      const mkSel = (field, opts, val) => {
-        const options = opts.map(o => `<option ${o===val?'selected':''}>${o}</option>`).join('');
-        return `<select class="inline-select" onchange="updateProject('${p.domain}','${field}',this.value)">${options}</select>`;
-      };
-      html += `<tr>
-        <td><strong>${p.domain}</strong></td>
-        <td>${appBadge(p.app)}</td>
-        <td>${mkSel('php', phpOpts, p.php)}</td>
-        <td>${mkSel('db_service', dbOpts, p.db_service)}</td>
-        <td>${mkSel('search', searchOpts, p.search)}</td>
-        <td><label class="toggle"><input type="checkbox" ${p.enabled?'checked':''} onchange="toggleProject('${p.domain}',this.checked)"><span class="slider"></span></label></td>
-        <td style="white-space:nowrap">
-          <button class="btn-icon" title="Shell" onclick="runProjectCmd('${p.domain}','shell')">⌨</button>
-          <button class="btn-icon" title="SSL" onclick="enableSSL('${p.domain}')">🔒</button>
-          <button class="btn-icon" style="color:var(--red)" title="Remove" onclick="removeProject('${p.domain}')">✕</button>
-        </td>
-      </tr>`;
-    }
-    html += '</tbody></table></div>';
-  }
-  content().innerHTML = html;
-}
-
-function showAddProject() {
-  showModal(`<h2>Add Project</h2>
-    <div class="form-group"><label>Domain</label><input id="ap-domain" placeholder="mysite.test" style="width:100%"></div>
-    <div class="form-row">
-      <div class="form-group"><label>App Type</label><select id="ap-app" style="width:100%">
-        <option value="magento2">Magento 2</option><option value="magento1">Magento 1</option>
-        <option value="laravel">Laravel</option><option value="wordpress">WordPress</option><option value="default">Default</option>
-      </select></div>
-      <div class="form-group"><label>PHP</label><select id="ap-php" style="width:100%">
-        <option>php84</option><option selected>php83</option><option>php82</option><option>php81</option><option>php74</option>
-      </select></div>
     </div>
-    <div class="form-row">
-      <div class="form-group"><label>Database</label><select id="ap-db" style="width:100%">
-        <option value="mysql">MySQL 8.4</option><option value="mysql80">MySQL 8.0</option><option value="mariadb">MariaDB 11.4</option>
-      </select></div>
-      <div class="form-group"><label>Search</label><select id="ap-search" style="width:100%">
-        <option value="opensearch">OpenSearch 2</option><option value="elasticsearch">ES 8</option>
-        <option value="elasticsearch7">ES 7</option><option value="none">None</option>
-      </select></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="addProject()">Add Project</button>
-    </div>`);
+  </nav>`;
 }
 
-async function addProject() {
-  const domain = document.getElementById('ap-domain').value.trim();
-  if (!domain) { toast('Domain required', 'error'); return; }
-  const body = {
-    domain,
-    app: document.getElementById('ap-app').value,
-    php: document.getElementById('ap-php').value,
-    db_service: document.getElementById('ap-db').value,
-    search: document.getElementById('ap-search').value,
-  };
-  const res = await POST('/api/projects', body);
-  if (res.error) { toast(res.error, 'error'); return; }
-  closeModal();
-  toast(`Project ${domain} added`, 'success');
-  renderProjects();
-}
-
-async function updateProject(domain, field, value) {
-  await PATCH(`/api/projects/${domain}`, { [field]: value });
-  toast(`${domain}: ${field} → ${value}`, 'success');
-}
-
-async function toggleProject(domain, enabled) {
-  await POST(`/api/projects/${domain}/${enabled ? 'enable' : 'disable'}`);
-  toast(`${domain} ${enabled ? 'enabled' : 'disabled'}`, 'success');
-}
-
-async function removeProject(domain) {
-  if (!confirm(`Remove project "${domain}"? This deletes the vhost config.`)) return;
-  await DELETE(`/api/projects/${domain}`);
-  toast(`${domain} removed`, 'success');
-  renderProjects();
-}
-
-async function runProjectCmd(domain, cmd, ...args) {
-  showModal(`<h2>Running: ${cmd} ${domain} ${args.join(' ')}</h2>
-    <div class="log-viewer" id="cmd-output" style="min-height:200px">Running...</div>
-    <div class="modal-actions"><button class="btn" onclick="closeModal()">Close</button></div>`);
-  const res = await POST('/api/exec', { command: cmd, args: [domain, ...args] });
-  const el = document.getElementById('cmd-output');
-  if (el) el.textContent = (res.stdout || '') + '\n' + (res.stderr || '');
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// DATABASE
-// ══════════════════════════════════════════════════════════════════════════════
-async function renderDatabase() {
-  content().innerHTML = '<div class="spinner" style="margin:40px auto;display:block;width:24px;height:24px"></div>';
-  await loadDatabases();
-
-  let html = `<div class="page-header"><h1>Database</h1><div class="actions">
-    <button class="btn btn-primary" onclick="showCreateDB()">+ Create</button>
-    <button class="btn" onclick="showImportDB()">⬆ Import</button>
-  </div></div>`;
-
-  if (state.databases.length === 0) {
-    html += '<div class="card empty"><div class="icon">🗄️</div><p>No databases found. Are DB services running?</p></div>';
-  } else {
-    html += '<div class="card table-wrap"><table><thead><tr><th>Name</th><th>Service</th><th>Size</th><th>Tables</th><th>Actions</th></tr></thead><tbody>';
-    for (const db of state.databases) {
-      html += `<tr><td><strong>${db.name}</strong></td><td><span class="badge badge-blue">${db.service}</span></td>
-        <td>${db.size || '—'}</td><td>${db.tables || '—'}</td>
-        <td>
-          <button class="btn btn-sm" onclick="exportDB('${db.name}','${db.service}')">⬇ Export</button>
-          <button class="btn btn-sm btn-danger" onclick="dropDB('${db.name}','${db.service}')">✕ Drop</button>
-        </td></tr>`;
-    }
-    html += '</tbody></table></div>';
-  }
-  content().innerHTML = html;
-}
-
-function showCreateDB() {
-  showModal(`<h2>Create Database</h2>
-    <div class="form-group"><label>Name</label><input id="cdb-name" placeholder="my_database" style="width:100%"></div>
-    <div class="form-group"><label>Service</label><select id="cdb-svc" style="width:100%">
-      <option value="mysql">mysql</option><option value="mysql80">mysql80</option><option value="mariadb">mariadb</option>
-    </select></div>
-    <div class="modal-actions">
-      <button class="btn" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="createDB()">Create</button>
-    </div>`);
-}
-
-async function createDB() {
-  const name = document.getElementById('cdb-name').value.trim();
-  if (!name) { toast('Name required', 'error'); return; }
-  const res = await POST('/api/databases', { name, service: document.getElementById('cdb-svc').value });
-  if (res.error) { toast(res.error, 'error'); return; }
-  closeModal();
-  toast(`Database ${name} created`, 'success');
-  renderDatabase();
-}
-
-async function exportDB(name, service) {
-  toast(`Exporting ${name}...`, 'info');
-  const res = await POST(`/api/databases/${name}/export?service=${service}`);
-  if (res.download) {
-    const a = document.createElement('a');
-    a.href = res.download;
-    a.download = res.file;
-    a.click();
-    toast(`${name} exported`, 'success');
-  } else {
-    toast(res.error || 'Export failed', 'error');
-  }
-}
-
-async function dropDB(name, service) {
-  if (!confirm(`Drop database "${name}" on ${service}? This cannot be undone.`)) return;
-  await DELETE(`/api/databases/${name}?service=${service}`);
-  toast(`${name} dropped`, 'success');
-  renderDatabase();
-}
-
-function showImportDB() {
-  showModal(`<h2>Import Database</h2>
-    <div class="form-group"><label>SQL File</label><input id="imp-file" type="file" accept=".sql,.sql.gz"></div>
-    <div class="form-row">
-      <div class="form-group"><label>Target Database</label><input id="imp-target" placeholder="my_database" style="width:100%"></div>
-      <div class="form-group"><label>Service</label><select id="imp-svc" style="width:100%">
-        <option value="mysql">mysql</option><option value="mysql80">mysql80</option><option value="mariadb">mariadb</option>
-      </select></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="importDB()">Import</button>
-    </div>`);
-}
-
-async function importDB() {
-  const fileInput = document.getElementById('imp-file');
-  const target = document.getElementById('imp-target').value.trim();
-  if (!fileInput.files[0] || !target) { toast('File and target required', 'error'); return; }
-  const fd = new FormData();
-  fd.append('file', fileInput.files[0]);
-  fd.append('target', target);
-  fd.append('service', document.getElementById('imp-svc').value);
-  toast('Importing...', 'info');
-  const res = await fetch('/api/databases/import', { method: 'POST', body: fd }).then(r => r.json());
-  if (res.error) { toast(res.error, 'error'); return; }
-  closeModal();
-  toast(`Imported into ${target}`, 'success');
-  renderDatabase();
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// BUILD
-// ══════════════════════════════════════════════════════════════════════════════
-async function renderBuild() {
-  content().innerHTML = '<div class="spinner" style="margin:40px auto;display:block;width:24px;height:24px"></div>';
-  await loadImages();
-
-  let html = `<div class="page-header"><h1>PHP Images</h1><div class="actions">
-    <button class="btn btn-primary" onclick="buildAll()">▶ Build All</button>
-    <button class="btn" onclick="buildMissing()">Build Missing</button>
-  </div></div>`;
-
-  html += '<div class="card table-wrap"><table><thead><tr><th>Version</th><th>Image</th><th>Status</th><th>Size</th><th>Action</th></tr></thead><tbody>';
-  for (const img of state.images) {
-    html += `<tr><td><strong>${img.version}</strong></td><td style="font-family:var(--mono);font-size:12px">${img.image}</td>
-      <td><span class="badge ${img.built?'badge-green':'badge-red'}">${img.built?'built':'not built'}</span></td>
-      <td>${img.size || '—'}</td>
-      <td><button class="btn btn-sm" onclick="buildOne('${img.version}')">${img.built ? '↻ Rebuild' : '▶ Build'}</button></td></tr>`;
-  }
-  html += '</tbody></table></div>';
-
-  html += '<div class="card" style="margin-top:16px"><div class="card-header">Build Output</div><div class="log-viewer" id="build-log" style="min-height:200px"></div></div>';
-  content().innerHTML = html;
-}
-
-function buildAll() { startBuild(state.images.map(i => i.version)); }
-function buildMissing() { startBuild(state.images.filter(i => !i.built).map(i => i.version)); }
-function buildOne(v) { startBuild([v]); }
-
-function startBuild(versions) {
-  if (versions.length === 0) { toast('Nothing to build', 'info'); return; }
-  const logEl = document.getElementById('build-log');
-  if (logEl) logEl.textContent = '';
-  toast(`Building ${versions.join(', ')}...`, 'info');
-
-  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  buildWS = new WebSocket(`${proto}//${location.host}/api/images/build/ws`);
-  buildWS.onopen = () => buildWS.send(JSON.stringify({ versions }));
-  buildWS.onmessage = (e) => {
-    const data = JSON.parse(e.data);
-    if (logEl) {
-      logEl.textContent += data.line + '\n';
-      logEl.scrollTop = logEl.scrollHeight;
-    }
-    if (data.stream === 'done') {
-      toast(`Build complete (exit: ${data.exitCode})`, data.exitCode === 0 ? 'success' : 'error');
-      loadImages().then(() => renderBuild());
-    }
-  };
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// LOGS
-// ══════════════════════════════════════════════════════════════════════════════
-async function renderLogs() {
-  await loadServices();
-  const svcs = state.services.map(s => s.service).filter(Boolean);
-
-  let html = `<div class="page-header"><h1>Logs</h1></div>`;
-  html += `<div style="display:flex;gap:12px;margin-bottom:16px;align-items:center">
-    <select id="log-service" style="min-width:150px">${svcs.map(s => `<option>${s}</option>`).join('')}</select>
-    <select id="log-lines"><option>50</option><option selected>100</option><option>500</option><option>1000</option></select>
-    <button class="btn btn-primary" onclick="startLogStream()">▶ Follow</button>
-    <button class="btn" onclick="stopLogStream()">■ Stop</button>
-    <button class="btn" onclick="fetchLogs()">Fetch</button>
-    <input id="log-filter" placeholder="Filter..." style="flex:1" oninput="filterLogs()">
+// ── Modal ────────────────────────────────────────────────────────────────────
+function Modal({ show, onClose, title, children }) {
+  if (!show) return null;
+  return html`<div class="modal-overlay" onClick=${e => e.target === e.currentTarget && onClose()}>
+    <div class="modal"><h2>${title}</h2>${children}</div>
   </div>`;
-  html += '<div class="card"><div class="log-viewer" id="log-output" style="min-height:400px"></div></div>';
-  content().innerHTML = html;
 }
 
-async function fetchLogs() {
-  const svc = document.getElementById('log-service').value;
-  const lines = document.getElementById('log-lines').value;
-  const res = await GET(`/api/logs/${svc}?lines=${lines}`);
-  const el = document.getElementById('log-output');
-  if (el) { el.textContent = res.output || ''; el.scrollTop = el.scrollHeight; }
-}
-
-function startLogStream() {
-  stopLogStream();
-  const svc = document.getElementById('log-service').value;
-  const lines = document.getElementById('log-lines').value;
-  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  logWS = new WebSocket(`${proto}//${location.host}/api/logs/${svc}/ws?lines=${lines}`);
-  const el = document.getElementById('log-output');
-  logWS.onmessage = (e) => {
-    const data = JSON.parse(e.data);
-    if (el) {
-      el.textContent += (data.line || '') + '\n';
-      el.scrollTop = el.scrollHeight;
-    }
-  };
-  logWS.onclose = () => { if (el) el.textContent += '\n--- stream closed ---\n'; };
-  toast(`Streaming ${svc} logs...`, 'info');
-}
-
-function stopLogStream() {
-  if (logWS) { logWS.close(); logWS = null; }
-}
-
-function filterLogs() {
-  const filter = document.getElementById('log-filter').value.toLowerCase();
-  const el = document.getElementById('log-output');
-  if (!el || !filter) return;
-  // Simple highlight — just scroll to match
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// SETTINGS
-// ══════════════════════════════════════════════════════════════════════════════
-async function renderSettings() {
-  content().innerHTML = '<div class="spinner" style="margin:40px auto;display:block;width:24px;height:24px"></div>';
-
-  // Load all settings data
-  const [envData, doctorData] = await Promise.all([
-    GET('/api/env').catch(() => []),
-    GET('/api/doctor').catch(() => ({ output: '', checks: [] })),
-  ]);
-  state.env = envData || [];
-  state.doctor = doctorData;
-
-  let html = `<div class="page-header"><h1>Settings</h1><div class="actions"><button class="btn btn-primary" onclick="showInstallModal()">🚀 Install Project</button></div></div>`;
-
-  // ── Doctor ──
-  html += '<div class="card" style="margin-bottom:16px"><div class="card-header">System Health <button class="btn btn-sm btn-success" onclick="runDoctorFix()">🔧 Auto-fix</button></div>';
-  if (state.doctor && state.doctor.checks) {
-    for (const c of state.doctor.checks) {
-      if (c.status === 'info' && !c.raw.includes(':')) continue;
-      const icon = c.status === 'pass' ? '✔' : c.status === 'fail' ? '✖' : 'ℹ';
-      html += `<div class="doctor-check ${c.status}"><span class="icon">${icon}</span><span>${c.raw}</span></div>`;
-    }
-  }
-  html += '</div>';
-
-  // ── Xdebug ──
-  html += '<div class="card" style="margin-bottom:16px"><div class="card-header">Xdebug</div>';
-  const phpVersions = ['php81','php82','php83','php84'];
-  html += '<div style="display:flex;gap:16px;flex-wrap:wrap">';
-  for (const php of phpVersions) {
-    html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg);border-radius:var(--radius-sm)">
-      <strong>${php}</strong>
-      <button class="btn btn-sm btn-success" onclick="xdebugToggle('${php}','on')">On</button>
-      <button class="btn btn-sm" onclick="xdebugToggle('${php}','off')">Off</button>
-    </div>`;
-  }
-  html += '</div></div>';
-
-  // ── Varnish ──
-  html += '<div class="card" style="margin-bottom:16px"><div class="card-header">Varnish</div>';
-  html += '<div style="padding:8px 12px;color:var(--text2);font-size:13px">Toggle Varnish per domain (requires running project)</div>';
-  if (state.projects.length > 0) {
-    html += '<div style="display:flex;gap:12px;flex-wrap:wrap;padding:0 12px 12px">';
-    for (const p of state.projects) {
-      html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg);border-radius:var(--radius-sm)">
-        <strong>${p.domain}</strong>
-        <button class="btn btn-sm btn-success" onclick="toggleVarnish('${p.domain}','on')">On</button>
-        <button class="btn btn-sm" onclick="toggleVarnish('${p.domain}','off')">Off</button>
+// ── Dashboard ────────────────────────────────────────────────────────────────
+function Dashboard() {
+  const [services, setServices] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const load = async () => { setServices(await GET('/api/services') || []); setProjects(await GET('/api/projects') || []); };
+  useEffect(() => { load(); const t = setInterval(load, 5000); return () => clearInterval(t); }, []);
+  const running = services.filter(s => svcState(s) === 'running').length;
+  return html`<div>
+    <div class="page-header"><h1>Dashboard</h1><div class="actions">
+      <button class="btn btn-success" onClick=${async () => { toast('Starting...'); await POST('/api/services/up'); load(); }}>▶ Start</button>
+      <button class="btn btn-danger" onClick=${async () => { await POST('/api/services/stop'); load(); }}>■ Stop</button>
+      <button class="btn" onClick=${async () => { await POST('/api/services/down'); load(); }}>⏏ Down</button>
+    </div></div>
+    <div class="card-header">Services <span class="badge badge-${running===services.length?'green':'orange'}">${running}/${services.length}</span></div>
+    <div class="card-grid">${services.map(s => {
+      const st = svcState(s);
+      return html`<div class="card service-card">
+        <div class="dot ${st}"></div>
+        <div class="info"><div class="name">${s.service||s.name}${portOf(s.ports) ? html` <span style="color:var(--text2)">${portOf(s.ports)}</span>` : ''}</div><div class="meta">${s.status||s.state}</div></div>
+        <button class="btn-icon" onClick=${async () => { toast('Restarting '+s.service); await POST('/api/services/'+(s.service)+'/restart'); load(); }}>↻</button>
       </div>`;
-    }
-    html += '</div>';
-  } else {
-    html += '<div style="padding:12px;color:var(--text2)">No projects registered</div>';
-  }
-  html += '</div>';
-
-  // ── Environment ──
-  html += '<div class="card"><div class="card-header">.env Configuration <button class="btn btn-sm btn-primary" onclick="saveEnv()">💾 Save</button></div>';
-  html += '<div id="env-editor">';
-  for (const entry of state.env) {
-    if (entry.type === 'comment') {
-      html += `<div class="env-row comment">${entry.value}</div>`;
-    } else {
-      html += `<div class="env-row"><span class="env-key">${entry.key}</span><span class="env-val"><input data-key="${entry.key}" value="${entry.value || ''}"></span></div>`;
-    }
-  }
-  html += '</div></div>';
-
-  content().innerHTML = html;
+    })}</div>
+    <div class="card-header" style="margin-top:24px">Projects <span class="badge badge-blue">${projects.length}</span></div>
+    ${projects.length === 0 ? html`<div class="card empty"><div class="icon">📁</div><p>No projects</p></div>` :
+      html`<div class="card table-wrap"><table><thead><tr><th>Domain</th><th>Type</th><th>PHP</th><th>DB</th><th>Search</th><th>Status</th></tr></thead><tbody>
+        ${projects.map(p => { const [label,color] = appBadge(p.app); return html`<tr><td><b>${p.domain}</b></td><td><span class="badge badge-${color}">${label}</span></td><td>${p.php}</td><td>${p.db_service}</td><td>${p.search}</td><td><span class="badge ${p.enabled?'badge-green':'badge-red'}">${p.enabled?'on':'off'}</span></td></tr>`; })}
+      </tbody></table></div>`}
+  </div>`;
 }
 
-async function runDoctorFix() {
-  toast('Running doctor fix...', 'info');
-  await POST('/api/doctor/fix');
-  toast('Doctor fix complete', 'success');
-  renderSettings();
+// ── Projects ─────────────────────────────────────────────────────────────────
+function Projects() {
+  const [projects, setProjects] = useState([]);
+  const [showAdd, setShowAdd] = useState(false);
+  const load = async () => setProjects(await GET('/api/projects') || []);
+  useEffect(() => { load(); }, []);
+  const phpOpts = ['php70','php71','php72','php73','php74','php81','php82','php83','php84'];
+  const dbOpts = ['mysql','mysql80','mariadb'];
+  const searchOpts = ['opensearch','opensearch1','elasticsearch','elasticsearch7','none'];
+  return html`<div>
+    <div class="page-header"><h1>Projects</h1><div class="actions"><button class="btn btn-primary" onClick=${()=>setShowAdd(true)}>+ Add Project</button></div></div>
+    ${projects.length === 0 ? html`<div class="card empty"><div class="icon">📁</div><p>No projects yet</p><button class="btn btn-primary" onClick=${()=>setShowAdd(true)}>Add your first project</button></div>` :
+      html`<div class="card table-wrap"><table><thead><tr><th>Domain</th><th>Type</th><th>PHP</th><th>DB</th><th>Search</th><th>Enabled</th><th></th></tr></thead><tbody>
+        ${projects.map(p => { const [label,color] = appBadge(p.app); return html`<tr>
+          <td><b>${p.domain}</b></td><td><span class="badge badge-${color}">${label}</span></td>
+          <td><select class="inline-select" value=${p.php} onChange=${e=>{PATCH('/api/projects/'+p.domain,{php:e.target.value});toast(p.domain+': PHP → '+e.target.value,'success');load();}}>${phpOpts.map(o=>html`<option selected=${o===p.php}>${o}</option>`)}</select></td>
+          <td><select class="inline-select" value=${p.db_service} onChange=${e=>{PATCH('/api/projects/'+p.domain,{db_service:e.target.value});toast(p.domain+': DB → '+e.target.value,'success');}}>${dbOpts.map(o=>html`<option selected=${o===p.db_service}>${o}</option>`)}</select></td>
+          <td><select class="inline-select" value=${p.search} onChange=${e=>{PATCH('/api/projects/'+p.domain,{search:e.target.value});toast(p.domain+': Search → '+e.target.value,'success');}}>${searchOpts.map(o=>html`<option selected=${o===p.search}>${o}</option>`)}</select></td>
+          <td><label class="toggle"><input type="checkbox" checked=${p.enabled} onChange=${e=>{POST('/api/projects/'+p.domain+'/'+(e.target.checked?'enable':'disable'));toast(p.domain+' '+(e.target.checked?'enabled':'disabled'),'success');}}/><span class="slider"></span></label></td>
+          <td style="white-space:nowrap"><button class="btn-icon" title="SSL" onClick=${()=>{toast('SSL for '+p.domain);POST('/api/ssl/'+p.domain);}}>🔒</button><button class="btn-icon" style="color:var(--red)" title="Remove" onClick=${async()=>{if(confirm('Remove '+p.domain+'?')){await DELETE('/api/projects/'+p.domain);toast(p.domain+' removed','success');load();}}}>✕</button></td>
+        </tr>`; })}
+      </tbody></table></div>`}
+    <${AddProjectModal} show=${showAdd} onClose=${()=>{setShowAdd(false);load();}} />
+  </div>`;
 }
 
-async function xdebugToggle(php, action) {
-  toast(`Xdebug ${action} for ${php}...`, 'info');
-  await POST(`/api/xdebug/${php}/${action}`);
-  toast(`Xdebug ${action} for ${php}`, 'success');
-}
-
-async function enableSSL(domain) {
-  toast(`Enabling SSL for ${domain}...`, 'info');
-  const res = await POST(`/api/ssl/${domain}`);
-  toast(res.error || `SSL enabled for ${domain}`, res.error ? 'error' : 'success');
-}
-
-async function toggleVarnish(domain, action) {
-  toast(`Varnish ${action} for ${domain}...`, 'info');
-  const res = await POST(`/api/varnish/${domain}/${action}`);
-  toast(res.error || `Varnish ${action} for ${domain}`, res.error ? 'error' : 'success');
-}
-
-function showInstallModal() {
-  showModal(`<h2>🚀 Install Project</h2>
-    <div class="form-group"><label>Type</label><select id="inst-type" style="width:100%" onchange="updateInstallForm()">
-      <option value="magento">Magento 2</option><option value="laravel">Laravel</option><option value="wordpress">WordPress</option>
-    </select></div>
-    <div id="inst-type-info" style="padding:10px 12px;background:var(--bg);border-radius:var(--radius-sm);margin-bottom:12px;font-size:12px;color:var(--text2);line-height:1.6"></div>
-    <div id="inst-magento-fields">
-      <div class="form-row">
-        <div class="form-group"><label>Version</label><input id="inst-version" value="2.4.8" style="width:100%"></div>
-        <div class="form-group"><label>Edition</label><select id="inst-edition" style="width:100%"><option>community</option><option>enterprise</option></select></div>
-      </div>
+function AddProjectModal({ show, onClose }) {
+  const [form, setForm] = useState({ domain:'', app:'magento2', php:'php83', db_service:'mysql', search:'opensearch' });
+  if (!show) return null;
+  const submit = async () => {
+    if (!form.domain) { toast('Domain required','error'); return; }
+    const res = await POST('/api/projects', form);
+    if (res.error) { toast(res.error,'error'); return; }
+    toast(form.domain+' added','success'); onClose();
+  };
+  return html`<${Modal} show=${show} onClose=${onClose} title="Add Project">
+    <div class="form-group"><label>Domain</label><input value=${form.domain} onInput=${e=>setForm({...form,domain:e.target.value})} placeholder="mysite.test" style="width:100%"/></div>
+    <div class="form-row">
+      <div class="form-group"><label>Type</label><select value=${form.app} onChange=${e=>setForm({...form,app:e.target.value})} style="width:100%"><option value="magento2">Magento 2</option><option value="laravel">Laravel</option><option value="wordpress">WordPress</option><option value="default">Default</option></select></div>
+      <div class="form-group"><label>PHP</label><select value=${form.php} onChange=${e=>setForm({...form,php:e.target.value})} style="width:100%"><option>php84</option><option>php83</option><option>php82</option><option>php81</option></select></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>Domain</label><input id="inst-domain" placeholder="shop.test" style="width:100%"></div>
-      <div class="form-group"><label>PHP</label><select id="inst-php" style="width:100%"><option>php84</option><option selected>php83</option><option>php82</option><option>php81</option></select></div>
+      <div class="form-group"><label>DB</label><select value=${form.db_service} onChange=${e=>setForm({...form,db_service:e.target.value})} style="width:100%"><option value="mysql">MySQL 8.4</option><option value="mysql80">MySQL 8.0</option><option value="mariadb">MariaDB</option></select></div>
+      <div class="form-group"><label>Search</label><select value=${form.search} onChange=${e=>setForm({...form,search:e.target.value})} style="width:100%"><option value="opensearch">OpenSearch</option><option value="none">None</option></select></div>
     </div>
-    <div class="modal-actions">
-      <button class="btn" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="runInstall()">Install</button>
-    </div>`);
-  updateInstallForm();
+    <div class="modal-actions"><button class="btn" onClick=${onClose}>Cancel</button><button class="btn btn-primary" onClick=${submit}>Add</button></div>
+  <//>`;
 }
-function updateInstallForm() {
-  const t = document.getElementById('inst-type').value;
-  const mf = document.getElementById('inst-magento-fields');
-  const info = document.getElementById('inst-type-info');
-  if (mf) mf.style.display = t === 'magento' ? '' : 'none';
-  const desc = {
-    magento: '📦 <b>Magento 2</b> — Full ecommerce stack<br>Services: PHP + MySQL/MariaDB + OpenSearch + Redis + RabbitMQ + Mailpit<br>Creates project, DB, vhost, runs setup:install',
-    laravel: '⚡ <b>Laravel</b> — Modern PHP framework<br>Services: PHP + MySQL/MariaDB + Redis (cache+sessions+queue) + Mailpit<br>composer create-project, configures .env, runs migrations',
-    wordpress: '📝 <b>WordPress</b> — CMS / Blog<br>Services: PHP + MySQL/MariaDB + Redis (object cache) + Mailpit<br>Downloads WP, generates wp-config.php, runs wp core install<br>Admin: admin / admin',
+
+// ── Database ─────────────────────────────────────────────────────────────────
+function DatabasePage() {
+  const [dbs, setDbs] = useState([]);
+  const load = async () => setDbs(await GET('/api/databases') || []);
+  useEffect(() => { load(); }, []);
+  return html`<div>
+    <div class="page-header"><h1>Database</h1><div class="actions">
+      <button class="btn btn-primary" onClick=${()=>{ const n=prompt('Database name:'); if(n){POST('/api/databases',{name:n,service:'mysql'}).then(()=>{toast(n+' created','success');load();})}}}>+ Create</button>
+    </div></div>
+    ${dbs.length===0 ? html`<div class="card empty"><div class="icon">🗄️</div><p>No databases found</p></div>` :
+      html`<div class="card table-wrap"><table><thead><tr><th>Name</th><th>Service</th><th>Size</th><th>Tables</th><th>Actions</th></tr></thead><tbody>
+        ${dbs.map(d => html`<tr><td><b>${d.name}</b></td><td><span class="badge badge-blue">${d.service}</span></td><td>${d.size||'—'}</td><td>${d.tables||'—'}</td>
+          <td><button class="btn btn-sm" onClick=${async()=>{toast('Exporting...');const r=await POST('/api/databases/'+d.name+'/export?service='+d.service);if(r.download){const a=document.createElement('a');a.href=r.download;a.click();toast('Exported','success');}}}>⬇ Export</button> <button class="btn btn-sm btn-danger" onClick=${async()=>{if(confirm('Drop '+d.name+'?')){await DELETE('/api/databases/'+d.name+'?service='+d.service);toast(d.name+' dropped','success');load();}}}>✕</button></td>
+        </tr>`)}
+      </tbody></table></div>`}
+  </div>`;
+}
+
+// ── Build ────────────────────────────────────────────────────────────────────
+function BuildPage() {
+  const [images, setImages] = useState([]);
+  const [log, setLog] = useState('');
+  const load = async () => setImages(await GET('/api/images') || []);
+  useEffect(() => { load(); }, []);
+  const build = (versions) => {
+    setLog(''); toast('Building '+versions.join(', ')+'...');
+    const ws = new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/api/images/build/ws`);
+    ws.onopen = () => ws.send(JSON.stringify({ versions }));
+    ws.onmessage = e => { const d = JSON.parse(e.data); setLog(l => l + (d.line||'') + '\n'); if (d.stream==='done') { toast('Build done','success'); load(); } };
   };
-  if (info) info.innerHTML = desc[t] || '';
-}
-async function runInstall() {
-  const type = document.getElementById('inst-type').value;
-  const domain = document.getElementById('inst-domain').value.trim();
-  if (!domain) { toast('Domain required', 'error'); return; }
-  const body = { type, domain, php: document.getElementById('inst-php').value };
-  if (type === 'magento') {
-    body.version = document.getElementById('inst-version').value;
-    body.edition = document.getElementById('inst-edition').value;
-  }
-  closeModal();
-  showModal(`<h2>Installing ${type}: ${domain}</h2>
-    <div class="log-viewer" id="install-output" style="min-height:300px">Starting installation... This may take several minutes.</div>
-    <div class="modal-actions"><button class="btn" onclick="closeModal()">Close</button></div>`);
-  toast(`Installing ${type} ${domain}...`, 'info');
-  const res = await POST('/api/install', body);
-  const el = document.getElementById('install-output');
-  if (el) el.textContent = (res.stdout || res.error || '') + '\n' + (res.stderr || '');
-  toast(res.error || `${type} installed: ${domain}`, res.error ? 'error' : 'success');
+  return html`<div>
+    <div class="page-header"><h1>PHP Images</h1><div class="actions">
+      <button class="btn btn-primary" onClick=${()=>build(images.map(i=>i.version))}>▶ Build All</button>
+      <button class="btn" onClick=${()=>build(images.filter(i=>!i.built).map(i=>i.version))}>Build Missing</button>
+    </div></div>
+    <div class="card table-wrap"><table><thead><tr><th>Version</th><th>Image</th><th>Status</th><th>Size</th><th></th></tr></thead><tbody>
+      ${images.map(i => html`<tr><td><b>${i.version}</b></td><td style="font-family:var(--mono);font-size:12px">${i.image}</td><td><span class="badge ${i.built?'badge-green':'badge-red'}">${i.built?'built':'—'}</span></td><td>${i.size||'—'}</td><td><button class="btn btn-sm" onClick=${()=>build([i.version])}>${i.built?'↻ Rebuild':'▶ Build'}</button></td></tr>`)}
+    </tbody></table></div>
+    ${log && html`<div class="card" style="margin-top:16px"><div class="card-header">Build Output</div><pre class="log-viewer">${log}</pre></div>`}
+  </div>`;
 }
 
-async function saveEnv() {
-  const updates = {};
-  document.querySelectorAll('#env-editor input[data-key]').forEach(inp => {
-    updates[inp.dataset.key] = inp.value;
-  });
-  await PATCH('/api/env', updates);
-  toast('.env saved', 'success');
+// ── Logs ──────────────────────────────────────────────────────────────────────
+function LogsPage() {
+  const [services, setServices] = useState([]);
+  const [svc, setSvc] = useState('');
+  const [output, setOutput] = useState('');
+  const wsRef = useRef(null);
+  useEffect(() => { GET('/api/services').then(s => { const list = (s||[]).map(x=>x.service).filter(Boolean); setServices(list); if(list.length) setSvc(list[0]); }); }, []);
+  const fetch_ = async () => { const r = await GET('/api/logs/'+svc+'?lines=200'); setOutput(r.output||''); };
+  const follow = () => {
+    if (wsRef.current) wsRef.current.close();
+    setOutput('');
+    const ws = new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/api/logs/${svc}/ws?lines=100`);
+    ws.onmessage = e => { const d = JSON.parse(e.data); setOutput(o => o + (d.line||'') + '\n'); };
+    wsRef.current = ws;
+  };
+  useEffect(() => () => { if (wsRef.current) wsRef.current.close(); }, []);
+  return html`<div>
+    <div class="page-header"><h1>Logs</h1></div>
+    <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center">
+      <select value=${svc} onChange=${e=>setSvc(e.target.value)} style="min-width:150px">${services.map(s=>html`<option>${s}</option>`)}</select>
+      <button class="btn btn-primary" onClick=${follow}>▶ Follow</button>
+      <button class="btn" onClick=${()=>{if(wsRef.current)wsRef.current.close();}}>■ Stop</button>
+      <button class="btn" onClick=${fetch_}>Fetch</button>
+    </div>
+    <div class="card"><pre class="log-viewer" style="min-height:400px">${output}</pre></div>
+  </div>`;
+}
+
+// ── Files ────────────────────────────────────────────────────────────────────
+function FilesPage() {
+  const [path, setPath] = useState('sources');
+  const [files, setFiles] = useState([]);
+  const [file, setFile] = useState(null);
+  const [projects, setProjects] = useState([]);
+  const editorRef = useRef(null);
+  const aceRef = useRef(null);
+
+  useEffect(() => { GET('/api/projects').then(p => setProjects(p||[])); }, []);
+  useEffect(() => { GET('/api/files?path='+encodeURIComponent(path)).then(f => setFiles(f||[])); }, [path]);
+
+  const viewFile = async (p) => {
+    const r = await GET('/api/files/read?path='+encodeURIComponent(p));
+    if (r.error) { toast(r.error,'error'); return; }
+    setFile(r);
+    // Init Ace editor after render
+    setTimeout(() => {
+      const el = document.getElementById('ace-editor');
+      if (el && window.ace) {
+        if (aceRef.current) aceRef.current.destroy();
+        const editor = ace.edit(el);
+        const ext = p.split('.').pop().toLowerCase();
+        const modeMap = {php:'php',js:'javascript',css:'css',json:'json',xml:'xml',html:'html',sql:'sql',yml:'yaml',yaml:'yaml',sh:'sh',md:'markdown',env:'text',conf:'text'};
+        editor.setTheme('ace/theme/' + (getTheme()==='dark'?'monokai':'chrome'));
+        editor.session.setMode('ace/mode/' + (modeMap[ext]||'text'));
+        editor.setOptions({ fontSize: 13, showPrintMargin: false, wrap: true });
+        editor.setValue(r.content, -1);
+        aceRef.current = editor;
+      }
+    }, 100);
+  };
+
+  const saveFile = async () => {
+    if (!aceRef.current || !file) return;
+    await POST('/api/files/write', { path: file.path, content: aceRef.current.getValue() });
+    toast('Saved','success');
+  };
+
+  const breadcrumbs = path.split('/');
+  const icon = name => { const e = name.split('.').pop().toLowerCase(); return ({php:'🐘',js:'🟡',css:'🟣',json:'🟢',xml:'🟤',sql:'🗃️',log:'📄',env:'🔒',yml:'⚙️',yaml:'⚙️',conf:'⚙️',sh:'📜'})[e]||'📄'; };
+
+  return html`<div>
+    <div class="page-header"><h1>Files</h1></div>
+    <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center">
+      <select onChange=${e=>setPath(e.target.value)} style="min-width:180px">
+        <option value="sources">All Projects</option>
+        ${projects.map(p=>html`<option value=${'sources/'+p.domain}>${p.domain}</option>`)}
+      </select>
+      <div style="font-family:var(--mono);font-size:13px;color:var(--text2)">
+        ${breadcrumbs.map((p,i)=>html`<a href="#" style="color:var(--accent)" onClick=${e=>{e.preventDefault();setPath(breadcrumbs.slice(0,i+1).join('/'))}}>${p}</a>${i<breadcrumbs.length-1?' / ':''}`)}
+      </div>
+    </div>
+    <div style="display:flex;gap:16px">
+      <div class="card" style="width:320px;min-height:400px;overflow-y:auto;max-height:70vh;flex-shrink:0">
+        ${path!=='sources' && html`<div style="padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer" onClick=${()=>setPath(path.split('/').slice(0,-1).join('/')||'sources')}>← ..</div>`}
+        ${files.map(f => html`<div style="padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between" onClick=${()=>f.isDir ? setPath(f.path) : viewFile(f.path)}>
+          <span>${f.isDir?'📁':icon(f.name)} ${f.name}</span><span style="color:var(--text2);font-size:11px">${f.isDir?'':fmtSize(f.size)}</span>
+        </div>`)}
+      </div>
+      <div class="card" style="flex:1;min-height:400px;position:relative">
+        ${file ? html`<div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--bg3)">
+            <span style="font-family:var(--mono);font-size:12px;color:var(--text2)">${file.path}</span>
+            <div style="display:flex;gap:6px"><button class="btn btn-sm btn-primary" onClick=${saveFile}>💾 Save</button><a class="btn btn-sm" href=${'/api/files/download?path='+encodeURIComponent(file.path)} target="_blank">⬇</a></div>
+          </div>
+          <div id="ace-editor" style="width:100%;height:calc(70vh - 60px)"></div>
+        </div>` : html`<div class="empty"><div class="icon">📄</div><p>Select a file</p></div>`}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── SQL Manager ──────────────────────────────────────────────────────────────
+function SQLPage() {
+  const [dbs, setDbs] = useState([]);
+  const [db, setDb] = useState('');
+  const [svc, setSvc] = useState('mysql');
+  const [tables, setTables] = useState([]);
+  const [query, setQuery] = useState('');
+  const [result, setResult] = useState(null);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => { GET('/api/databases').then(d => { setDbs(d||[]); if(d&&d.length) { setDb(d[0].name); setSvc(d[0].service); } }); }, []);
+  useEffect(() => { if(db && svc) GET('/api/dbmanager/tables?db='+db+'&service='+svc).then(t=>setTables(t||[])); }, [db, svc]);
+
+  const selectTable = async (t) => {
+    setQuery('SELECT * FROM `'+t+'` LIMIT 50;');
+    const r = await GET('/api/dbmanager/data?db='+db+'&service='+svc+'&table='+t+'&page=1&limit=50');
+    setResult(r); setPage(1);
+  };
+
+  const loadPage = async (t, p) => {
+    const r = await GET('/api/dbmanager/data?db='+db+'&service='+svc+'&table='+t+'&page='+p+'&limit=50');
+    setResult(r); setPage(p);
+  };
+
+  const runQuery = async () => {
+    if(!query.trim()) return;
+    const r = await POST('/api/dbmanager/query', { db, service: svc, query: query.trim() });
+    setResult(r);
+  };
+
+  return html`<div>
+    <div class="page-header"><h1>SQL Manager</h1></div>
+    <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center">
+      <select value=${db} onChange=${e=>{ const opt=e.target.options[e.target.selectedIndex]; setDb(e.target.value); setSvc(opt.dataset.svc||'mysql'); }} style="min-width:200px">
+        ${dbs.map(d=>html`<option value=${d.name} data-svc=${d.service}>${d.name} (${d.service})</option>`)}
+      </select>
+      <button class="btn btn-primary" onClick=${runQuery}>▶ Run Query</button>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <textarea value=${query} onInput=${e=>setQuery(e.target.value)} spellcheck="false" placeholder="SELECT * FROM ... LIMIT 50;" style="width:100%;min-height:80px;background:var(--bg);color:var(--text);border:none;padding:12px;font-family:var(--mono);font-size:13px;resize:vertical;outline:none"></textarea>
+    </div>
+    <div style="display:flex;gap:16px">
+      <div class="card" style="width:280px;min-height:300px;overflow-y:auto;max-height:60vh;flex-shrink:0">
+        <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-weight:600;font-size:12px;color:var(--text2)">${tables.length} tables</div>
+        ${tables.map(t=>html`<div style="padding:6px 12px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px;display:flex;justify-content:space-between" onClick=${()=>selectTable(t.name)}>
+          <span>🗃️ ${t.name}</span><span style="color:var(--text2);font-size:11px">${t.rows} rows</span>
+        </div>`)}
+      </div>
+      <div class="card" style="flex:1;min-height:300px;overflow:auto;max-height:60vh">
+        ${result ? html`<div>
+          ${result.error ? html`<div style="padding:16px;color:var(--red);font-family:var(--mono)">${result.error}</div>` :
+            html`<div class="table-wrap" style="max-height:calc(60vh - 60px);overflow:auto"><table><thead><tr>${(result.columns||[]).map(c=>html`<th>${c}</th>`)}</tr></thead><tbody>
+              ${(result.rows||[]).map(r=>html`<tr>${r.map(cell=>html`<td style="font-family:var(--mono);font-size:12px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${cell===null?html`<span style="color:var(--text2);font-style:italic">NULL</span>`:String(cell).substring(0,200)}</td>`)}</tr>`)}
+            </tbody></table></div>`}
+          ${result.total > 0 && html`<div style="padding:8px 12px;font-size:12px;color:var(--text2);border-top:1px solid var(--border)">
+            ${result.total} rows, page ${result.page||page}/${result.pages||1}
+            ${(result.page||page)>1 && html` <button class="btn btn-sm" onClick=${()=>loadPage(query.match(/`(\w+)`/)?.[1],page-1)}>← Prev</button>`}
+            ${(result.page||page)<(result.pages||1) && html` <button class="btn btn-sm" onClick=${()=>loadPage(query.match(/`(\w+)`/)?.[1],page+1)}>Next →</button>`}
+          </div>`}
+          ${result.count >= 0 && !result.total && html`<div style="padding:8px 12px;font-size:12px;color:var(--text2);border-top:1px solid var(--border)">${result.count} row(s)</div>`}
+        </div>` : html`<div class="empty"><div class="icon">🗃️</div><p>Select a table or run a query</p></div>`}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── Terminal ─────────────────────────────────────────────────────────────────
+function TerminalPage() {
+  const termRef = useRef(null);
+  const wsRef = useRef(null);
+
+  useEffect(() => {
+    if (!window.Terminal) { toast('xterm.js not loaded','error'); return; }
+    const term = new window.Terminal({ theme: getTheme()==='dark' ? { background: '#0d1117' } : { background: '#ffffff', foreground: '#1f2328' }, fontFamily: "'SF Mono','Fira Code',monospace", fontSize: 14, cursorBlink: true });
+    const fitAddon = new window.FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(termRef.current);
+    fitAddon.fit();
+
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${proto}//${location.host}/api/terminal/ws`);
+    ws.binaryType = 'arraybuffer';
+    ws.onopen = () => {
+      // Send resize
+      ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+    };
+    ws.onmessage = e => {
+      if (e.data instanceof ArrayBuffer) term.write(new Uint8Array(e.data));
+      else term.write(e.data);
+    };
+    ws.onclose = () => term.write('\r\n\x1b[31m--- disconnected ---\x1b[0m\r\n');
+    term.onData(data => ws.send(data));
+    term.onResize(({ cols, rows }) => ws.send(JSON.stringify({ type: 'resize', cols, rows })));
+
+    const resizeObs = new ResizeObserver(() => fitAddon.fit());
+    resizeObs.observe(termRef.current);
+
+    wsRef.current = ws;
+    return () => { ws.close(); term.dispose(); resizeObs.disconnect(); };
+  }, []);
+
+  return html`<div>
+    <div class="page-header"><h1>Terminal</h1></div>
+    <div class="card" style="padding:8px"><div ref=${termRef} style="height:calc(80vh - 100px)"></div></div>
+  </div>`;
+}
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+function SettingsPage() {
+  const [doctor, setDoctor] = useState(null);
+  const [env, setEnv] = useState([]);
+  const [projects, setProjects] = useState([]);
+  useEffect(() => { Promise.all([GET('/api/doctor'),GET('/api/env'),GET('/api/projects')]).then(([d,e,p])=>{setDoctor(d);setEnv(e||[]);setProjects(p||[]);}); }, []);
+
+  const saveEnv = async () => {
+    const updates = {};
+    document.querySelectorAll('[data-envkey]').forEach(el => { updates[el.dataset.envkey] = el.value; });
+    await PATCH('/api/env', updates);
+    toast('.env saved','success');
+  };
+
+  return html`<div>
+    <div class="page-header"><h1>Settings</h1><div class="actions">
+      <button class="btn btn-primary" onClick=${()=>{ /* install modal handled below */ }}>🚀 Install</button>
+    </div></div>
+
+    <div class="card" style="margin-bottom:16px"><div class="card-header">System Health <button class="btn btn-sm btn-success" onClick=${async()=>{toast('Fixing...');await POST('/api/doctor/fix');const d=await GET('/api/doctor');setDoctor(d);toast('Done','success');}}>🔧 Fix</button></div>
+      ${doctor && doctor.checks && doctor.checks.map(ch => ch.status!=='info'||ch.raw.includes(':') ? html`<div class="doctor-check ${ch.status}"><span class="icon">${ch.status==='pass'?'✔':ch.status==='fail'?'✖':'ℹ'}</span><span>${ch.raw}</span></div>` : null)}
+    </div>
+
+    <div class="card" style="margin-bottom:16px"><div class="card-header">Xdebug</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;padding:8px">
+        ${['php81','php82','php83','php84'].map(p=>html`<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg);border-radius:var(--radius-sm)">
+          <b>${p}</b> <button class="btn btn-sm btn-success" onClick=${()=>{toast('Xdebug on '+p);POST('/api/xdebug/'+p+'/on');}}>On</button><button class="btn btn-sm" onClick=${()=>{toast('Xdebug off '+p);POST('/api/xdebug/'+p+'/off');}}>Off</button>
+        </div>`)}
+      </div>
+    </div>
+
+    <div class="card"><div class="card-header">.env <button class="btn btn-sm btn-primary" onClick=${saveEnv}>💾 Save</button></div>
+      ${env.map(e => e.type==='comment' ? html`<div class="env-row comment">${e.value}</div>` :
+        html`<div class="env-row"><span class="env-key">${e.key}</span><span class="env-val"><input data-envkey=${e.key} value=${e.value}/></span></div>`)}
+    </div>
+  </div>`;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// FILES
+// APP
 // ══════════════════════════════════════════════════════════════════════════════
-let currentFilePath = 'sources';
-
-async function renderFiles() {
-  await loadProjects();
-  let html = `<div class="page-header"><h1>Files</h1></div>`;
-
-  // Project selector + path breadcrumb
-  const projOpts = state.projects.map(p => `<option value="sources/${p.domain}">${p.domain}</option>`).join('');
-  html += `<div style="display:flex;gap:12px;margin-bottom:16px;align-items:center">`;
-  html += `<select id="file-project" onchange="browseDir(this.value)" style="min-width:180px"><option value="sources">All Projects</option>${projOpts}</select>`;
-  html += `<div id="file-breadcrumb" style="font-family:var(--mono);font-size:13px;color:var(--text2);flex:1"></div>`;
-  html += `<button class="btn btn-sm" onclick="showLogViewer()">📋 Logs</button>`;
-  html += `</div>`;
-
-  html += `<div style="display:flex;gap:16px;">`;
-  // File list
-  html += `<div class="card" id="file-list" style="width:320px;min-height:400px;overflow-y:auto;max-height:70vh;flex-shrink:0"></div>`;
-  // File content
-  html += `<div class="card" id="file-content" style="flex:1;min-height:400px;position:relative">`;
-  html += `<div class="empty"><div class="icon">📄</div><p>Select a file to view</p></div></div>`;
-  html += `</div>`;
-
-  content().innerHTML = html;
-  browseDir(currentFilePath);
+function App() {
+  const [page, setPage] = useState(location.hash.replace('#','') || '/');
+  useEffect(() => { const h = () => setPage(location.hash.replace('#','') || '/'); window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
+  const nav = p => { location.hash = p; setPage(p); };
+  const pages = { '/': Dashboard, '/projects': Projects, '/db': DatabasePage, '/build': BuildPage, '/logs': LogsPage, '/files': FilesPage, '/sql': SQLPage, '/terminal': TerminalPage, '/settings': SettingsPage };
+  const Page = pages[page] || Dashboard;
+  return html`<div class="app"><${Sidebar} page=${page} setPage=${nav} /><main class="main"><${Page} /></main></div>`;
 }
 
-async function browseDir(path) {
-  currentFilePath = path;
-  const files = await GET('/api/files?path=' + encodeURIComponent(path));
-  const listEl = document.getElementById('file-list');
-  const breadEl = document.getElementById('file-breadcrumb');
-
-  // Breadcrumb
-  if (breadEl) {
-    const parts = path.split('/');
-    let bc = '';
-    let accumulated = '';
-    parts.forEach((p, i) => {
-      accumulated += (i > 0 ? '/' : '') + p;
-      const a = accumulated;
-      bc += `<a href="#" onclick="event.preventDefault();browseDir('${a}')" style="color:var(--accent)">${p}</a>`;
-      if (i < parts.length - 1) bc += ' / ';
-    });
-    breadEl.innerHTML = bc;
-  }
-
-  if (!listEl) return;
-  if (!files || files.length === 0) {
-    listEl.innerHTML = '<div style="padding:16px;color:var(--text2)">Empty directory</div>';
-    return;
-  }
-
-  // Parent dir link
-  let html = '';
-  if (path !== 'sources') {
-    const parent = path.split('/').slice(0, -1).join('/') || 'sources';
-    html += `<div style="padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer" onclick="browseDir('${parent}')">
-      <span style="color:var(--text2)">← ..</span></div>`;
-  }
-
-  for (const f of files) {
-    const icon = f.isDir ? '📁' : fileIcon(f.name);
-    const size = f.isDir ? '' : formatSize(f.size);
-    if (f.isDir) {
-      html += `<div style="padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between" onclick="browseDir('${f.path}')">
-        <span>${icon} ${f.name}</span><span style="color:var(--text2);font-size:11px">${size}</span></div>`;
-    } else {
-      html += `<div style="padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between" onclick="viewFile('${f.path}')">
-        <span>${icon} ${f.name}</span><span style="color:var(--text2);font-size:11px">${size}</span></div>`;
-    }
-  }
-  listEl.innerHTML = html;
-}
-
-async function viewFile(path) {
-  const el = document.getElementById('file-content');
-  if (!el) return;
-  el.innerHTML = '<div style="padding:16px"><div class="spinner"></div></div>';
-
-  const res = await GET('/api/files/read?path=' + encodeURIComponent(path));
-  if (res.error) {
-    el.innerHTML = `<div style="padding:16px;color:var(--red)">${res.error}</div>`;
-    return;
-  }
-
-  const ext = path.split('.').pop().toLowerCase();
-  const isEditable = ['php','html','css','js','json','xml','env','yml','yaml','conf','ini','htaccess','txt','md','sh','sql','log'].includes(ext);
-
-  let html = `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--bg3)">`;
-  html += `<span style="font-family:var(--mono);font-size:12px;color:var(--text2)">${path}</span>`;
-  html += `<div style="display:flex;gap:6px">`;
-  if (isEditable) html += `<button class="btn btn-sm btn-primary" onclick="saveFile('${path}')">💾 Save</button>`;
-  html += `<a class="btn btn-sm" href="/api/files/download?path=${encodeURIComponent(path)}" target="_blank">⬇ Download</a>`;
-  html += `</div></div>`;
-
-  if (isEditable) {
-    html += `<textarea id="file-editor" spellcheck="false" style="width:100%;height:calc(70vh - 60px);background:var(--bg);color:var(--text);border:none;padding:12px;font-family:var(--mono);font-size:12px;line-height:1.6;resize:none;outline:none">${escapeHtml(res.content)}</textarea>`;
-  } else {
-    html += `<pre style="padding:12px;font-family:var(--mono);font-size:12px;overflow:auto;max-height:calc(70vh - 60px)">${escapeHtml(res.content)}</pre>`;
-  }
-  el.innerHTML = html;
-}
-
-async function saveFile(path) {
-  const editor = document.getElementById('file-editor');
-  if (!editor) return;
-  const res = await POST('/api/files/write', { path, content: editor.value });
-  toast(res.error || 'File saved', res.error ? 'error' : 'success');
-}
-
-function showLogViewer() {
-  const projSel = document.getElementById('file-project');
-  const project = projSel ? projSel.value.replace('sources/', '') : '';
-  showModal(`<h2>📋 Log Viewer</h2>
-    <div id="log-file-list" style="margin-bottom:12px"><div class="spinner"></div></div>
-    <div class="log-viewer" id="log-file-content" style="min-height:300px"></div>
-    <div class="modal-actions"><button class="btn" onclick="closeModal()">Close</button></div>`);
-  loadLogFiles(project);
-}
-
-async function loadLogFiles(project) {
-  const logs = await GET('/api/files/logs?project=' + encodeURIComponent(project));
-  const el = document.getElementById('log-file-list');
-  if (!el) return;
-  if (!logs || logs.length === 0) {
-    el.innerHTML = '<div style="color:var(--text2)">No log files found</div>';
-    return;
-  }
-  let html = '<div style="display:flex;gap:6px;flex-wrap:wrap">';
-  for (const log of logs) {
-    html += `<button class="btn btn-sm" onclick="tailLogFile('${log.path}')">${log.name} <span style="color:var(--text2)">(${formatSize(log.size)})</span></button>`;
-  }
-  html += '</div>';
-  el.innerHTML = html;
-}
-
-async function tailLogFile(path) {
-  const el = document.getElementById('log-file-content');
-  if (!el) return;
-  const res = await GET('/api/files/tail?path=' + encodeURIComponent(path) + '&lines=200');
-  el.textContent = res.content || res.error || 'Empty';
-  el.scrollTop = el.scrollHeight;
-}
-
-function fileIcon(name) {
-  const ext = name.split('.').pop().toLowerCase();
-  const map = {php:'🐘',js:'🟡',css:'🟣',html:'🟠',json:'🟢',xml:'🟤',sql:'🗃️',log:'📄',md:'📘',env:'🔒',yml:'⚙️',yaml:'⚙️',conf:'⚙️',sh:'📜',png:'🖼️',jpg:'🖼️',gif:'🖼️',svg:'🖼️'};
-  return map[ext] || '📄';
-}
-
-function formatSize(bytes) {
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-  return (bytes / 1048576).toFixed(1) + ' MB';
-}
-
-function escapeHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// DB MANAGER
-// ══════════════════════════════════════════════════════════════════════════════
-let dbmState = { db: '', service: 'mysql', table: '' };
-
-async function renderDBManager() {
-  await loadDatabases();
-
-  let html = `<div class="page-header"><h1>SQL Manager</h1></div>`;
-
-  // DB + Service selector
-  const dbOpts = state.databases.map(d => `<option value="${d.name}" data-svc="${d.service}">${d.name} (${d.service})</option>`).join('');
-  html += `<div style="display:flex;gap:12px;margin-bottom:16px;align-items:center">`;
-  html += `<label style="margin:0">Database:</label>`;
-  html += `<select id="dbm-db" onchange="dbmSelectDB(this)" style="min-width:200px">${dbOpts || '<option>No databases</option>'}</select>`;
-  html += `<button class="btn btn-sm btn-primary" onclick="dbmRunQuery()">▶ Run Query</button>`;
-  html += `</div>`;
-
-  // Query editor
-  html += `<div class="card" style="margin-bottom:16px">`;
-  html += `<textarea id="dbm-query" spellcheck="false" placeholder="SELECT * FROM ... LIMIT 50;" style="width:100%;min-height:80px;background:var(--bg);color:var(--text);border:none;padding:12px;font-family:var(--mono);font-size:13px;resize:vertical;outline:none"></textarea>`;
-  html += `</div>`;
-
-  html += `<div style="display:flex;gap:16px;">`;
-  // Table list
-  html += `<div class="card" id="dbm-tables" style="width:280px;min-height:300px;overflow-y:auto;max-height:60vh;flex-shrink:0"></div>`;
-  // Data/Results
-  html += `<div class="card" id="dbm-results" style="flex:1;min-height:300px;overflow:auto;max-height:60vh">`;
-  html += `<div class="empty"><div class="icon">🗃️</div><p>Select a table or run a query</p></div></div>`;
-  html += `</div>`;
-
-  content().innerHTML = html;
-
-  // Auto-select first DB
-  if (state.databases.length > 0) {
-    dbmState.db = state.databases[0].name;
-    dbmState.service = state.databases[0].service;
-    dbmLoadTables();
-  }
-}
-
-function dbmSelectDB(sel) {
-  const opt = sel.options[sel.selectedIndex];
-  dbmState.db = sel.value;
-  dbmState.service = opt.dataset.svc || 'mysql';
-  dbmLoadTables();
-}
-
-async function dbmLoadTables() {
-  const el = document.getElementById('dbm-tables');
-  if (!el) return;
-  el.innerHTML = '<div style="padding:12px"><div class="spinner"></div></div>';
-
-  const tables = await GET(`/api/dbmanager/tables?db=${dbmState.db}&service=${dbmState.service}`);
-  if (!tables || tables.length === 0) {
-    el.innerHTML = '<div style="padding:16px;color:var(--text2)">No tables</div>';
-    return;
-  }
-
-  let html = `<div style="padding:8px 12px;border-bottom:1px solid var(--border);font-weight:600;font-size:12px;color:var(--text2)">${tables.length} tables</div>`;
-  for (const t of tables) {
-    const active = t.name === dbmState.table ? 'background:var(--bg3);' : '';
-    html += `<div style="padding:6px 12px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px;display:flex;justify-content:space-between;${active}" onclick="dbmSelectTable('${t.name}')">`;
-    html += `<span>🗃️ ${t.name}</span>`;
-    html += `<span style="color:var(--text2);font-size:11px">${t.rows || ''} rows</span>`;
-    html += `</div>`;
-  }
-  el.innerHTML = html;
-}
-
-async function dbmSelectTable(table) {
-  dbmState.table = table;
-  // Highlight in list
-  dbmLoadTables();
-  // Set query
-  const q = document.getElementById('dbm-query');
-  if (q) q.value = `SELECT * FROM \`${table}\` LIMIT 50;`;
-  // Load data
-  await dbmLoadData(table, 1);
-}
-
-async function dbmLoadData(table, page) {
-  const el = document.getElementById('dbm-results');
-  if (!el) return;
-  el.innerHTML = '<div style="padding:16px"><div class="spinner"></div></div>';
-
-  const res = await GET(`/api/dbmanager/data?db=${dbmState.db}&service=${dbmState.service}&table=${table}&page=${page}&limit=50`);
-  if (!res || !res.columns) {
-    el.innerHTML = '<div style="padding:16px;color:var(--red)">Failed to load data</div>';
-    return;
-  }
-
-  let html = renderResultTable(res.columns, res.rows);
-
-  // Pagination
-  if (res.pages > 1) {
-    html += `<div style="padding:8px 12px;display:flex;gap:8px;align-items:center;border-top:1px solid var(--border)">`;
-    html += `<span style="font-size:12px;color:var(--text2)">${res.total} rows, page ${res.page}/${res.pages}</span>`;
-    if (res.page > 1) html += `<button class="btn btn-sm" onclick="dbmLoadData('${table}',${res.page-1})">← Prev</button>`;
-    if (res.page < res.pages) html += `<button class="btn btn-sm" onclick="dbmLoadData('${table}',${res.page+1})">Next →</button>`;
-    html += `</div>`;
-  }
-
-  el.innerHTML = html;
-}
-
-async function dbmRunQuery() {
-  const q = document.getElementById('dbm-query');
-  if (!q || !q.value.trim()) { toast('Enter a query', 'error'); return; }
-  const el = document.getElementById('dbm-results');
-  if (!el) return;
-  el.innerHTML = '<div style="padding:16px"><div class="spinner"></div></div>';
-
-  const res = await POST('/api/dbmanager/query', {
-    db: dbmState.db, service: dbmState.service, query: q.value.trim()
-  });
-
-  if (res.error) {
-    el.innerHTML = `<div style="padding:16px;color:var(--red);font-family:var(--mono);font-size:13px">${escapeHtml(res.error)}</div>`;
-    return;
-  }
-
-  let html = renderResultTable(res.columns || [], res.rows || []);
-  html += `<div style="padding:8px 12px;font-size:12px;color:var(--text2);border-top:1px solid var(--border)">${res.count} row(s) returned</div>`;
-  el.innerHTML = html;
-}
-
-function renderResultTable(columns, rows) {
-  if (!columns.length) return '<div style="padding:16px;color:var(--text2)">No results</div>';
-  let html = '<div class="table-wrap" style="max-height:calc(60vh - 80px);overflow:auto"><table><thead><tr>';
-  for (const col of columns) html += `<th>${escapeHtml(col)}</th>`;
-  html += '</tr></thead><tbody>';
-  for (const row of rows) {
-    html += '<tr>';
-    for (const cell of row) {
-      const val = cell === null ? '<span style="color:var(--text2);font-style:italic">NULL</span>' : escapeHtml(String(cell)).substring(0, 200);
-      html += `<td style="font-family:var(--mono);font-size:12px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${val}</td>`;
-    }
-    html += '</tr>';
-  }
-  html += '</tbody></table></div>';
-  return html;
-}
-
-// ── Init ─────────────────────────────────────────────────────────────────────
-navigate();
+render(html`<${App} />`, document.getElementById('app'));

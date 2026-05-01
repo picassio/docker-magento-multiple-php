@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"github.com/picassio/docker-magento-multiple-php/ui/server/exec"
 	"github.com/picassio/docker-magento-multiple-php/ui/server/handlers"
 )
@@ -24,111 +26,103 @@ func main() {
 	root := flag.String("root", "", "Project root directory")
 	flag.Parse()
 
-	// Resolve root
 	if *root == "" {
-		// Auto-detect: go up from binary location to find docker-compose.yml
 		exe, _ := os.Executable()
-		dir := filepath.Dir(exe)
-		for d := dir; d != "/"; d = filepath.Dir(d) {
+		for d := filepath.Dir(exe); d != "/"; d = filepath.Dir(d) {
 			if _, err := os.Stat(filepath.Join(d, "docker-compose.yml")); err == nil {
 				*root = d
 				break
 			}
 		}
 		if *root == "" {
-			// Try cwd
 			cwd, _ := os.Getwd()
 			if _, err := os.Stat(filepath.Join(cwd, "docker-compose.yml")); err == nil {
 				*root = cwd
 			} else {
-				log.Fatal("Cannot find project root (docker-compose.yml). Use --root=<path>")
+				log.Fatal("Cannot find project root. Use --root=<path>")
 			}
 		}
 	}
-
 	exec.RootDir = *root
 	log.Printf("Project root: %s", exec.RootDir)
 
-	mux := http.NewServeMux()
+	e := echo.New()
+	e.HideBanner = true
+	e.Use(middleware.CORS())
+	e.Use(middleware.Recover())
 
 	// ── API routes ──────────────────────────────────────────────────────
+	api := e.Group("/api")
+
 	// Projects
-	mux.HandleFunc("GET /api/projects", handlers.ListProjects)
-	mux.HandleFunc("POST /api/projects", handlers.AddProject)
-	mux.HandleFunc("DELETE /api/projects/{domain}", handlers.RemoveProject)
-	mux.HandleFunc("PATCH /api/projects/{domain}", handlers.UpdateProject)
-	mux.HandleFunc("POST /api/projects/{domain}/enable", handlers.EnableProject)
-	mux.HandleFunc("POST /api/projects/{domain}/disable", handlers.DisableProject)
+	api.GET("/projects", handlers.ListProjects)
+	api.POST("/projects", handlers.AddProject)
+	api.DELETE("/projects/:domain", handlers.RemoveProject)
+	api.PATCH("/projects/:domain", handlers.UpdateProject)
+	api.POST("/projects/:domain/enable", handlers.EnableProject)
+	api.POST("/projects/:domain/disable", handlers.DisableProject)
 
 	// Services
-	mux.HandleFunc("GET /api/services", handlers.ListServices)
-	mux.HandleFunc("POST /api/services/up", handlers.ServicesUp)
-	mux.HandleFunc("POST /api/services/down", handlers.ServicesDown)
-	mux.HandleFunc("POST /api/services/stop", handlers.ServicesStop)
-	mux.HandleFunc("POST /api/services/{name}/restart", handlers.RestartService)
+	api.GET("/services", handlers.ListServices)
+	api.POST("/services/up", handlers.ServicesUp)
+	api.POST("/services/down", handlers.ServicesDown)
+	api.POST("/services/stop", handlers.ServicesStop)
+	api.POST("/services/:name/restart", handlers.RestartService)
 
 	// Databases
-	mux.HandleFunc("GET /api/databases", handlers.ListDatabases)
-	mux.HandleFunc("POST /api/databases", handlers.CreateDatabase)
-	mux.HandleFunc("DELETE /api/databases/{name}", handlers.DropDatabase)
-	mux.HandleFunc("POST /api/databases/{name}/export", handlers.ExportDatabase)
-	mux.HandleFunc("GET /api/databases/{name}/download", handlers.DownloadDatabase)
-	mux.HandleFunc("POST /api/databases/import", handlers.ImportDatabase)
+	api.GET("/databases", handlers.ListDatabases)
+	api.POST("/databases", handlers.CreateDatabase)
+	api.DELETE("/databases/:name", handlers.DropDatabase)
+	api.POST("/databases/:name/export", handlers.ExportDatabase)
+	api.GET("/databases/:name/download", handlers.DownloadDatabase)
+	api.POST("/databases/import", handlers.ImportDatabase)
 
-	// Images
-	mux.HandleFunc("GET /api/images", handlers.ListImages)
-	mux.HandleFunc("POST /api/images/build", handlers.BuildImages)
-	mux.HandleFunc("GET /api/images/build/ws", handlers.BuildImagesWS)
+	// Images + Build (WebSocket)
+	api.GET("/images", handlers.ListImages)
+	api.POST("/images/build", handlers.BuildImages)
+	api.GET("/images/build/ws", handlers.BuildImagesWS)
 
 	// Logs
-	mux.HandleFunc("GET /api/logs/{service}", handlers.GetLogs)
-	mux.HandleFunc("GET /api/logs/{service}/ws", handlers.StreamLogs)
-
-	// System
-	mux.HandleFunc("GET /api/doctor", handlers.Doctor)
-	mux.HandleFunc("POST /api/doctor/fix", handlers.DoctorFix)
-	mux.HandleFunc("GET /api/env", handlers.GetEnv)
-	mux.HandleFunc("PATCH /api/env", handlers.UpdateEnv)
-	mux.HandleFunc("GET /api/xdebug/{php}", handlers.XdebugStatus)
-	mux.HandleFunc("POST /api/xdebug/{php}/{action}", handlers.XdebugToggle)
+	api.GET("/logs/:service", handlers.GetLogs)
+	api.GET("/logs/:service/ws", handlers.StreamLogsWS)
 
 	// Files
-	mux.HandleFunc("GET /api/files", handlers.ListFiles)
-	mux.HandleFunc("GET /api/files/read", handlers.ReadFile)
-	mux.HandleFunc("POST /api/files/write", handlers.WriteFile)
-	mux.HandleFunc("GET /api/files/logs", handlers.ListLogs)
-	mux.HandleFunc("GET /api/files/tail", handlers.TailFile)
-	mux.HandleFunc("GET /api/files/tail/ws", handlers.TailFileWS)
-	mux.HandleFunc("GET /api/files/download", handlers.DownloadFile)
+	api.GET("/files", handlers.ListFiles)
+	api.GET("/files/read", handlers.ReadFile)
+	api.POST("/files/write", handlers.WriteFile)
+	api.GET("/files/logs", handlers.ListLogs)
+	api.GET("/files/tail", handlers.TailFile)
+	api.GET("/files/tail/ws", handlers.TailFileWS)
+	api.GET("/files/download", handlers.DownloadFile)
 
 	// DB Manager
-	mux.HandleFunc("GET /api/dbmanager/tables", handlers.ListTables)
-	mux.HandleFunc("GET /api/dbmanager/columns", handlers.DescribeTable)
-	mux.HandleFunc("GET /api/dbmanager/data", handlers.TableData)
-	mux.HandleFunc("POST /api/dbmanager/query", handlers.RunQuery)
+	api.GET("/dbmanager/tables", handlers.ListTables)
+	api.GET("/dbmanager/columns", handlers.DescribeTable)
+	api.GET("/dbmanager/data", handlers.TableData)
+	api.POST("/dbmanager/query", handlers.RunQuery)
 
-	// Commands (shell, composer, magento, artisan, wp, ssl, varnish, install)
-	mux.HandleFunc("POST /api/exec", handlers.ExecCommand)
-	mux.HandleFunc("GET /api/exec/ws", handlers.ExecCommandWS)
-	mux.HandleFunc("POST /api/ssl/{domain}", handlers.EnableSSL)
-	mux.HandleFunc("POST /api/varnish/{domain}/{action}", handlers.VarnishToggle)
-	mux.HandleFunc("POST /api/install", handlers.Install)
+	// System
+	api.GET("/doctor", handlers.Doctor)
+	api.POST("/doctor/fix", handlers.DoctorFix)
+	api.GET("/env", handlers.GetEnv)
+	api.PATCH("/env", handlers.UpdateEnv)
+	api.GET("/xdebug/:php", handlers.XdebugStatus)
+	api.POST("/xdebug/:php/:action", handlers.XdebugToggle)
+
+	// Commands
+	api.POST("/exec", handlers.ExecCommand)
+	api.POST("/ssl/:domain", handlers.EnableSSL)
+	api.POST("/varnish/:domain/:action", handlers.VarnishToggle)
+	api.POST("/install", handlers.Install)
+
+	// Terminal (WebSocket PTY)
+	api.GET("/terminal/ws", handlers.TerminalWS)
 
 	// ── Static files (embedded frontend) ────────────────────────────────
-	webFS, err := fs.Sub(embeddedWeb, "web")
-	if err != nil {
-		log.Fatal(err)
-	}
-	mux.Handle("GET /", http.FileServer(http.FS(webFS)))
+	webFS, _ := fs.Sub(embeddedWeb, "web")
+	e.GET("/*", echo.WrapHandler(http.FileServer(http.FS(webFS))))
 
-	// ── CORS middleware (dev) ───────────────────────────────────────────
-	handler := corsMiddleware(mux)
-
-	// ── Start ───────────────────────────────────────────────────────────
-	addr := fmt.Sprintf(":%d", *port)
-	log.Printf("Mage UI starting on http://localhost%s", addr)
-
-	// Graceful shutdown
+	// ── Graceful shutdown ───────────────────────────────────────────────
 	go func() {
 		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
@@ -137,20 +131,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	if err := http.ListenAndServe(addr, handler); err != nil {
-		log.Fatal(err)
-	}
-}
-
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(204)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+	addr := fmt.Sprintf(":%d", *port)
+	log.Printf("Mage UI → http://localhost%s", addr)
+	e.Logger.Fatal(e.Start(addr))
 }

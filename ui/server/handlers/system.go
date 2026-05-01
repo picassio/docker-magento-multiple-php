@@ -2,168 +2,145 @@ package handlers
 
 import (
 	"bufio"
-	"encoding/json"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/labstack/echo/v4"
 	"github.com/picassio/docker-magento-multiple-php/ui/server/exec"
 )
 
-// GET /api/doctor
-func Doctor(w http.ResponseWriter, r *http.Request) {
-	res, err := exec.Run(exec.RootDir+"/scripts/doctor", "check")
-	if err != nil {
-		jsonError(w, err.Error(), 500)
-		return
-	}
-	output := exec.StripAnsi(res.Stdout + "\n" + res.Stderr)
-
-	// Parse into structured checks
+func Doctor(c echo.Context) error {
+	res, _ := exec.Run(exec.RootDir+"/scripts/doctor", "check")
+	output := ""
+	if res != nil { output = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
 	var checks []map[string]string
-	for _, line := range strings.Split(output, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		check := map[string]string{"raw": line}
-		if strings.Contains(line, "✔") || strings.Contains(line, "[OK]") || strings.Contains(line, "PASS") {
-			check["status"] = "pass"
-		} else if strings.Contains(line, "✖") || strings.Contains(line, "[FAIL]") || strings.Contains(line, "WARNING") {
-			check["status"] = "fail"
-		} else {
-			check["status"] = "info"
-		}
-		checks = append(checks, check)
+	for _, l := range strings.Split(output, "\n") {
+		l = strings.TrimSpace(l)
+		if l == "" { continue }
+		ch := map[string]string{"raw": l, "status": "info"}
+		if strings.Contains(l, "✔") || strings.Contains(l, "[OK]") { ch["status"] = "pass" }
+		if strings.Contains(l, "✖") || strings.Contains(l, "[FAIL]") || strings.Contains(l, "WARNING") { ch["status"] = "fail" }
+		checks = append(checks, ch)
 	}
-
-	jsonOK(w, map[string]interface{}{
-		"output": output,
-		"checks": checks,
-	})
+	return ok(c, map[string]interface{}{"output": output, "checks": checks})
 }
 
-// POST /api/doctor/fix
-func DoctorFix(w http.ResponseWriter, r *http.Request) {
-	res, err := exec.Run(exec.RootDir+"/scripts/doctor", "fix")
-	if err != nil {
-		jsonError(w, err.Error(), 500)
-		return
-	}
-	jsonOK(w, map[string]string{
-		"status": "fixed",
-		"output": exec.StripAnsi(res.Stdout + "\n" + res.Stderr),
-	})
+func DoctorFix(c echo.Context) error {
+	res, _ := exec.Run(exec.RootDir+"/scripts/doctor", "fix")
+	out := ""
+	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	return ok(c, map[string]string{"status": "fixed", "output": out})
 }
 
-// GET /api/env
-func GetEnv(w http.ResponseWriter, r *http.Request) {
-	envFile := filepath.Join(exec.RootDir, ".env")
-	f, err := os.Open(envFile)
-	if err != nil {
-		jsonError(w, err.Error(), 500)
-		return
-	}
+func GetEnv(c echo.Context) error {
+	f, err := os.Open(filepath.Join(exec.RootDir, ".env"))
+	if err != nil { return fail(c, 500, err.Error()) }
 	defer f.Close()
-
 	var entries []map[string]string
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Text()
-		trimmed := strings.TrimSpace(line)
-
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := sc.Text()
+		t := strings.TrimSpace(line)
+		if t == "" || strings.HasPrefix(t, "#") {
 			entries = append(entries, map[string]string{"type": "comment", "value": line})
-			continue
-		}
-
-		parts := strings.SplitN(trimmed, "=", 2)
-		if len(parts) == 2 {
-			entries = append(entries, map[string]string{
-				"type":  "var",
-				"key":   parts[0],
-				"value": parts[1],
-			})
+		} else if parts := strings.SplitN(t, "=", 2); len(parts) == 2 {
+			entries = append(entries, map[string]string{"type": "var", "key": parts[0], "value": parts[1]})
 		}
 	}
-	jsonOK(w, entries)
+	return ok(c, entries)
 }
 
-// PATCH /api/env
-func UpdateEnv(w http.ResponseWriter, r *http.Request) {
+func UpdateEnv(c echo.Context) error {
 	var updates map[string]string
-	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
-		jsonError(w, "invalid JSON", 400)
-		return
-	}
-
+	c.Bind(&updates)
 	envFile := filepath.Join(exec.RootDir, ".env")
-	data, err := os.ReadFile(envFile)
-	if err != nil {
-		jsonError(w, err.Error(), 500)
-		return
-	}
-
+	data, _ := os.ReadFile(envFile)
 	lines := strings.Split(string(data), "\n")
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
-			continue
-		}
-		parts := strings.SplitN(trimmed, "=", 2)
-		if len(parts) == 2 {
-			if newVal, ok := updates[parts[0]]; ok {
-				lines[i] = parts[0] + "=" + newVal
+	for i, l := range lines {
+		t := strings.TrimSpace(l)
+		if t == "" || strings.HasPrefix(t, "#") { continue }
+		if parts := strings.SplitN(t, "=", 2); len(parts) == 2 {
+			if v, ok := updates[parts[0]]; ok {
+				lines[i] = parts[0] + "=" + v
 				delete(updates, parts[0])
 			}
 		}
 	}
-
-	// Append any new keys
-	for k, v := range updates {
-		lines = append(lines, k+"="+v)
-	}
-
-	if err := os.WriteFile(envFile, []byte(strings.Join(lines, "\n")), 0644); err != nil {
-		jsonError(w, err.Error(), 500)
-		return
-	}
-	jsonOK(w, map[string]string{"status": "updated"})
+	for k, v := range updates { lines = append(lines, k+"="+v) }
+	os.WriteFile(envFile, []byte(strings.Join(lines, "\n")), 0644)
+	return ok(c, map[string]string{"status": "updated"})
 }
 
-// GET /api/xdebug/{php}
-func XdebugStatus(w http.ResponseWriter, r *http.Request) {
-	php := r.PathValue("php")
+func XdebugStatus(c echo.Context) error {
+	php := c.Param("php")
 	res, _ := exec.Mage("xdebug", "status", php)
-	output := ""
-	if res != nil {
-		output = exec.StripAnsi(res.Stdout)
-	}
-	enabled := strings.Contains(strings.ToLower(output), "enabled") || strings.Contains(strings.ToLower(output), "active")
-	jsonOK(w, map[string]interface{}{
-		"php":     php,
-		"enabled": enabled,
-		"output":  output,
-	})
+	out := ""
+	if res != nil { out = exec.StripAnsi(res.Stdout) }
+	enabled := strings.Contains(strings.ToLower(out), "enabled")
+	return ok(c, map[string]interface{}{"php": php, "enabled": enabled, "output": out})
 }
 
-// POST /api/xdebug/{php}/{action}
-func XdebugToggle(w http.ResponseWriter, r *http.Request) {
-	php := r.PathValue("php")
-	action := r.PathValue("action")
-	if action != "on" && action != "off" {
-		jsonError(w, "action must be on or off", 400)
-		return
+func XdebugToggle(c echo.Context) error {
+	php, action := c.Param("php"), c.Param("action")
+	if action != "on" && action != "off" { return fail(c, 400, "action must be on or off") }
+	res, _ := exec.Mage("xdebug", action, php)
+	out := ""
+	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	return ok(c, map[string]string{"status": action, "php": php, "output": out})
+}
+
+func ExecCommand(c echo.Context) error {
+	var req struct{ Command string; Args []string }
+	c.Bind(&req)
+	allowed := map[string]bool{"shell":true,"composer":true,"magento":true,"artisan":true,"wp":true,"ssl":true,"varnish":true,"install":true,"install-laravel":true,"install-wp":true,"setup":true,"vhost":true}
+	if !allowed[req.Command] { return fail(c, 403, "command not allowed") }
+	res, _ := exec.MageTimeout(5*time.Minute, append([]string{req.Command}, req.Args...)...)
+	out, stderr := "", ""
+	exitCode := 0
+	if res != nil { out = exec.StripAnsi(res.Stdout); stderr = exec.StripAnsi(res.Stderr); exitCode = res.ExitCode }
+	return ok(c, map[string]interface{}{"command": req.Command, "stdout": out, "stderr": stderr, "exitCode": exitCode})
+}
+
+func EnableSSL(c echo.Context) error {
+	domain := c.Param("domain")
+	res, _ := exec.MageTimeout(60*time.Second, "ssl", domain)
+	out := ""
+	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	return ok(c, map[string]string{"status": "ok", "domain": domain, "output": out})
+}
+
+func VarnishToggle(c echo.Context) error {
+	domain, action := c.Param("domain"), c.Param("action")
+	res, _ := exec.MageTimeout(30*time.Second, "varnish", action, domain)
+	out := ""
+	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	return ok(c, map[string]string{"status": action, "domain": domain, "output": out})
+}
+
+func Install(c echo.Context) error {
+	var req struct{ Type, Version, Edition, Domain, PHP string }
+	c.Bind(&req)
+	if req.Domain == "" { return fail(c, 400, "domain required") }
+	var args []string
+	switch req.Type {
+	case "magento":
+		if req.Version == "" || req.Edition == "" { return fail(c, 400, "version and edition required") }
+		args = []string{"install", req.Version, req.Edition, req.Domain}
+		if req.PHP != "" { args = append(args, req.PHP) }
+	case "laravel":
+		args = []string{"install-laravel", req.Domain}
+		if req.PHP != "" { args = append(args, req.PHP) }
+	case "wordpress":
+		args = []string{"install-wp", req.Domain}
+		if req.PHP != "" { args = append(args, req.PHP) }
+	default:
+		return fail(c, 400, "type must be magento, laravel, or wordpress")
 	}
-	res, err := exec.Mage("xdebug", action, php)
-	if err != nil {
-		jsonError(w, err.Error(), 500)
-		return
-	}
-	jsonOK(w, map[string]string{
-		"status": action,
-		"php":    php,
-		"output": exec.StripAnsi(res.Stdout + "\n" + res.Stderr),
-	})
+	res, _ := exec.MageTimeout(10*time.Minute, args...)
+	out, stderr := "", ""
+	exitCode := 0
+	if res != nil { out = exec.StripAnsi(res.Stdout); stderr = exec.StripAnsi(res.Stderr); exitCode = res.ExitCode }
+	return ok(c, map[string]interface{}{"status": "installed", "type": req.Type, "domain": req.Domain, "stdout": out, "stderr": stderr, "exitCode": exitCode})
 }

@@ -1,12 +1,13 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
-	"net/http"
 	"strings"
 
-	"github.com/gorilla/websocket"
+	"github.com/labstack/echo/v4"
 	"github.com/picassio/docker-magento-multiple-php/ui/server/exec"
+	"nhooyr.io/websocket"
 )
 
 type PHPImage struct {
@@ -17,116 +18,74 @@ type PHPImage struct {
 	ID      string `json:"id,omitempty"`
 }
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
-}
-
-// GET /api/images
-func ListImages(w http.ResponseWriter, r *http.Request) {
-	// Get all PHP versions from compose
-	res, _ := exec.DockerCompose("config", "--services")
-	var phpVersions []string
-	if res != nil {
-		for _, svc := range strings.Split(res.Stdout, "\n") {
-			svc = strings.TrimSpace(svc)
-			if strings.HasPrefix(svc, "php") {
-				phpVersions = append(phpVersions, svc)
+func ListImages(c echo.Context) error {
+	// Collect PHP services from core + legacy compose
+	seen := map[string]bool{}
+	var versions []string
+	for _, args := range [][]string{
+		{"config", "--services"},
+		{"-f", exec.RootDir + "/docker-compose.yml", "-f", exec.RootDir + "/compose/legacy.yml", "config", "--services"},
+	} {
+		res, _ := exec.Run("docker", append([]string{"compose"}, args...)...)
+		if res == nil { continue }
+		for _, s := range strings.Split(res.Stdout, "\n") {
+			s = strings.TrimSpace(s)
+			if strings.HasPrefix(s, "php") && !seen[s] {
+				seen[s] = true
+				versions = append(versions, s)
 			}
 		}
 	}
-
-	// Also check legacy
-	res2, _ := exec.Run("docker", "compose", "-f", exec.RootDir+"/docker-compose.yml",
-		"-f", exec.RootDir+"/compose/legacy.yml", "config", "--services")
-	if res2 != nil {
-		for _, svc := range strings.Split(res2.Stdout, "\n") {
-			svc = strings.TrimSpace(svc)
-			if strings.HasPrefix(svc, "php") {
-				found := false
-				for _, v := range phpVersions {
-					if v == svc {
-						found = true
-						break
-					}
-				}
-				if !found {
-					phpVersions = append(phpVersions, svc)
-				}
-			}
-		}
-	}
-
-	// Check which are built
-	var images []PHPImage
-	for _, ver := range phpVersions {
-		img := PHPImage{Version: ver, Image: "magento-" + ver}
-		// Check if image exists
-		res, _ := exec.Run("docker", "images", "--format", "{{.Repository}}:{{.Tag}}\t{{.Size}}\t{{.ID}}",
-			"--filter", "reference=*"+ver+"*")
-		if res != nil && res.Stdout != "" {
-			for _, line := range strings.Split(res.Stdout, "\n") {
-				if strings.Contains(line, ver) {
-					parts := strings.Split(line, "\t")
+	images := make([]PHPImage, 0, len(versions))
+	for _, v := range versions {
+		img := PHPImage{Version: v, Image: "magento-" + v}
+		res, _ := exec.Run("docker", "images", "--format", "{{.Repository}}:{{.Tag}}\t{{.Size}}\t{{.ID}}", "--filter", "reference=*"+v+"*")
+		if res != nil {
+			for _, l := range strings.Split(res.Stdout, "\n") {
+				if strings.Contains(l, v) {
+					p := strings.Split(l, "\t")
 					img.Built = true
-					if len(parts) > 0 {
-						img.Image = parts[0]
-					}
-					if len(parts) > 1 {
-						img.Size = parts[1]
-					}
-					if len(parts) > 2 {
-						img.ID = parts[2]
-					}
+					if len(p) > 0 { img.Image = p[0] }
+					if len(p) > 1 { img.Size = p[1] }
+					if len(p) > 2 { img.ID = p[2] }
 					break
 				}
 			}
 		}
 		images = append(images, img)
 	}
-
-	jsonOK(w, images)
+	return ok(c, images)
 }
 
-// POST /api/images/build
-func BuildImages(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Versions []string `json:"versions"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, "invalid JSON", 400)
-		return
-	}
-
-	args := append([]string{"build"}, req.Versions...)
-	res, err := exec.Mage(args...)
-	if err != nil {
-		jsonError(w, err.Error(), 500)
-		return
-	}
-	jsonOK(w, map[string]string{
-		"status": "built",
-		"output": exec.StripAnsi(res.Stdout + "\n" + res.Stderr),
-	})
+func BuildImages(c echo.Context) error {
+	var req struct{ Versions []string `json:"versions"` }
+	c.Bind(&req)
+	res, _ := exec.Mage(append([]string{"build"}, req.Versions...)...)
+	out := ""
+	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	return ok(c, map[string]string{"status": "built", "output": out})
 }
 
-// GET /api/images/build/ws — WebSocket: live build output
-func BuildImagesWS(w http.ResponseWriter, r *http.Request) {
-	ws, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		return
-	}
-	defer ws.Close()
-
-	// Read versions from first message
-	_, msg, err := ws.ReadMessage()
-	if err != nil {
-		return
-	}
-	var req struct {
-		Versions []string `json:"versions"`
-	}
+func BuildImagesWS(c echo.Context) error {
+	conn, err := websocket.Accept(c.Response(), c.Request(), &websocket.AcceptOptions{InsecureSkipVerify: true})
+	if err != nil { return err }
+	defer conn.Close(websocket.StatusNormalClosure, "done")
+	ctx := c.Request().Context()
+	_, msg, err := conn.Read(ctx)
+	if err != nil { return err }
+	var req struct{ Versions []string `json:"versions"` }
 	json.Unmarshal(msg, &req)
+	return exec.StreamToWS(ctx, conn, exec.RootDir+"/bin/mage", append([]string{"build"}, req.Versions...)...)
+}
 
-	args := append([]string{"build"}, req.Versions...)
-	exec.StreamToWS(ws, exec.RootDir+"/bin/mage", args...)
+func StreamLogsWS(c echo.Context) error {
+	service := c.Param("service")
+	conn, err := websocket.Accept(c.Response(), c.Request(), &websocket.AcceptOptions{InsecureSkipVerify: true})
+	if err != nil { return err }
+	defer conn.Close(websocket.StatusNormalClosure, "done")
+	ctx := context.Background()
+	// Send initial + follow
+	lines := c.QueryParam("lines")
+	if lines == "" { lines = "50" }
+	return exec.StreamToWS(ctx, conn, "docker", "compose", "logs", "--no-color", "--follow", "--tail="+lines, service)
 }

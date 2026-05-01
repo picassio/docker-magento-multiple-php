@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/labstack/echo/v4"
 	"github.com/picassio/docker-magento-multiple-php/ui/server/exec"
 )
 
@@ -20,219 +20,102 @@ type Database struct {
 	Tables  int    `json:"tables,omitempty"`
 }
 
-func listDBsForService(service string) ([]Database, error) {
-	mysqlPwdEnv := "MYSQL_PWD=root"
-	res, err := exec.DockerCompose("exec", "-T", "-e", mysqlPwdEnv, service, "mysql", "-u", "root", "-N", "-e",
+func listDBs(service string) []Database {
+	env := "MYSQL_PWD=root"
+	res, _ := exec.DockerCompose("exec", "-T", "-e", env, service, "mysql", "-u", "root", "-N", "-e",
 		"SELECT table_schema, ROUND(SUM(data_length+index_length)/1024/1024,1), COUNT(*) FROM information_schema.tables WHERE table_schema NOT IN ('information_schema','mysql','performance_schema','sys') GROUP BY table_schema")
-	if err != nil || res == nil || res.ExitCode != 0 || strings.TrimSpace(res.Stdout) == "" {
-		// Fallback: just list names
-		res2, _ := exec.DockerCompose("exec", "-T", "-e", mysqlPwdEnv, service, "mysql", "-u", "root", "-N", "-e", "SHOW DATABASES")
-		if res2 == nil {
-			return nil, fmt.Errorf("cannot connect to %s", service)
-		}
+	if res == nil || strings.TrimSpace(res.Stdout) == "" {
+		res2, _ := exec.DockerCompose("exec", "-T", "-e", env, service, "mysql", "-u", "root", "-N", "-e", "SHOW DATABASES")
+		if res2 == nil { return nil }
 		var dbs []Database
-		for _, line := range strings.Split(res2.Stdout, "\n") {
-			name := strings.TrimSpace(line)
-			if name == "" || name == "information_schema" || name == "mysql" || name == "performance_schema" || name == "sys" {
-				continue
-			}
-			dbs = append(dbs, Database{Name: name, Service: service})
+		for _, l := range strings.Split(res2.Stdout, "\n") {
+			n := strings.TrimSpace(l)
+			if n == "" || n == "information_schema" || n == "mysql" || n == "performance_schema" || n == "sys" { continue }
+			dbs = append(dbs, Database{Name: n, Service: service})
 		}
-		return dbs, nil
+		return dbs
 	}
-
 	var dbs []Database
-	for _, line := range strings.Split(res.Stdout, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		fields := strings.Fields(line)
-		if len(fields) < 3 {
-			continue
-		}
-		tables := 0
-		fmt.Sscanf(fields[2], "%d", &tables)
-		dbs = append(dbs, Database{
-			Name:    fields[0],
-			Service: service,
-			Size:    fields[1] + " MB",
-			Tables:  tables,
-		})
+	for _, l := range strings.Split(res.Stdout, "\n") {
+		f := strings.Fields(strings.TrimSpace(l))
+		if len(f) < 3 { continue }
+		t := 0; fmt.Sscanf(f[2], "%d", &t)
+		dbs = append(dbs, Database{Name: f[0], Service: service, Size: f[1] + " MB", Tables: t})
 	}
-	return dbs, nil
+	return dbs
 }
 
-// GET /api/databases
-func ListDatabases(w http.ResponseWriter, r *http.Request) {
-	services := []string{"mysql", "mysql80", "mariadb"}
+func ListDatabases(c echo.Context) error {
 	all := make([]Database, 0)
-
-	for _, svc := range services {
-		// Check if running
+	for _, svc := range []string{"mysql", "mysql80", "mariadb"} {
 		res, _ := exec.DockerCompose("ps", "--services", "--filter", "status=running")
-		if res == nil || !strings.Contains(res.Stdout, svc) {
-			continue
-		}
-		dbs, err := listDBsForService(svc)
-		if err != nil {
-			continue
-		}
-		all = append(all, dbs...)
+		if res == nil || !strings.Contains(res.Stdout, svc) { continue }
+		if dbs := listDBs(svc); dbs != nil { all = append(all, dbs...) }
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i].Name < all[j].Name })
-	jsonOK(w, all)
+	return ok(c, all)
 }
 
-// POST /api/databases
-func CreateDatabase(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Name    string `json:"name"`
-		Service string `json:"service"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, "invalid JSON", 400)
-		return
-	}
-	if req.Name == "" {
-		jsonError(w, "name required", 400)
-		return
-	}
-	if req.Service == "" {
-		req.Service = "mysql"
-	}
-
-	res, err := exec.Run(exec.RootDir+"/scripts/database", "create",
-		"--database-name="+req.Name, "--db-service="+req.Service)
-	if err != nil {
-		jsonError(w, err.Error(), 500)
-		return
-	}
-	if res.ExitCode != 0 {
-		jsonError(w, exec.StripAnsi(res.Stderr+"\n"+res.Stdout), 400)
-		return
-	}
-	jsonOK(w, map[string]string{"status": "created", "name": req.Name, "service": req.Service})
+func CreateDatabase(c echo.Context) error {
+	var req struct{ Name, Service string }
+	c.Bind(&req)
+	if req.Name == "" { return fail(c, 400, "name required") }
+	if req.Service == "" { req.Service = "mysql" }
+	res, _ := exec.Run(exec.RootDir+"/scripts/database", "create", "--database-name="+req.Name, "--db-service="+req.Service)
+	if res != nil && res.ExitCode != 0 { return fail(c, 400, exec.StripAnsi(res.Stderr+"\n"+res.Stdout)) }
+	return ok(c, map[string]string{"status": "created", "name": req.Name})
 }
 
-// DELETE /api/databases/{name}
-func DropDatabase(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	service := r.URL.Query().Get("service")
-	if service == "" {
-		service = "mysql"
-	}
-
-	mysqlPwdEnv := "MYSQL_PWD=root"
-	res, err := exec.DockerCompose("exec", "-T", "-e", mysqlPwdEnv, service, "mysql", "-u", "root", "-e",
-		"DROP DATABASE IF EXISTS `"+name+"`")
-	if err != nil {
-		jsonError(w, err.Error(), 500)
-		return
-	}
-	if res.ExitCode != 0 {
-		jsonError(w, exec.StripAnsi(res.Stderr), 400)
-		return
-	}
-	jsonOK(w, map[string]string{"status": "dropped", "name": name})
+func DropDatabase(c echo.Context) error {
+	name := c.Param("name")
+	svc := c.QueryParam("service")
+	if svc == "" { svc = "mysql" }
+	exec.DockerCompose("exec", "-T", "-e", "MYSQL_PWD=root", svc, "mysql", "-u", "root", "-e", "DROP DATABASE IF EXISTS `"+name+"`")
+	return ok(c, map[string]string{"status": "dropped", "name": name})
 }
 
-// POST /api/databases/{name}/export
-func ExportDatabase(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	service := r.URL.Query().Get("service")
-	if service == "" {
-		service = "mysql"
-	}
-
-	res, err := exec.Run(exec.RootDir+"/scripts/database", "export",
-		"--database-name="+name, "--db-service="+service)
-	if err != nil {
-		jsonError(w, err.Error(), 500)
-		return
-	}
-
-	// Find the exported file
-	exportDir := filepath.Join(exec.RootDir, "databases", "export")
-	entries, _ := filepath.Glob(filepath.Join(exportDir, name+"-*.sql"))
-	if len(entries) == 0 {
-		jsonOK(w, map[string]string{"status": "exported", "output": exec.StripAnsi(res.Stdout)})
-		return
-	}
+func ExportDatabase(c echo.Context) error {
+	name := c.Param("name")
+	svc := c.QueryParam("service")
+	if svc == "" { svc = "mysql" }
+	exec.Run(exec.RootDir+"/scripts/database", "export", "--database-name="+name, "--db-service="+svc)
+	dir := filepath.Join(exec.RootDir, "databases", "export")
+	entries, _ := filepath.Glob(filepath.Join(dir, name+"-*.sql"))
+	if len(entries) == 0 { return ok(c, map[string]string{"status": "exported"}) }
 	sort.Strings(entries)
-	latest := entries[len(entries)-1]
-	jsonOK(w, map[string]string{
-		"status":   "exported",
-		"file":     filepath.Base(latest),
-		"download": "/api/databases/" + name + "/download?file=" + filepath.Base(latest),
-	})
+	f := filepath.Base(entries[len(entries)-1])
+	return ok(c, map[string]string{"status": "exported", "file": f, "download": "/api/databases/" + name + "/download?file=" + f})
 }
 
-// GET /api/databases/{name}/download
-func DownloadDatabase(w http.ResponseWriter, r *http.Request) {
-	file := r.URL.Query().Get("file")
-	if file == "" || strings.Contains(file, "..") {
-		jsonError(w, "invalid file", 400)
-		return
-	}
+func DownloadDatabase(c echo.Context) error {
+	file := c.QueryParam("file")
+	if file == "" || strings.Contains(file, "..") { return fail(c, 400, "invalid file") }
 	path := filepath.Join(exec.RootDir, "databases", "export", file)
-	if _, err := os.Stat(path); err != nil {
-		jsonError(w, "file not found", 404)
-		return
-	}
-	w.Header().Set("Content-Disposition", "attachment; filename="+file)
-	w.Header().Set("Content-Type", "application/sql")
+	if _, err := os.Stat(path); err != nil { return fail(c, 404, "not found") }
+	c.Response().Header().Set("Content-Disposition", "attachment; filename="+file)
 	f, _ := os.Open(path)
 	defer f.Close()
-	io.Copy(w, f)
+	io.Copy(c.Response(), f)
+	return nil
 }
 
-// POST /api/databases/import
-func ImportDatabase(w http.ResponseWriter, r *http.Request) {
-	r.ParseMultipartForm(500 << 20) // 500MB max
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		jsonError(w, "file required", 400)
-		return
-	}
-	defer file.Close()
-
-	target := r.FormValue("target")
-	service := r.FormValue("service")
-	if target == "" {
-		jsonError(w, "target database required", 400)
-		return
-	}
-	if service == "" {
-		service = "mysql"
-	}
-
-	// Save uploaded file
-	importDir := filepath.Join(exec.RootDir, "databases", "import")
-	os.MkdirAll(importDir, 0755)
-	destPath := filepath.Join(importDir, header.Filename)
-	dest, err := os.Create(destPath)
-	if err != nil {
-		jsonError(w, err.Error(), 500)
-		return
-	}
-	io.Copy(dest, file)
-	dest.Close()
-
-	// Import
-	res, err := exec.Run(exec.RootDir+"/scripts/database", "import",
-		"--source="+header.Filename, "--target="+target, "--db-service="+service)
-	if err != nil {
-		jsonError(w, err.Error(), 500)
-		return
-	}
-
-	// Cleanup
-	os.Remove(destPath)
-
-	jsonOK(w, map[string]string{
-		"status": "imported",
-		"target": target,
-		"output": exec.StripAnsi(res.Stdout),
-	})
+func ImportDatabase(c echo.Context) error {
+	file, err := c.FormFile("file")
+	if err != nil { return fail(c, 400, "file required") }
+	target := c.FormValue("target")
+	svc := c.FormValue("service")
+	if target == "" { return fail(c, 400, "target required") }
+	if svc == "" { svc = "mysql" }
+	dir := filepath.Join(exec.RootDir, "databases", "import")
+	os.MkdirAll(dir, 0755)
+	src, _ := file.Open()
+	defer src.Close()
+	dst, _ := os.Create(filepath.Join(dir, file.Filename))
+	io.Copy(dst, src)
+	dst.Close()
+	res, _ := exec.Run(exec.RootDir+"/scripts/database", "import", "--source="+file.Filename, "--target="+target, "--db-service="+svc)
+	os.Remove(filepath.Join(dir, file.Filename))
+	out := ""
+	if res != nil { out = exec.StripAnsi(res.Stdout) }
+	return c.JSON(http.StatusOK, map[string]string{"status": "imported", "output": out})
 }

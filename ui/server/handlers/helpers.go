@@ -1,17 +1,15 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
+
+	"github.com/labstack/echo/v4"
 )
 
-func jsonOK(w http.ResponseWriter, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
+func ok(c echo.Context, data interface{}) error {
+	return c.JSON(http.StatusOK, data)
 }
 
-func jsonError(w http.ResponseWriter, msg string, code int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+func fail(c echo.Context, code int, msg string) error {
+	return c.JSON(code, map[string]string{"error": msg})
 }

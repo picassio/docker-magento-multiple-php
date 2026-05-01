@@ -2,11 +2,11 @@ package handlers
 
 import (
 	"encoding/json"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/labstack/echo/v4"
 	"github.com/picassio/docker-magento-multiple-php/ui/server/exec"
 )
 
@@ -18,33 +18,22 @@ type Project struct {
 	DBName    string `json:"db_name"`
 	Search    string `json:"search"`
 	Enabled   bool   `json:"enabled"`
-	Redis     string `json:"redis,omitempty"`
 }
 
-func projectsFile() string {
-	return filepath.Join(exec.RootDir, "projects.json")
-}
+func projectsFile() string { return filepath.Join(exec.RootDir, "projects.json") }
 
 func readProjects() (map[string]Project, error) {
 	data, err := os.ReadFile(projectsFile())
 	if err != nil {
-		if os.IsNotExist(err) {
-			return map[string]Project{}, nil
-		}
+		if os.IsNotExist(err) { return map[string]Project{}, nil }
 		return nil, err
 	}
-
 	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, err
-	}
-
+	if err := json.Unmarshal(data, &raw); err != nil { return nil, err }
 	projects := make(map[string]Project, len(raw))
 	for domain, v := range raw {
 		var p Project
-		if err := json.Unmarshal(v, &p); err != nil {
-			continue
-		}
+		json.Unmarshal(v, &p)
 		p.Domain = domain
 		projects[domain] = p
 	}
@@ -53,207 +42,92 @@ func readProjects() (map[string]Project, error) {
 
 func writeProjects(projects map[string]Project) error {
 	out := make(map[string]interface{}, len(projects))
-	for domain, p := range projects {
-		out[domain] = map[string]interface{}{
-			"php":        p.PHP,
-			"app":        p.App,
-			"db_service": p.DBService,
-			"db_name":    p.DBName,
-			"search":     p.Search,
-			"enabled":    p.Enabled,
+	for d, p := range projects {
+		out[d] = map[string]interface{}{
+			"php": p.PHP, "app": p.App, "db_service": p.DBService,
+			"db_name": p.DBName, "search": p.Search, "enabled": p.Enabled,
 		}
 	}
-	data, err := json.MarshalIndent(out, "", "  ")
-	if err != nil {
-		return err
-	}
+	data, _ := json.MarshalIndent(out, "", "  ")
 	return os.WriteFile(projectsFile(), data, 0644)
 }
 
-// GET /api/projects
-func ListProjects(w http.ResponseWriter, r *http.Request) {
+func ListProjects(c echo.Context) error {
 	projects, err := readProjects()
-	if err != nil {
-		jsonError(w, err.Error(), 500)
-		return
-	}
-
+	if err != nil { return fail(c, 500, err.Error()) }
 	list := make([]Project, 0, len(projects))
-	for _, p := range projects {
-		list = append(list, p)
-	}
-	jsonOK(w, list)
+	for _, p := range projects { list = append(list, p) }
+	return ok(c, list)
 }
 
-// POST /api/projects
-func AddProject(w http.ResponseWriter, r *http.Request) {
+func AddProject(c echo.Context) error {
 	var p Project
-	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-		jsonError(w, "invalid JSON", 400)
-		return
-	}
-	if p.Domain == "" {
-		jsonError(w, "domain required", 400)
-		return
-	}
-	if p.PHP == "" {
-		p.PHP = "php83"
-	}
-	if p.App == "" {
-		p.App = "magento2"
-	}
-	if p.DBService == "" {
-		p.DBService = "mysql"
-	}
-	if p.DBName == "" {
-		p.DBName = strings.ReplaceAll(strings.ReplaceAll(p.Domain, ".", "_"), "-", "_")
-	}
-	if p.Search == "" {
-		p.Search = "opensearch"
-	}
+	if err := c.Bind(&p); err != nil { return fail(c, 400, "invalid JSON") }
+	if p.Domain == "" { return fail(c, 400, "domain required") }
+	if p.PHP == "" { p.PHP = "php83" }
+	if p.App == "" { p.App = "magento2" }
+	if p.DBService == "" { p.DBService = "mysql" }
+	if p.DBName == "" { p.DBName = strings.ReplaceAll(strings.ReplaceAll(p.Domain, ".", "_"), "-", "_") }
+	if p.Search == "" { p.Search = "opensearch" }
 	p.Enabled = true
-
 	projects, err := readProjects()
-	if err != nil {
-		jsonError(w, err.Error(), 500)
-		return
-	}
-	if _, exists := projects[p.Domain]; exists {
-		jsonError(w, "project already exists", 409)
-		return
-	}
-
+	if err != nil { return fail(c, 500, err.Error()) }
+	if _, exists := projects[p.Domain]; exists { return fail(c, 409, "project already exists") }
 	projects[p.Domain] = p
-	if err := writeProjects(projects); err != nil {
-		jsonError(w, err.Error(), 500)
-		return
-	}
-
-	// Create source dir
-	srcDir := filepath.Join(exec.RootDir, "sources", p.Domain)
-	os.MkdirAll(srcDir, 0755)
-
-	// Create vhost
+	writeProjects(projects)
+	os.MkdirAll(filepath.Join(exec.RootDir, "sources", p.Domain), 0755)
 	rootDir := p.Domain
-	if p.App == "laravel" {
-		rootDir = p.Domain + "/public"
-	}
-	exec.Run(exec.RootDir+"/scripts/create-vhost",
-		"--domain="+p.Domain, "--app="+p.App,
-		"--root-dir="+rootDir, "--php-version="+p.PHP)
-
-	// Create database
-	exec.Run(exec.RootDir+"/scripts/database", "create",
-		"--database-name="+p.DBName, "--db-service="+p.DBService)
-
-	jsonOK(w, p)
+	if p.App == "laravel" { rootDir = p.Domain + "/public" }
+	exec.Run(exec.RootDir+"/scripts/create-vhost", "--domain="+p.Domain, "--app="+p.App, "--root-dir="+rootDir, "--php-version="+p.PHP)
+	exec.Run(exec.RootDir+"/scripts/database", "create", "--database-name="+p.DBName, "--db-service="+p.DBService)
+	return ok(c, p)
 }
 
-// DELETE /api/projects/{domain}
-func RemoveProject(w http.ResponseWriter, r *http.Request) {
-	domain := r.PathValue("domain")
+func RemoveProject(c echo.Context) error {
+	domain := c.Param("domain")
 	projects, err := readProjects()
-	if err != nil {
-		jsonError(w, err.Error(), 500)
-		return
-	}
-	if _, exists := projects[domain]; !exists {
-		jsonError(w, "project not found", 404)
-		return
-	}
-
-	// Remove vhost
-	vhost := filepath.Join(exec.RootDir, "conf", "nginx", "conf.d", domain+".conf")
-	os.Remove(vhost)
-
+	if err != nil { return fail(c, 500, err.Error()) }
+	if _, exists := projects[domain]; !exists { return fail(c, 404, "project not found") }
+	os.Remove(filepath.Join(exec.RootDir, "conf", "nginx", "conf.d", domain+".conf"))
 	delete(projects, domain)
-	if err := writeProjects(projects); err != nil {
-		jsonError(w, err.Error(), 500)
-		return
-	}
-
-	jsonOK(w, map[string]string{"status": "removed"})
+	writeProjects(projects)
+	return ok(c, map[string]string{"status": "removed"})
 }
 
-// PATCH /api/projects/{domain}
-func UpdateProject(w http.ResponseWriter, r *http.Request) {
-	domain := r.PathValue("domain")
+func UpdateProject(c echo.Context) error {
+	domain := c.Param("domain")
 	projects, err := readProjects()
-	if err != nil {
-		jsonError(w, err.Error(), 500)
-		return
-	}
+	if err != nil { return fail(c, 500, err.Error()) }
 	p, exists := projects[domain]
-	if !exists {
-		jsonError(w, "project not found", 404)
-		return
-	}
-
-	var update map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
-		jsonError(w, "invalid JSON", 400)
-		return
-	}
-
-	if v, ok := update["php"].(string); ok {
+	if !exists { return fail(c, 404, "project not found") }
+	var u map[string]interface{}
+	c.Bind(&u)
+	if v, ok := u["php"].(string); ok {
 		p.PHP = v
-		// Recreate vhost with new PHP
 		rootDir := p.Domain
-		if p.App == "laravel" {
-			rootDir = p.Domain + "/public"
-		}
-		exec.Run(exec.RootDir+"/scripts/create-vhost",
-			"--domain="+p.Domain, "--app="+p.App,
-			"--root-dir="+rootDir, "--php-version="+p.PHP)
+		if p.App == "laravel" { rootDir = p.Domain + "/public" }
+		exec.Run(exec.RootDir+"/scripts/create-vhost", "--domain="+p.Domain, "--app="+p.App, "--root-dir="+rootDir, "--php-version="+p.PHP)
 	}
-	if v, ok := update["app"].(string); ok {
-		p.App = v
-	}
-	if v, ok := update["db_service"].(string); ok {
-		p.DBService = v
-	}
-	if v, ok := update["db_name"].(string); ok {
-		p.DBName = v
-	}
-	if v, ok := update["search"].(string); ok {
-		p.Search = v
-	}
-
+	if v, ok := u["app"].(string); ok { p.App = v }
+	if v, ok := u["db_service"].(string); ok { p.DBService = v }
+	if v, ok := u["db_name"].(string); ok { p.DBName = v }
+	if v, ok := u["search"].(string); ok { p.Search = v }
 	projects[domain] = p
-	if err := writeProjects(projects); err != nil {
-		jsonError(w, err.Error(), 500)
-		return
-	}
-	jsonOK(w, p)
+	writeProjects(projects)
+	return ok(c, p)
 }
 
-// POST /api/projects/{domain}/enable
-func EnableProject(w http.ResponseWriter, r *http.Request) {
-	setProjectEnabled(w, r, true)
-}
+func EnableProject(c echo.Context) error  { return setEnabled(c, true) }
+func DisableProject(c echo.Context) error { return setEnabled(c, false) }
 
-// POST /api/projects/{domain}/disable
-func DisableProject(w http.ResponseWriter, r *http.Request) {
-	setProjectEnabled(w, r, false)
-}
-
-func setProjectEnabled(w http.ResponseWriter, r *http.Request, enabled bool) {
-	domain := r.PathValue("domain")
+func setEnabled(c echo.Context, enabled bool) error {
+	domain := c.Param("domain")
 	projects, err := readProjects()
-	if err != nil {
-		jsonError(w, err.Error(), 500)
-		return
-	}
+	if err != nil { return fail(c, 500, err.Error()) }
 	p, exists := projects[domain]
-	if !exists {
-		jsonError(w, "project not found", 404)
-		return
-	}
+	if !exists { return fail(c, 404, "project not found") }
 	p.Enabled = enabled
 	projects[domain] = p
-	if err := writeProjects(projects); err != nil {
-		jsonError(w, err.Error(), 500)
-		return
-	}
-	jsonOK(w, p)
+	writeProjects(projects)
+	return ok(c, p)
 }
