@@ -103,6 +103,20 @@ func ExecCommand(c echo.Context) error {
 	return ok(c, map[string]interface{}{"command": req.Command, "stdout": out, "stderr": stderr, "exitCode": exitCode})
 }
 
+// POST /api/debug/start — start phpMyAdmin + Redis Commander
+func DebugStart(c echo.Context) error {
+	res, _ := exec.Run("docker", "compose", "-f", exec.RootDir+"/docker-compose.yml", "-f", exec.RootDir+"/compose/debug.yml", "up", "-d", "phpmyadmin", "redis-commander")
+	out := ""
+	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	return ok(c, map[string]string{"status": "started", "output": out})
+}
+
+// POST /api/debug/stop
+func DebugStop(c echo.Context) error {
+	exec.Run("docker", "compose", "-f", exec.RootDir+"/docker-compose.yml", "-f", exec.RootDir+"/compose/debug.yml", "rm", "-sf", "phpmyadmin", "redis-commander")
+	return ok(c, map[string]string{"status": "stopped"})
+}
+
 func EnableSSL(c echo.Context) error {
 	domain := c.Param("domain")
 	res, _ := exec.MageTimeout(60*time.Second, "ssl", domain)

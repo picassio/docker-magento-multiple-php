@@ -4,8 +4,12 @@ services:
     image: phpmyadmin:latest
     environment:
       PMA_HOST: mysql
+      PMA_ABSOLUTE_URI: http://localhost:${PHPMYADMIN_PORT:-8080}/
+      HIDE_PHP_VERSION: 1
     ports:
       - "${PHPMYADMIN_PORT:-8080}:80"
+    volumes:
+      - ./conf/phpmyadmin/config.user.inc.php:/etc/phpmyadmin/config.user.inc.php:ro
     restart: unless-stopped
 
   redis-commander:

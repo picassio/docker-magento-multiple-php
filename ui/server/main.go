@@ -109,6 +109,10 @@ func main() {
 	api.GET("/xdebug/:php", handlers.XdebugStatus)
 	api.POST("/xdebug/:php/:action", handlers.XdebugToggle)
 
+	// Debug tools (phpMyAdmin + Redis Commander)
+	api.POST("/debug/start", handlers.DebugStart)
+	api.POST("/debug/stop", handlers.DebugStop)
+
 	// Commands
 	api.POST("/exec", handlers.ExecCommand)
 	api.POST("/ssl/:domain", handlers.EnableSSL)

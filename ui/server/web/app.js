@@ -411,67 +411,93 @@ function FilesPage() {
 
 // ── SQL Manager ──────────────────────────────────────────────────────────────
 function SQLPage() {
+  const [tab, setTab] = useState('phpmyadmin');
   const [dbs, setDbs] = useState([]);
   const [db, setDb] = useState('');
   const [svc, setSvc] = useState('mysql');
   const [tables, setTables] = useState([]);
   const [query, setQuery] = useState('');
   const [result, setResult] = useState(null);
-  const [page, setPage] = useState(1);
+  const [toolsUp, setToolsUp] = useState(false);
 
-  useEffect(() => { GET('/api/databases').then(d => { setDbs(d||[]); if(d&&d.length) { setDb(d[0].name); setSvc(d[0].service); } }); }, []);
-  useEffect(() => { if(db && svc) GET('/api/dbmanager/tables?db='+db+'&service='+svc).then(t=>setTables(t||[])); }, [db, svc]);
+  useEffect(() => {
+    GET('/api/databases').then(d => { setDbs(d||[]); if(d&&d.length){setDb(d[0].name);setSvc(d[0].service);} });
+    // Check if debug tools running
+    GET('/api/services').then(s => { setToolsUp((s||[]).some(x => x.service === 'phpmyadmin')); });
+  }, []);
+  useEffect(() => { if(db&&svc&&tab==='query') GET('/api/dbmanager/tables?db='+db+'&service='+svc).then(t=>setTables(t||[])); }, [db,svc,tab]);
 
-  const selectTable = async (t) => {
-    setQuery('SELECT * FROM `'+t+'` LIMIT 50;');
-    const r = await GET('/api/dbmanager/data?db='+db+'&service='+svc+'&table='+t+'&page=1&limit=50');
-    setResult(r); setPage(1);
-  };
-
-  const loadPage = async (t, p) => {
-    const r = await GET('/api/dbmanager/data?db='+db+'&service='+svc+'&table='+t+'&page='+p+'&limit=50');
-    setResult(r); setPage(p);
+  const startTools = async () => {
+    toast('Starting phpMyAdmin + Redis Commander...');
+    await POST('/api/debug/start');
+    setToolsUp(true);
+    toast('Tools started','success');
   };
 
   const runQuery = async () => {
     if(!query.trim()) return;
-    const r = await POST('/api/dbmanager/query', { db, service: svc, query: query.trim() });
+    setResult(null);
+    const r = await POST('/api/dbmanager/query', {db, service:svc, query:query.trim()});
     setResult(r);
   };
 
+  const pmaUrl = location.protocol+'//'+location.hostname+':8080';
+  const redisUrl = location.protocol+'//'+location.hostname+':8081';
+
   return html`<div>
-    <div class="page-header"><h1>SQL Manager</h1></div>
-    <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center">
-      <select value=${db} onChange=${e=>{ const opt=e.target.options[e.target.selectedIndex]; setDb(e.target.value); setSvc(opt.dataset.svc||'mysql'); }} style="min-width:200px">
-        ${dbs.map(d=>html`<option value=${d.name} data-svc=${d.service}>${d.name} (${d.service})</option>`)}
-      </select>
-      <button class="btn btn-primary" onClick=${runQuery}>▶ Run Query</button>
+    <div class="page-header"><h1>SQL & Data</h1><div class="actions">
+      ${!toolsUp && html`<button class="btn btn-success" onClick=${startTools}>Start phpMyAdmin + Redis</button>`}
+    </div></div>
+
+    <div style="display:flex;gap:0;margin-bottom:16px">
+      ${[['phpmyadmin','phpMyAdmin'],['redis','Redis'],['query','Quick Query']].map(([id,label],i,a)=>
+        html`<button class="btn ${tab===id?'btn-primary':''}" style="border-radius:${i===0?'var(--radius-sm) 0 0 var(--radius-sm)':i===a.length-1?'0 var(--radius-sm) var(--radius-sm) 0':'0'};margin-left:${i>0?'-1px':'0'}" onClick=${()=>setTab(id)}>${label}</button>`
+      )}
     </div>
-    <div class="card" style="margin-bottom:16px">
-      <textarea value=${query} onInput=${e=>setQuery(e.target.value)} spellcheck="false" placeholder="SELECT * FROM ... LIMIT 50;" style="width:100%;min-height:80px;background:var(--bg);color:var(--text);border:none;padding:12px;font-family:var(--mono);font-size:13px;resize:vertical;outline:none"></textarea>
-    </div>
-    <div class="split-layout" style="display:flex;gap:16px">
-      <div class="card" style="width:280px;min-height:300px;overflow-y:auto;max-height:60vh;flex-shrink:0">
-        <div style="padding:8px 12px;border-bottom:1px solid var(--border);font-weight:600;font-size:12px;color:var(--text2)">${tables.length} tables</div>
-        ${tables.map(t=>html`<div style="padding:6px 12px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px;display:flex;justify-content:space-between" onClick=${()=>selectTable(t.name)}>
-          <span>🗃️ ${t.name}</span><span style="color:var(--text2);font-size:11px">${t.rows} rows</span>
-        </div>`)}
+
+    ${tab === 'phpmyadmin' && html`<div class="card" style="overflow:hidden">
+      ${toolsUp ? html`<iframe src=${pmaUrl} style="width:100%;height:calc(80vh - 160px);border:none"/>` :
+        html`<div class="empty" style="padding:40px"><p>phpMyAdmin is not running</p><button class="btn btn-primary" onClick=${startTools}>Start Debug Tools</button></div>`}
+      <div style="padding:8px 14px;border-top:1px solid var(--border);font-size:12px;color:var(--text3);display:flex;justify-content:space-between;align-items:center">
+        <span>phpMyAdmin — browse, query, manage all databases</span>
+        <a href=${pmaUrl} target="_blank" class="btn btn-sm">Open in new tab</a>
       </div>
-      <div class="card" style="flex:1;min-height:300px;overflow:auto;max-height:60vh">
-        ${result ? html`<div>
-          ${result.error ? html`<div style="padding:16px;color:var(--red);font-family:var(--mono)">${result.error}</div>` :
-            html`<div class="table-wrap" style="max-height:calc(60vh - 60px);overflow:auto"><table><thead><tr>${(result.columns||[]).map(c=>html`<th>${c}</th>`)}</tr></thead><tbody>
-              ${(result.rows||[]).map(r=>html`<tr>${r.map(cell=>html`<td style="font-family:var(--mono);font-size:12px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${cell===null?html`<span style="color:var(--text2);font-style:italic">NULL</span>`:String(cell).substring(0,200)}</td>`)}</tr>`)}
-            </tbody></table></div>`}
-          ${result.total > 0 && html`<div style="padding:8px 12px;font-size:12px;color:var(--text2);border-top:1px solid var(--border)">
-            ${result.total} rows, page ${result.page||page}/${result.pages||1}
-            ${(result.page||page)>1 && html` <button class="btn btn-sm" onClick=${()=>loadPage(query.match(/`(\w+)`/)?.[1],page-1)}>← Prev</button>`}
-            ${(result.page||page)<(result.pages||1) && html` <button class="btn btn-sm" onClick=${()=>loadPage(query.match(/`(\w+)`/)?.[1],page+1)}>Next →</button>`}
-          </div>`}
-          ${result.count >= 0 && !result.total && html`<div style="padding:8px 12px;font-size:12px;color:var(--text2);border-top:1px solid var(--border)">${result.count} row(s)</div>`}
-        </div>` : html`<div class="empty"><div class="icon">🗃️</div><p>Select a table or run a query</p></div>`}
+    </div>`}
+
+    ${tab === 'redis' && html`<div class="card" style="overflow:hidden">
+      ${toolsUp ? html`<iframe src=${redisUrl} style="width:100%;height:calc(80vh - 160px);border:none"/>` :
+        html`<div class="empty" style="padding:40px"><p>Redis Commander is not running</p><button class="btn btn-primary" onClick=${startTools}>Start Debug Tools</button></div>`}
+      <div style="padding:8px 14px;border-top:1px solid var(--border);font-size:12px;color:var(--text3);display:flex;justify-content:space-between;align-items:center">
+        <span>Redis Commander — keys, TTL, memory usage</span>
+        <a href=${redisUrl} target="_blank" class="btn btn-sm">Open in new tab</a>
       </div>
-    </div>
+    </div>`}
+
+    ${tab === 'query' && html`<div>
+      <div style="display:flex;gap:10px;margin-bottom:10px;align-items:center">
+        <select value=${db} onChange=${e=>{const o=e.target.options[e.target.selectedIndex];setDb(e.target.value);setSvc(o.dataset.svc||'mysql');}} style="min-width:180px">
+          ${dbs.map(d=>html`<option value=${d.name} data-svc=${d.service}>${d.name} (${d.service})</option>`)}
+        </select>
+        <button class="btn btn-primary btn-sm" onClick=${runQuery}>▶ Run</button>
+      </div>
+      <div class="card" style="margin-bottom:10px">
+        <textarea value=${query} onInput=${e=>setQuery(e.target.value)} onKeyDown=${e=>{if(e.ctrlKey&&e.key==='Enter')runQuery();}} spellcheck="false" placeholder="SELECT * FROM ... LIMIT 50;  (Ctrl+Enter to run)" style="width:100%;min-height:60px;background:var(--bg);color:var(--text);border:none;padding:10px;font-family:var(--mono);font-size:13px;resize:vertical;outline:none"/>
+      </div>
+      <div class="split-layout">
+        <div class="card" style="width:220px;min-height:200px;overflow-y:auto;max-height:45vh;flex-shrink:0">
+          <div style="padding:6px 10px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text3);font-weight:600">${tables.length} TABLES</div>
+          ${tables.map(t=>html`<div style="padding:4px 10px;border-bottom:1px solid var(--border);cursor:pointer;font-size:11px;font-family:var(--mono)" onClick=${()=>{setQuery('SELECT * FROM \`'+t.name+'\` LIMIT 50;');}}>${t.name}</div>`)}
+        </div>
+        <div class="card" style="flex:1;min-height:200px;overflow:auto;max-height:45vh">
+          ${result ? html`<div>
+            ${result.error ? html`<pre style="padding:10px;color:var(--red);font-family:var(--mono);font-size:12px">${result.error}</pre>` :
+              html`<div class="table-wrap"><table><thead><tr>${(result.columns||[]).map(c=>html`<th>${c}</th>`)}</tr></thead><tbody>
+                ${(result.rows||[]).map(r=>html`<tr>${r.map(cell=>html`<td style="font-family:var(--mono);font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${cell===null?html`<i style="color:var(--text3)">NULL</i>`:String(cell).substring(0,100)}</td>`)}</tr>`)}\n              </tbody></table></div>`}
+            <div style="padding:6px 10px;font-size:11px;color:var(--text3);border-top:1px solid var(--border)">${result.count||0} row(s)</div>
+          </div>` : html`<div class="empty" style="padding:20px"><p style="font-size:12px">Run a query</p></div>`}
+        </div>
+      </div>
+    </div>`}
   </div>`;
 }
 
