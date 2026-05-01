@@ -14,7 +14,9 @@ import (
 	"nhooyr.io/websocket"
 )
 
-// GET /api/terminal/ws — WebSocket PTY terminal
+// GET /api/terminal/ws?project=shop.test — WebSocket PTY terminal
+// If project is set, opens shell inside the project's PHP container
+// Otherwise opens host bash in the project root
 func TerminalWS(c echo.Context) error {
 	conn, err := websocket.Accept(c.Response(), c.Request(), &websocket.AcceptOptions{
 		InsecureSkipVerify: true,
@@ -27,23 +29,78 @@ func TerminalWS(c echo.Context) error {
 	ctx, cancel := context.WithCancel(c.Request().Context())
 	defer cancel()
 
-	// Start bash shell in the project root
-	cmd := osexec.CommandContext(ctx, "bash", "--login")
-	cmd.Dir = exec.RootDir
-	cmd.Env = append(os.Environ(),
-		"TERM=xterm-256color",
-		"PS1=\\[\\033[1;32m\\]mage-ui\\[\\033[0m\\]:\\[\\033[1;34m\\]\\w\\[\\033[0m\\]$ ",
-	)
+	project := c.QueryParam("project")
+
+	var cmd *osexec.Cmd
+
+	if project != "" {
+		// Read project's PHP version from projects.json
+		projects, _ := readProjects()
+		p, exists := projects[project]
+		php := "php83"
+		if exists {
+			php = p.PHP
+		}
+
+		// Get compose project name for docker exec
+		composeProjName := os.Getenv("COMPOSE_PROJECT_NAME")
+		containerName := composeProjName + "-" + php + "-1"
+		if composeProjName == "" {
+			containerName = "docker-magento-multiple-php-" + php + "-1"
+		}
+
+		// Open bash inside the PHP container, cd to project dir
+		cmd = osexec.CommandContext(ctx,
+			"docker", "exec", "-it",
+			"-e", "TERM=xterm-256color",
+			"-u", "nginx",
+			"-w", "/home/public_html/"+project,
+			containerName,
+			"bash", "--login",
+		)
+	} else {
+		// Host shell in project root
+		cmd = osexec.CommandContext(ctx, "bash", "--login")
+		cmd.Dir = exec.RootDir
+		cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+	}
 
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
-		return err
+		// Fallback: try without -it flag for docker exec
+		if project != "" {
+			projects, _ := readProjects()
+			p, exists := projects[project]
+			php := "php83"
+			if exists {
+				php = p.PHP
+			}
+			composeProjName := os.Getenv("COMPOSE_PROJECT_NAME")
+			containerName := composeProjName + "-" + php + "-1"
+			if composeProjName == "" {
+				containerName = "docker-magento-multiple-php-" + php + "-1"
+			}
+			cmd = osexec.CommandContext(ctx,
+				"docker", "exec", "-i",
+				"-e", "TERM=xterm-256color",
+				"-u", "nginx",
+				"-w", "/home/public_html/"+project,
+				containerName,
+				"bash",
+			)
+			ptmx, err = pty.Start(cmd)
+			if err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
 	}
 	defer ptmx.Close()
 
 	var wg sync.WaitGroup
 
-	// PTY → WebSocket (output)
+	// PTY → WebSocket
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -59,7 +116,7 @@ func TerminalWS(c echo.Context) error {
 		}
 	}()
 
-	// WebSocket → PTY (input)
+	// WebSocket → PTY
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -70,7 +127,6 @@ func TerminalWS(c echo.Context) error {
 				break
 			}
 			if typ == websocket.MessageText {
-				// Check for resize messages: {"type":"resize","cols":80,"rows":24}
 				var resize struct {
 					Type string `json:"type"`
 					Cols int    `json:"cols"`
@@ -81,7 +137,6 @@ func TerminalWS(c echo.Context) error {
 					continue
 				}
 			}
-			// Regular input
 			io.WriteString(ptmx, string(msg))
 		}
 	}()

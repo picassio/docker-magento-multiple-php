@@ -177,10 +177,8 @@ function RunCommandModal({ show, onClose, project }) {
     { label: 'db check', cmd: 'wp', args: 'db check' },
     { label: 'core update', cmd: 'wp', args: 'core update' },
   );
-  // Always available
-  shortcuts.push(
-    { label: 'shell', cmd: 'shell', args: '' },
-  );
+  // Always available — open terminal navigates to Terminal page with project pre-selected
+  const openTerminal = () => { onClose(); location.hash = '#/terminal?project=' + encodeURIComponent(project.domain); };
 
   const run = async (command, argsStr) => {
     const args = [project.domain, ...(argsStr ? argsStr.split(' ') : [])].filter(Boolean);
@@ -208,6 +206,7 @@ function RunCommandModal({ show, onClose, project }) {
       <label>Quick Commands</label>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         ${shortcuts.map(s => html`<button class="btn btn-sm" disabled=${running} onClick=${() => run(s.cmd, s.args)}>${s.label}</button>`)}
+        <button class="btn btn-sm btn-success" onClick=${openTerminal}>▶ Open Terminal</button>
       </div>
     </div>
     <div style="margin-bottom:14px">
@@ -478,23 +477,48 @@ function SQLPage() {
 
 // ── Terminal ─────────────────────────────────────────────────────────────────
 function TerminalPage() {
+  const [projects, setProjects] = useState([]);
+  const [target, setTarget] = useState('');
   const termRef = useRef(null);
   const wsRef = useRef(null);
+  const termInst = useRef(null);
+  const fitRef = useRef(null);
 
+  // Read project from URL hash: #/terminal?project=shop.test
   useEffect(() => {
-    if (!window.Terminal) { toast('xterm.js not loaded','error'); return; }
-    const term = new window.Terminal({ theme: getTheme()==='dark' ? { background: '#0d1117' } : { background: '#ffffff', foreground: '#1f2328' }, fontFamily: "'SF Mono','Fira Code',monospace", fontSize: 14, cursorBlink: true });
+    GET('/api/projects').then(p => {
+      setProjects(p||[]);
+      const params = new URLSearchParams(location.hash.split('?')[1] || '');
+      const proj = params.get('project') || '';
+      if (proj) { setTarget(proj); connect(proj); }
+    });
+  }, []);
+
+  const connect = useCallback((proj) => {
+    // Cleanup previous
+    if (wsRef.current) wsRef.current.close();
+    if (termInst.current) termInst.current.dispose();
+
+    if (!window.Terminal || !termRef.current) return;
+
+    const term = new window.Terminal({
+      theme: getTheme()==='dark' ? { background: '#0f172a', foreground: '#f1f5f9' } : { background: '#ffffff', foreground: '#1f2328' },
+      fontFamily: "'Fira Code','SF Mono',monospace", fontSize: 13, cursorBlink: true,
+    });
     const fitAddon = new window.FitAddon.FitAddon();
     term.loadAddon(fitAddon);
     term.open(termRef.current);
     fitAddon.fit();
+    termInst.current = term;
+    fitRef.current = fitAddon;
 
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${proto}//${location.host}/api/terminal/ws`);
+    const url = proj ? `${proto}//${location.host}/api/terminal/ws?project=${encodeURIComponent(proj)}` : `${proto}//${location.host}/api/terminal/ws`;
+    const ws = new WebSocket(url);
     ws.binaryType = 'arraybuffer';
     ws.onopen = () => {
-      // Send resize
       ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+      term.write(proj ? `\x1b[32mConnected to ${proj} container\x1b[0m\r\n` : '\x1b[32mConnected to host\x1b[0m\r\n');
     };
     ws.onmessage = e => {
       if (e.data instanceof ArrayBuffer) term.write(new Uint8Array(e.data));
@@ -502,18 +526,32 @@ function TerminalPage() {
     };
     ws.onclose = () => term.write('\r\n\x1b[31m--- disconnected ---\x1b[0m\r\n');
     term.onData(data => ws.send(data));
-    term.onResize(({ cols, rows }) => ws.send(JSON.stringify({ type: 'resize', cols, rows })));
-
-    const resizeObs = new ResizeObserver(() => fitAddon.fit());
-    resizeObs.observe(termRef.current);
-
+    term.onResize(({ cols, rows }) => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'resize', cols, rows })); });
     wsRef.current = ws;
-    return () => { ws.close(); term.dispose(); resizeObs.disconnect(); };
   }, []);
+
+  // Cleanup + resize observer
+  useEffect(() => {
+    if (!target) connect('');
+    return () => { if (wsRef.current) wsRef.current.close(); if (termInst.current) termInst.current.dispose(); };
+  }, []);
+
+  const switchTarget = (proj) => {
+    setTarget(proj);
+    connect(proj);
+  };
 
   return html`<div>
     <div class="page-header"><h1>Terminal</h1></div>
-    <div class="card" style="padding:8px"><div ref=${termRef} style="height:calc(80vh - 100px)"></div></div>
+    <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center">
+      <select value=${target} onChange=${e => switchTarget(e.target.value)} style="min-width:200px">
+        <option value="">Host (project root)</option>
+        ${projects.map(p => html`<option value=${p.domain}>${p.domain} (${p.php})</option>`)}
+      </select>
+      <button class="btn btn-sm" onClick=${() => connect(target)}>Reconnect</button>
+      <span style="font-size:12px;color:var(--text3)">${target ? 'Inside PHP container → /home/public_html/'+target : 'Host shell → project root'}</span>
+    </div>
+    <div class="card" style="padding:8px"><div ref=${termRef} style="height:calc(80vh - 130px)"></div></div>
   </div>`;
 }
 
