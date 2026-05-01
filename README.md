@@ -34,6 +34,7 @@ bin/mage magento mysite.com cache:flush
 
 ## Features
 
+- **Web UI** — `bin/mage ui` launches a full dashboard (10 pages, Go binary, works offline)
 - **Multi-framework** — Magento 1/2, Laravel, WordPress, and generic PHP projects in one stack
 - **Project management** — register projects with `bin/mage project add`, switch PHP/DB/search per project, enable/disable without data loss
 - **Smart start** — `bin/mage up` reads `projects.json`, starts only the services your projects need, auto-loads the right compose override files
@@ -107,6 +108,7 @@ bin/mage magento mysite.com cache:flush
 | `debug.yml` | phpMyAdmin, Redis Commander | 8080, 8081 | DB/cache inspection |
 | `varnish.yml` | Varnish 7.6 | 6081 | Full-page cache |
 | `dashboards.yml` | OpenSearch Dashboards | 5601 | Search analytics |
+| `ui.yml` | Mage UI dashboard | 8888 | Web management UI |
 
 > All ports are unique — every service variant can run simultaneously.
 
@@ -125,6 +127,34 @@ bin/mage magento mysite.com cache:flush
 | 2.4.8 | 8.3, 8.4 | OS 2.x+ | MySQL 8.4 / MariaDB 11.4 | 7.x | `mariadb.yml` *(optional)* |
 
 > `bin/mage up` auto-detects which override files to load from your `projects.json`.
+
+---
+
+## Web UI
+
+```bash
+bin/mage ui          # build + start + open browser
+bin/mage ui stop     # stop the UI
+bin/mage ui build    # rebuild after code changes
+bin/mage ui logs     # tail UI container logs
+```
+
+Full web dashboard at `http://localhost:8888` with 10 pages:
+
+| Page | What |
+|------|------|
+| **Dashboard** | Service status cards (live), project list, Start/Stop/Down |
+| **Projects** | CRUD, inline PHP/DB/Search switch, enable/disable toggle, Run Command modal |
+| **Database** | List, create, export, import, drop databases |
+| **Build** | PHP image list, build all/missing/individual, live WebSocket output |
+| **Logs** | Service selector, fetch/follow mode, WebSocket live tail |
+| **Files** | Project file browser, Ace editor (syntax highlighting), log viewer |
+| **SQL** | phpMyAdmin (embedded), Redis Commander (embedded), Quick Query |
+| **Mail** | Mailpit (embedded) — captured SMTP emails from PHP |
+| **Terminal** | xterm.js shell inside project’s PHP container (or host) |
+| **Settings** | Doctor checks + auto-fix, Xdebug toggle, .env editor, Install wizard |
+
+Tech: Go binary (12MB) with embedded Preact + Ace Editor + xterm.js. Zero CDN deps, works fully offline.
 
 ---
 
@@ -158,6 +188,7 @@ bin/mage magento mysite.com cache:flush
 | `stop` / `restart` | Stop or restart services |
 | `status` | Show projects + running containers |
 | `logs [service]` | Tail container logs |
+| `ui [start\|stop\|build\|logs]` | Web dashboard (http://localhost:8888) |
 
 ### Development
 
