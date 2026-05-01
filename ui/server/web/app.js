@@ -213,27 +213,48 @@ function BuildPage() {
 function LogsPage() {
   const [services, setServices] = useState([]);
   const [svc, setSvc] = useState('');
-  const [output, setOutput] = useState('');
+  const [output, setOutput] = useState('Loading...');
   const wsRef = useRef(null);
-  useEffect(() => { GET('/api/services').then(s => { const list = (s||[]).map(x=>x.service).filter(Boolean); setServices(list); if(list.length) setSvc(list[0]); }); }, []);
-  const fetch_ = async () => { const r = await GET('/api/logs/'+svc+'?lines=200'); setOutput(r.output||''); };
+  const logRef = useRef(null);
+
+  // Load services, then auto-fetch first service logs
+  useEffect(() => {
+    GET('/api/services').then(s => {
+      const list = (s||[]).map(x=>x.service).filter(Boolean);
+      setServices(list);
+      if (list.length) {
+        setSvc(list[0]);
+        GET('/api/logs/'+list[0]+'?lines=200').then(r => setOutput(r.output||'No logs yet'));
+      } else {
+        setOutput('No running services');
+      }
+    });
+  }, []);
+
+  const fetch_ = async () => {
+    if (!svc) return;
+    setOutput('Loading...');
+    const r = await GET('/api/logs/'+svc+'?lines=200');
+    setOutput(r.output||'No logs');
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  };
   const follow = () => {
     if (wsRef.current) wsRef.current.close();
     setOutput('');
     const ws = new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/api/logs/${svc}/ws?lines=100`);
-    ws.onmessage = e => { const d = JSON.parse(e.data); setOutput(o => o + (d.line||'') + '\n'); };
+    ws.onmessage = e => { const d = JSON.parse(e.data); setOutput(o => o + (d.line||'') + '\n'); if(logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; };
     wsRef.current = ws;
   };
   useEffect(() => () => { if (wsRef.current) wsRef.current.close(); }, []);
   return html`<div>
     <div class="page-header"><h1>Logs</h1></div>
     <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center">
-      <select value=${svc} onChange=${e=>setSvc(e.target.value)} style="min-width:150px">${services.map(s=>html`<option>${s}</option>`)}</select>
+      <select value=${svc} onChange=${e=>{setSvc(e.target.value); GET('/api/logs/'+e.target.value+'?lines=200').then(r=>setOutput(r.output||'No logs'));}} style="min-width:150px">${services.map(s=>html`<option>${s}</option>`)}</select>
       <button class="btn btn-primary" onClick=${follow}>▶ Follow</button>
       <button class="btn" onClick=${()=>{if(wsRef.current)wsRef.current.close();}}>■ Stop</button>
       <button class="btn" onClick=${fetch_}>Fetch</button>
     </div>
-    <div class="card"><pre class="log-viewer" style="min-height:400px">${output}</pre></div>
+    <div class="card"><pre ref=${logRef} class="log-viewer" style="min-height:400px">${output}</pre></div>
   </div>`;
 }
 

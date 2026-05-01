@@ -1,1 +1,42 @@
-{}
+{
+  "app.test": {
+    "app": "default",
+    "db_name": "app_test",
+    "db_service": "mysql",
+    "enabled": true,
+    "php": "php83",
+    "search": "none"
+  },
+  "blog.test": {
+    "app": "default",
+    "db_name": "blog_test",
+    "db_service": "mysql",
+    "enabled": true,
+    "php": "php83",
+    "search": "none"
+  },
+  "shop.test": {
+    "app": "default",
+    "db_name": "shop_test",
+    "db_service": "mysql",
+    "enabled": true,
+    "php": "php83",
+    "search": "none"
+  },
+  "test.local": {
+    "app": "default",
+    "db_name": "test_local",
+    "db_service": "mysql",
+    "enabled": true,
+    "php": "php83",
+    "search": "none"
+  },
+  "testfjjf.com": {
+    "app": "default",
+    "db_name": "testfjjf_com",
+    "db_service": "mysql",
+    "enabled": true,
+    "php": "php83",
+    "search": "none"
+  }
+}

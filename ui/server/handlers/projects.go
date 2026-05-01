@@ -55,9 +55,47 @@ func writeProjects(projects map[string]Project) error {
 func ListProjects(c echo.Context) error {
 	projects, err := readProjects()
 	if err != nil { return fail(c, 500, err.Error()) }
+
+	// Auto-discover projects from sources/ if projects.json is empty
+	if len(projects) == 0 {
+		srcDir := filepath.Join(exec.RootDir, "sources")
+		entries, _ := os.ReadDir(srcDir)
+		for _, e := range entries {
+			if !e.IsDir() || e.Name() == ".keepme" { continue }
+			domain := e.Name()
+			app := detectAppType(filepath.Join(srcDir, domain))
+			dbName := strings.ReplaceAll(strings.ReplaceAll(domain, ".", "_"), "-", "_")
+			p := Project{
+				Domain: domain, PHP: "php83", App: app,
+				DBService: "mysql", DBName: dbName,
+				Search: "none", Enabled: true,
+			}
+			if app == "magento2" { p.Search = "opensearch" }
+			projects[domain] = p
+		}
+		if len(projects) > 0 {
+			writeProjects(projects)
+		}
+	}
+
 	list := make([]Project, 0, len(projects))
 	for _, p := range projects { list = append(list, p) }
 	return ok(c, list)
+}
+
+// detectAppType checks source dir for framework markers
+func detectAppType(dir string) string {
+	// Magento 2: app/etc/env.php or bin/magento
+	if _, err := os.Stat(filepath.Join(dir, "bin", "magento")); err == nil { return "magento2" }
+	if _, err := os.Stat(filepath.Join(dir, "app", "etc", "env.php")); err == nil { return "magento2" }
+	// Laravel: artisan file
+	if _, err := os.Stat(filepath.Join(dir, "artisan")); err == nil { return "laravel" }
+	// WordPress: wp-config.php or wp-includes/
+	if _, err := os.Stat(filepath.Join(dir, "wp-config.php")); err == nil { return "wordpress" }
+	if _, err := os.Stat(filepath.Join(dir, "wp-includes")); err == nil { return "wordpress" }
+	// Magento 1: app/Mage.php
+	if _, err := os.Stat(filepath.Join(dir, "app", "Mage.php")); err == nil { return "magento1" }
+	return "default"
 }
 
 func AddProject(c echo.Context) error {
