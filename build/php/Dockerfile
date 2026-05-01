@@ -51,7 +51,11 @@ RUN apt-get update -y && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # --- PHP repository + PHP installation --------------------------------------
-RUN LC_ALL=C.UTF-8 add-apt-repository ppa:ondrej/php && \
+# Add ondrej/php PPA directly (avoids Launchpad API calls that timeout in Docker)
+RUN curl -fsSL https://keyserver.ubuntu.com/pks/lookup?op=get\&search=0x71E1B1F2A1682E14DEA4F1FCAB15EB5F14CE515D \
+        | gpg --dearmor -o /usr/share/keyrings/ondrej-php.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/ondrej-php.gpg] https://ppa.launchpadcontent.net/ondrej/php/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) main" \
+        > /etc/apt/sources.list.d/ondrej-php.list && \
     apt-get update -y
 
 # Core PHP extensions (version-agnostic list)
