@@ -426,12 +426,13 @@ cmd_project_set_field() {
 cmd_build() {
     local overrides=()
     local services=()
-    local no_cache=false
+    local no_cache=true
 
     for arg in "$@"; do
         case "$arg" in
             --with=*)    overrides+=("${arg#*=}") ;;
             --no-cache)  no_cache=true ;;
+            --cache)     no_cache=false ;;
             -*)          _die "Unknown option: $arg" ;;
             *)           services+=("$arg") ;;
         esac
