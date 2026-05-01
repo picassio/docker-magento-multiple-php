@@ -65,14 +65,16 @@ func TerminalWS(c echo.Context) error {
 		containerName := findContainerName(php)
 
 		// Open bash inside the PHP container, cd to project dir
-		// Use -i only (not -it) — creack/pty provides the TTY
+		// Use 'script' to allocate a PTY inside the container
+		// This gives us a proper prompt and interactive shell
 		cmd = osexec.CommandContext(ctx,
 			"docker", "exec", "-i",
 			"-e", "TERM=xterm-256color",
+			"-e", "PS1=\\[\\033[1;32m\\]\\u@\\h\\[\\033[0m\\]:\\[\\033[1;34m\\]\\w\\[\\033[0m\\]$ ",
 			"-u", "nginx",
 			"-w", "/home/public_html/"+project,
 			containerName,
-			"bash",
+			"script", "-qc", "bash", "/dev/null",
 		)
 	} else {
 		// Host shell in project root
