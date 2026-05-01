@@ -66,7 +66,7 @@ function Sidebar({ page, setPage }) {
     <nav class="sidebar ${menuOpen ? 'open' : ''}">
     <div class="logo" onClick=${() => nav('/')}>${logoSvg} <span>Mage UI</span></div>
     ${items.map(([path, label, icon]) => html`
-      <a class="nav-item ${page === path ? 'active' : ''}" onClick=${e => { e.preventDefault(); nav(path); }} href="#">
+      <a class="nav-item ${page === path.split('?')[0] ? 'active' : ''}" onClick=${e => { e.preventDefault(); nav(path); }} href="#">
         ${icon} <span>${label}</span>
       </a>
     `)}
@@ -597,9 +597,10 @@ function SettingsPage() {
 // APP
 // ══════════════════════════════════════════════════════════════════════════════
 function App() {
-  const [page, setPage] = useState(location.hash.replace('#','') || '/');
-  useEffect(() => { const h = () => setPage(location.hash.replace('#','') || '/'); window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
-  const nav = p => { location.hash = p; setPage(p); };
+  const getPage = () => (location.hash.replace('#','').split('?')[0]) || '/';
+  const [page, setPage] = useState(getPage());
+  useEffect(() => { const h = () => setPage(getPage()); window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
+  const nav = p => { location.hash = p; setPage(p.split('?')[0]); };
   const pages = { '/': Dashboard, '/projects': Projects, '/db': DatabasePage, '/build': BuildPage, '/logs': LogsPage, '/files': FilesPage, '/sql': SQLPage, '/terminal': TerminalPage, '/settings': SettingsPage };
   const Page = pages[page] || Dashboard;
   return html`<div class="app"><${Sidebar} page=${page} setPage=${nav} /><main class="main"><${Page} /></main></div>`;
