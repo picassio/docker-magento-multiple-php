@@ -1,0 +1,27 @@
+# =============================================================================
+# Mage UI — Web dashboard service
+# Usage: docker compose -f docker-compose.yml -f compose/ui.yml up -d ui
+# Or:    bin/mage ui
+# =============================================================================
+
+services:
+  ui:
+    build:
+      context: .
+      dockerfile: ui/Dockerfile
+    image: mage-ui:latest
+    container_name: mage-ui
+    ports:
+      - "${MAGE_UI_PORT:-8888}:8888"
+    volumes:
+      - .:/project
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /project
+    environment:
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-docker-magento-multiple-php}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8888/api/projects"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

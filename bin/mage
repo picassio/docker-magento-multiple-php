@@ -71,7 +71,7 @@ ${_bold}HOSTING${_reset}
     ${_green}varnish${_reset} <on|off|status> <domain>     Toggle Varnish
 
 ${_bold}UI${_reset}
-    ${_green}ui${_reset}                                 Open web dashboard (http://localhost:8888)
+    ${_green}ui${_reset} [start|stop|build|logs]         Web dashboard (http://localhost:8888)
 
 ${_bold}INSTALL${_reset}
     ${_green}install${_reset} <ver> <edition> <domain> [php]  Install fresh Magento (auto-detects stack)
@@ -1040,46 +1040,58 @@ cmd_logs() { if [[ -n "${1:-}" ]]; then dc logs -f "$1"; else dc logs -f; fi; }
 
 # ── Command: ui ───────────────────────────────────────────────────────────────
 cmd_ui() {
-    local ui_bin="${MAGE_ROOT}/ui/mage-ui"
-    local port=8888
-    local release_url="https://github.com/picassio/docker-magento-multiple-php/releases/latest/download"
+    local port="${MAGE_UI_PORT:-8888}"
+    local action="${1:-start}"
 
-    if [[ ! -x "$ui_bin" ]]; then
-        _arrow "Downloading UI server..."
-        local os arch
-        os=$(uname -s | tr '[:upper:]' '[:lower:]')
-        arch=$(uname -m)
-        [[ "$arch" == "x86_64" ]] && arch="amd64"
-        [[ "$arch" == "aarch64" ]] && arch="arm64"
-        mkdir -p "$(dirname "$ui_bin")"
-        if curl -fsSL "${release_url}/mage-ui-${os}-${arch}" -o "$ui_bin" 2>/dev/null; then
-            chmod +x "$ui_bin"
-            _success "UI server downloaded"
-        else
-            # Try building from source
-            if command -v go &>/dev/null; then
-                _arrow "Building UI from source..."
-                (cd "${MAGE_ROOT}/ui/server" && go build -o "$ui_bin" .)
-                _success "UI server built"
-            else
-                _die "Cannot download or build UI. Install Go or download from GitHub releases."
-            fi
-        fi
+    local ui_compose="docker compose -f ${MAGE_ROOT}/docker-compose.yml -f ${MAGE_ROOT}/compose/ui.yml"
+
+    case "$action" in
+        stop)
+            _arrow "Stopping Mage UI..."
+            $ui_compose stop ui 2>/dev/null
+            $ui_compose rm -f ui 2>/dev/null
+            _success "UI stopped"
+            return
+            ;;
+        build)
+            _arrow "Building Mage UI image..."
+            $ui_compose build ui
+            _success "UI image built"
+            return
+            ;;
+        logs)
+            $ui_compose logs -f ui
+            return
+            ;;
+    esac
+
+    # Start
+    _arrow "Starting Mage UI..."
+
+    # Build image if not exists
+    if ! docker image inspect mage-ui:latest &>/dev/null; then
+        _arrow "Building UI image (first time)..."
+        $ui_compose build ui
     fi
 
-    _arrow "Starting Mage UI at ${_bold}http://localhost:${port}${_reset}"
-    "$ui_bin" --root="$MAGE_ROOT" --port="$port" &
-    local pid=$!
+    $ui_compose up -d ui
+
+    # Wait for healthy
+    local attempts=0
+    while ! curl -sf "http://localhost:${port}/api/projects" &>/dev/null; do
+        attempts=$((attempts + 1))
+        [[ $attempts -ge 15 ]] && break
+        sleep 1
+    done
 
     # Open browser
+    local url="http://localhost:${port}"
+    _success "Mage UI running at ${_bold}${url}${_reset}"
     if command -v xdg-open &>/dev/null; then
-        xdg-open "http://localhost:${port}" 2>/dev/null
+        xdg-open "$url" 2>/dev/null
     elif command -v open &>/dev/null; then
-        open "http://localhost:${port}"
+        open "$url"
     fi
-
-    _success "UI running (PID: $pid). Press Ctrl+C to stop."
-    wait $pid
 }
 
 # ── Command: setup ────────────────────────────────────────────────────────────
@@ -1141,7 +1153,7 @@ main() {
         install)        cmd_install "$@" ;;
         install-laravel) cmd_install_laravel "$@" ;;
         install-wp)     cmd_install_wp "$@" ;;
-        ui)             cmd_ui ;;
+        ui)             cmd_ui "$@" ;;
         setup)          cmd_setup ;;
         build)          cmd_build "$@" ;;
         doctor)         exec "${SCRIPTS_DIR}/doctor" "$@" ;;

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -60,7 +61,12 @@ func MageTimeout(timeout time.Duration, args ...string) (*Result, error) {
 }
 
 func DockerCompose(args ...string) (*Result, error) {
-	return Run("docker", append([]string{"compose"}, args...)...)
+	base := []string{"compose"}
+	// Pass project name if set (for running inside a container)
+	if pn := os.Getenv("COMPOSE_PROJECT_NAME"); pn != "" {
+		base = append(base, "-p", pn)
+	}
+	return Run("docker", append(base, args...)...)
 }
 
 func StreamToWS(ctx context.Context, conn *websocket.Conn, name string, args ...string) error {
