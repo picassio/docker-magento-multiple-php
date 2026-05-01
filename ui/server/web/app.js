@@ -56,6 +56,7 @@ function Sidebar({ page, setPage }) {
     ['/logs', 'Logs', I('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/>')],
     ['/files', 'Files', I('<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M13 2v7h7"/>')],
     ['/sql', 'SQL', I('<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>')],
+    ['/mail', 'Mail', I('<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>')],
     ['/terminal', 'Terminal', I('<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>')],
     ['/settings', 'Settings', I('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.2.65.77 1.09 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>')],
   ];
@@ -501,6 +502,21 @@ function SQLPage() {
   </div>`;
 }
 
+// ── Mail (Mailpit) ──────────────────────────────────────────────────────────
+function MailPage() {
+  const mailUrl = '/mailpit/';
+  const directUrl = location.protocol+'//'+location.hostname+':8025';
+  return html`<div>
+    <div class="page-header"><h1>Mail</h1><div class="actions">
+      <a href=${directUrl} target="_blank" class="btn btn-sm">Open Mailpit ↗</a>
+    </div></div>
+    <div class="card" style="overflow:hidden">
+      <iframe src=${mailUrl} style="width:100%;height:calc(85vh - 100px);border:none"/>
+    </div>
+    <div style="padding:8px 0;font-size:12px;color:var(--text3)">SMTP: mailpit:1025 — All emails sent from PHP are captured here</div>
+  </div>`;
+}
+
 // ── Terminal ─────────────────────────────────────────────────────────────────
 function TerminalPage() {
   const [projects, setProjects] = useState([]);
@@ -627,7 +643,7 @@ function App() {
   const [page, setPage] = useState(getPage());
   useEffect(() => { const h = () => setPage(getPage()); window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
   const nav = p => { location.hash = p; setPage(p.split('?')[0]); };
-  const pages = { '/': Dashboard, '/projects': Projects, '/db': DatabasePage, '/build': BuildPage, '/logs': LogsPage, '/files': FilesPage, '/sql': SQLPage, '/terminal': TerminalPage, '/settings': SettingsPage };
+  const pages = { '/': Dashboard, '/projects': Projects, '/db': DatabasePage, '/build': BuildPage, '/logs': LogsPage, '/files': FilesPage, '/sql': SQLPage, '/mail': MailPage, '/terminal': TerminalPage, '/settings': SettingsPage };
   const Page = pages[page] || Dashboard;
   return html`<div class="app"><${Sidebar} page=${page} setPage=${nav} /><main class="main"><${Page} /></main></div>`;
 }

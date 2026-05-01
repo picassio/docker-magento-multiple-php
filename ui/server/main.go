@@ -7,6 +7,8 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -121,6 +123,20 @@ func main() {
 
 	// Terminal (WebSocket PTY)
 	api.GET("/terminal/ws", handlers.TerminalWS)
+
+	// Mailpit proxy (strip CSP for iframe embedding)
+	mailpitProxy := httputil.NewSingleHostReverseProxy(&url.URL{Scheme: "http", Host: "localhost:8025"})
+	origDirector := mailpitProxy.Director
+	mailpitProxy.Director = func(r *http.Request) {
+		origDirector(r)
+		r.Host = "localhost:8025"
+	}
+	mailpitProxy.ModifyResponse = func(resp *http.Response) error {
+		resp.Header.Del("Content-Security-Policy")
+		resp.Header.Del("X-Frame-Options")
+		return nil
+	}
+	e.Any("/mailpit/*", echo.WrapHandler(http.StripPrefix("/mailpit", mailpitProxy)))
 
 	// ── Static files (embedded frontend) ────────────────────────────────
 	webFS, _ := fs.Sub(embeddedWeb, "web")
