@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # ==============================================================================
 # Unified PHP Dockerfile for Magento Development
 # Supports PHP 7.0 – 8.4 via build arguments
@@ -57,12 +56,10 @@ RUN apt-get update -y && \
 # Instead we fetch the key from keyserver.ubuntu.com (reliable) and add the
 # PPA source manually.
 #
-# WSL2 NOTE: Uses --network=host so the build step runs on the host network
-# stack. Docker's default bridge NAT in WSL2 cannot route to Launchpad's IP
-# (185.125.190.80) due to Hyper-V vSwitch MTU/routing issues.
-# Run `bin/mage doctor fix` to also set the correct MTU in daemon.json.
-RUN --network=host \
-    curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x14AA40EC0831756756D7F66C4F4EA0AAE5267A6C' \
+# WSL2 NOTE: Run `bin/mage doctor fix` first — it sets Docker MTU to match
+# WSL2's NIC (1280), which is required for containers to reach Launchpad.
+# See: https://github.com/microsoft/WSL/issues/5491
+RUN curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x14AA40EC0831756756D7F66C4F4EA0AAE5267A6C' \
         | gpg --dearmor -o /usr/share/keyrings/ondrej-php.gpg && \
     . /etc/os-release && \
     echo "deb [signed-by=/usr/share/keyrings/ondrej-php.gpg] https://ppa.launchpadcontent.net/ondrej/php/ubuntu ${VERSION_CODENAME} main" \
@@ -71,7 +68,7 @@ RUN --network=host \
 
 # Core PHP extensions (version-agnostic list)
 # PHP 7.x needs the separate json package; PHP 8.x has it built-in.
-RUN --network=host apt-get install -y \
+RUN apt-get install -y \
         php${PHP_VERSION} \
         php${PHP_VERSION}-fpm \
         php${PHP_VERSION}-common \

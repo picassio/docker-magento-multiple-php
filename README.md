@@ -614,10 +614,10 @@ EOF
 sudo systemctl restart docker
 ```
 
-> **Note:** The PHP Dockerfile uses `RUN --network=host` (BuildKit) for the PPA
-> steps. This makes those build steps run on the WSL host network stack directly,
-> bypassing Docker's bridge NAT which cannot route to Launchpad's IP. The MTU fix
-> from `doctor` ensures all other container networking also works correctly.
+> **Note:** The Dockerfile fetches the PPA key from `keyserver.ubuntu.com`
+> (bypasses the flaky Launchpad REST API). The MTU fix from `doctor` ensures
+> Docker containers can reach `ppa.launchpadcontent.net` during builds.
+> See also: https://github.com/microsoft/WSL/issues/5491
 
 ### Line Ending Issues
 
