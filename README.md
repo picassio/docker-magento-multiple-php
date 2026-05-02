@@ -524,7 +524,7 @@ See `env-example` for the full list including credentials and other ports.
 ## Prerequisites
 
 - **Docker Engine 20.10+** with Compose plugin v2 (`docker compose`)
-- **Linux** (Ubuntu 22.04+ recommended) — works on macOS/WSL2 with caveats
+- **Linux** (Ubuntu 22.04+ recommended) — works on macOS/WSL2 (see [WSL2 section](#wsl2--windows) below)
 - **mkcert** — optional, for local SSL certificates
 
 ### System Health Check
@@ -540,6 +540,7 @@ The doctor checks and fixes:
 
 | Check | Why | Required by |
 |---|---|---|
+| WSL2 Docker MTU | Fix container networking | All (WSL2 only) |
 | `vm.max_map_count ≥ 262144` | Memory-mapped files | OpenSearch, Elasticsearch |
 | `vm.overcommit_memory = 1` | Prevent BGSAVE failures | Redis |
 | Transparent Huge Pages disabled | Prevent latency spikes | Redis |
@@ -578,7 +579,47 @@ bash tests/test-stacks.sh      # Magento stack connectivity: 6 scenarios
 
 ---
 
-## WSL / Windows
+## WSL2 / Windows
+
+### Docker Build Fails (Networking)
+
+If `bin/mage build` fails with errors like:
+- `504 Gateway Time-out` from Launchpad API
+- `Could not connect to ppa.launchpadcontent.net`
+- `apt-get update` hanging or timing out during Docker builds
+
+**Root cause:** WSL2's virtual NIC has MTU 1280, but Docker defaults to MTU 1500. Packets larger than 1280 bytes get dropped silently by the Hyper-V virtual switch, breaking TLS connections to many hosts from inside containers.
+
+**Fix:** Run the doctor command:
+
+```bash
+bin/mage doctor fix
+```
+
+This automatically detects WSL2, sets Docker's MTU to match the WSL2 NIC (1280), and restarts the daemon. The fix persists in `/etc/docker/daemon.json`.
+
+**Manual fix** (if doctor isn't available):
+
+```bash
+# Check your WSL2 MTU
+cat /sys/class/net/eth0/mtu   # Usually 1280
+
+# Add MTU to Docker daemon config
+sudo tee /etc/docker/daemon.json <<EOF
+{
+  "mtu": 1280
+}
+EOF
+
+sudo systemctl restart docker
+```
+
+> **Note:** The PHP Dockerfile uses `debian:bookworm` + `packages.sury.org` (Fastly CDN)
+> instead of Ubuntu + Launchpad PPA. This avoids `ppa.launchpadcontent.net` which is
+> particularly unreliable from Docker containers in WSL2 (the specific IP 185.125.190.80
+> has persistent routing issues through Hyper-V NAT even with correct MTU).
+
+### Line Ending Issues
 
 If `bin/mage` fails with `bash\r: No such file or directory`, line endings are wrong:
 

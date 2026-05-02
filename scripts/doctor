@@ -90,6 +90,44 @@ else
     fi
 fi
 
+# ── 1b. WSL2 Docker MTU ──────────────────────────────────────────────────────
+# In WSL2, the virtual NIC (eth0) has MTU 1280 but Docker defaults to 1500.
+# This mismatch causes TLS connections to many hosts to silently fail from
+# inside containers (packets >1280 bytes get dropped by the Hyper-V vSwitch).
+if grep -qi microsoft /proc/version 2>/dev/null; then
+    echo ""
+    _arrow "WSL2 Docker Networking"
+
+    WSL_MTU=$(cat /sys/class/net/eth0/mtu 2>/dev/null || echo "1500")
+    DOCKER_MTU=$(python3 -c "import json; d=json.load(open('$DAEMON_JSON')) if __import__('os').path.exists('$DAEMON_JSON') else {}; print(d.get('mtu', 1500))" 2>/dev/null || echo "1500")
+
+    if [[ "$DOCKER_MTU" -le "$WSL_MTU" ]]; then
+        check_pass "Docker MTU (${DOCKER_MTU}) ≤ WSL2 NIC MTU (${WSL_MTU})"
+    else
+        check_fail "Docker MTU (${DOCKER_MTU}) > WSL2 NIC MTU (${WSL_MTU}) — containers cannot reach many hosts"
+        if needs_fix; then
+            # Apply MTU fix to daemon.json
+            if [[ -f "$DAEMON_JSON" ]]; then
+                python3 -c "
+import json
+with open('$DAEMON_JSON') as f:
+    data = json.load(f)
+data['mtu'] = ${WSL_MTU}
+with open('$DAEMON_JSON', 'w') as f:
+    json.dump(data, f, indent=2)
+" 2>/dev/null
+            else
+                echo "{ \"mtu\": ${WSL_MTU} }" | sudo tee "$DAEMON_JSON" >/dev/null
+            fi
+            sudo systemctl restart docker 2>/dev/null && sleep 2
+            check_fixed "Docker MTU set to ${WSL_MTU} (daemon restarted)"
+        else
+            echo "    Fix: Add \"mtu\": ${WSL_MTU} to /etc/docker/daemon.json and restart Docker"
+            echo "    Or run: bin/mage doctor fix"
+        fi
+    fi
+fi
+
 # ── 2. Kernel Parameters ─────────────────────────────────────────────────────
 echo ""
 _arrow "Kernel Parameters (sysctl)"
