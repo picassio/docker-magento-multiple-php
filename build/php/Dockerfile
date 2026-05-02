@@ -1,16 +1,11 @@
+# syntax=docker/dockerfile:1
 # ==============================================================================
 # Unified PHP Dockerfile for Magento Development
 # Supports PHP 7.0 – 8.4 via build arguments
 # ==============================================================================
-# Uses Debian bookworm + packages.sury.org (Fastly CDN) instead of Ubuntu +
-# Launchpad PPA. The Launchpad PPA server (ppa.launchpadcontent.net) is
-# unreachable from Docker containers in WSL2 due to Hyper-V NAT routing issues.
-# packages.sury.org is maintained by the same developer (Ondrej Sury) and
-# provides identical PHP packages via a reliable CDN.
-# ==============================================================================
 
 # --- Build arguments ---------------------------------------------------------
-ARG BASE_IMAGE=debian:bookworm
+ARG BASE_IMAGE=ubuntu:24.04
 FROM ${BASE_IMAGE}
 
 ARG PHP_VERSION=8.3
@@ -26,6 +21,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=UTC
 
 # --- System setup: directories, user, base packages -------------------------
+# Ubuntu 24.04 ships with uid/gid 1000 taken by 'ubuntu' user — remove it first
 RUN if getent passwd 1000 >/dev/null 2>&1; then userdel -r $(getent passwd 1000 | cut -d: -f1) 2>/dev/null || true; fi && \
     if getent group 1000 >/dev/null 2>&1; then groupdel $(getent group 1000 | cut -d: -f1) 2>/dev/null || true; fi && \
     mkdir -p /home/public_html /run/php /var/lib/php/session && \
@@ -36,21 +32,9 @@ RUN if getent passwd 1000 >/dev/null 2>&1; then userdel -r $(getent passwd 1000 
 
 WORKDIR /home/public_html
 
-# Replace default Debian mirrors that are unreachable from Docker in WSL2.
-# deb.debian.org doesn't route properly through WSL2's Hyper-V NAT.
-# Use ftp.us.debian.org for main packages, security.debian.org for security.
-RUN if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
-        sed -i 's|http://deb.debian.org/debian-security|http://security.debian.org/debian-security|g' /etc/apt/sources.list.d/debian.sources && \
-        sed -i 's|http://deb.debian.org/debian|http://ftp.us.debian.org/debian|g' /etc/apt/sources.list.d/debian.sources; \
-    elif [ -f /etc/apt/sources.list ]; then \
-        sed -i 's|http://deb.debian.org/debian-security|http://security.debian.org/debian-security|g' /etc/apt/sources.list && \
-        sed -i 's|http://deb.debian.org/debian|http://ftp.us.debian.org/debian|g' /etc/apt/sources.list; \
-    fi
-
 RUN apt-get update -y && \
     apt-get install -y \
-        apt-transport-https \
-        lsb-release \
+        software-properties-common \
         curl \
         git \
         sudo \
@@ -60,21 +44,34 @@ RUN apt-get update -y && \
         unzip \
         tzdata \
         gnupg \
-        ca-certificates \
-        tini && \
+        ca-certificates && \
+    # tini: available in noble (24.04) repos, needs manual install on bionic (18.04)
+    (apt-get install -y tini 2>/dev/null || \
+        (curl -fsSL https://github.com/krallin/tini/releases/download/v0.19.0/tini -o /usr/bin/tini && chmod +x /usr/bin/tini)) && \
     dpkg-reconfigure -f noninteractive tzdata && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# --- PHP repository (packages.sury.org — Fastly CDN, works in WSL/Docker) ---
-RUN curl -fsSL https://packages.sury.org/php/apt.gpg \
-        -o /usr/share/keyrings/deb.sury.org-php.gpg && \
-    echo "deb [signed-by=/usr/share/keyrings/deb.sury.org-php.gpg] https://packages.sury.org/php/ $(lsb_release -sc) main" \
-        > /etc/apt/sources.list.d/php-sury.list && \
+# --- PHP repository + PHP installation --------------------------------------
+# We avoid `add-apt-repository ppa:ondrej/php` because it calls the Launchpad
+# REST API (getSigningKeyData) which frequently returns 504 Gateway Timeout.
+# Instead we fetch the key from keyserver.ubuntu.com (reliable) and add the
+# PPA source manually.
+#
+# WSL2 NOTE: Uses --network=host so the build step runs on the host network
+# stack. Docker's default bridge NAT in WSL2 cannot route to Launchpad's IP
+# (185.125.190.80) due to Hyper-V vSwitch MTU/routing issues.
+# Run `bin/mage doctor fix` to also set the correct MTU in daemon.json.
+RUN --network=host \
+    curl -fsSL 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x14AA40EC0831756756D7F66C4F4EA0AAE5267A6C' \
+        | gpg --dearmor -o /usr/share/keyrings/ondrej-php.gpg && \
+    . /etc/os-release && \
+    echo "deb [signed-by=/usr/share/keyrings/ondrej-php.gpg] https://ppa.launchpadcontent.net/ondrej/php/ubuntu ${VERSION_CODENAME} main" \
+        > /etc/apt/sources.list.d/ondrej-php.list && \
     apt-get update -y
 
 # Core PHP extensions (version-agnostic list)
 # PHP 7.x needs the separate json package; PHP 8.x has it built-in.
-RUN apt-get install -y \
+RUN --network=host apt-get install -y \
         php${PHP_VERSION} \
         php${PHP_VERSION}-fpm \
         php${PHP_VERSION}-common \

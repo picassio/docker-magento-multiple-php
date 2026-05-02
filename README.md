@@ -614,10 +614,10 @@ EOF
 sudo systemctl restart docker
 ```
 
-> **Note:** The PHP Dockerfile uses `debian:bookworm` + `packages.sury.org` (Fastly CDN)
-> instead of Ubuntu + Launchpad PPA. This avoids `ppa.launchpadcontent.net` which is
-> particularly unreliable from Docker containers in WSL2 (the specific IP 185.125.190.80
-> has persistent routing issues through Hyper-V NAT even with correct MTU).
+> **Note:** The PHP Dockerfile uses `RUN --network=host` (BuildKit) for the PPA
+> steps. This makes those build steps run on the WSL host network stack directly,
+> bypassing Docker's bridge NAT which cannot route to Launchpad's IP. The MTU fix
+> from `doctor` ensures all other container networking also works correctly.
 
 ### Line Ending Issues
 
