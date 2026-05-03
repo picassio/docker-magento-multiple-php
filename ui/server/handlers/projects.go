@@ -18,6 +18,7 @@ type Project struct {
 	DBName    string `json:"db_name"`
 	Search    string `json:"search"`
 	Enabled   bool   `json:"enabled"`
+	Status    string `json:"status"`
 }
 
 func projectsFile() string { return filepath.Join(exec.RootDir, "projects.json") }
@@ -78,8 +79,14 @@ func ListProjects(c echo.Context) error {
 		}
 	}
 
+	// Get running services to compute project status
+	running := getRunningServices()
+
 	list := make([]Project, 0, len(projects))
-	for _, p := range projects { list = append(list, p) }
+	for _, p := range projects {
+		p.Status = computeProjectStatus(p, running)
+		list = append(list, p)
+	}
 	return ok(c, list)
 }
 
@@ -157,6 +164,32 @@ func UpdateProject(c echo.Context) error {
 
 func EnableProject(c echo.Context) error  { return setEnabled(c, true) }
 func DisableProject(c echo.Context) error { return setEnabled(c, false) }
+
+// getRunningServices returns a set of currently running service names
+func getRunningServices() map[string]bool {
+	res, _ := exec.DockerCompose("ps", "--format", "{{.Service}}", "--status", "running")
+	running := map[string]bool{}
+	if res != nil {
+		for _, s := range strings.Split(res.Stdout, "\n") {
+			s = strings.TrimSpace(s)
+			if s != "" { running[s] = true }
+		}
+	}
+	return running
+}
+
+// computeProjectStatus returns "live", "partial", "stopped", or "disabled"
+func computeProjectStatus(p Project, running map[string]bool) string {
+	if !p.Enabled { return "disabled" }
+	needed := projectServices(p)
+	up := 0
+	for _, s := range needed {
+		if running[s] { up++ }
+	}
+	if up == len(needed) { return "live" }
+	if up > 0 { return "partial" }
+	return "stopped"
+}
 
 // projectServices returns docker compose services needed by a project
 func projectServices(p Project) []string {

@@ -111,8 +111,8 @@ function Dashboard() {
     })}</div>
     <div class="card-header" style="margin-top:24px">Projects <span class="badge badge-blue">${projects.length}</span></div>
     ${projects.length === 0 ? html`<div class="card empty"><div class="icon">📁</div><p>No projects</p></div>` :
-      html`<div class="card table-wrap"><table><thead><tr><th>Domain</th><th>Type</th><th>PHP</th><th>DB</th><th>Search</th><th>Status</th></tr></thead><tbody>
-        ${projects.map(p => { const [label,color] = appBadge(p.app); return html`<tr><td><b>${p.domain}</b></td><td><span class="badge badge-${color}">${label}</span></td><td>${p.php}</td><td>${p.db_service}</td><td>${p.search}</td><td><span class="badge ${p.enabled?'badge-green':'badge-red'}">${p.enabled?'on':'off'}</span></td></tr>`; })}
+      html`<div class="card table-wrap"><table><thead><tr><th>Domain</th><th>Status</th><th>Type</th><th>PHP</th><th>DB</th><th>Search</th></tr></thead><tbody>
+        ${projects.map(p => { const [label,color] = appBadge(p.app); const stColor = {live:'green',partial:'orange',stopped:'red',disabled:'purple'}[p.status]||'red'; return html`<tr><td><b>${p.domain}</b></td><td><span class="badge badge-${stColor}">${p.status||'unknown'}</span></td><td><span class="badge badge-${color}">${label}</span></td><td>${p.php}</td><td>${p.db_service}</td><td>${p.search}</td></tr>`; })}
       </tbody></table></div>`}
   </div>`;
 }
@@ -191,7 +191,7 @@ function Projects() {
   const [actionTarget, setActionTarget] = useState('');
   const [acting, setActing] = useState('');
   const load = async () => setProjects(await GET('/api/projects') || []);
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); const t = setInterval(load, 5000); return () => clearInterval(t); }, []);
   const phpOpts = ['php70','php71','php72','php73','php74','php81','php82','php83','php84','php85'];
   const dbOpts = ['mysql','mysql80','mariadb'];
   const searchOpts = ['opensearch','opensearch1','elasticsearch','elasticsearch7','none'];
@@ -208,9 +208,9 @@ function Projects() {
   return html`<div>
     <div class="page-header"><h1>Projects</h1><div class="actions"><button class="btn btn-primary" onClick=${()=>setShowAdd(true)}>+ Add Project</button></div></div>
     ${projects.length === 0 ? html`<div class="card empty"><div class="icon">📁</div><p>No projects yet</p><button class="btn btn-primary" onClick=${()=>setShowAdd(true)}>Add your first project</button></div>` :
-      html`<div class="card table-wrap"><table><thead><tr><th>Domain</th><th>Type</th><th>PHP</th><th>DB</th><th>Search</th><th>Enabled</th><th></th></tr></thead><tbody>
-        ${projects.map(p => { const [label,color] = appBadge(p.app); const isBusy = acting.startsWith(p.domain+':'); return html`<tr>
-          <td><b>${p.domain}</b></td><td><span class="badge badge-${color}">${label}</span></td>
+      html`<div class="card table-wrap"><table><thead><tr><th>Domain</th><th>Status</th><th>Type</th><th>PHP</th><th>DB</th><th>Search</th><th>Enabled</th><th></th></tr></thead><tbody>
+        ${projects.map(p => { const [label,color] = appBadge(p.app); const isBusy = acting.startsWith(p.domain+':'); const stColor = {live:'green',partial:'orange',stopped:'red',disabled:'purple'}[p.status]||'red'; return html`<tr>
+          <td><b>${p.domain}</b></td><td><span class="badge badge-${stColor}">${p.status||'unknown'}</span></td><td><span class="badge badge-${color}">${label}</span></td>
           <td><select class="inline-select" value=${p.php} onChange=${e=>{PATCH('/api/projects/'+p.domain,{php:e.target.value});toast(p.domain+': PHP → '+e.target.value,'success');load();}}>${phpOpts.map(o=>html`<option selected=${o===p.php}>${o}</option>`)}</select></td>
           <td><select class="inline-select" value=${p.db_service} onChange=${e=>{PATCH('/api/projects/'+p.domain,{db_service:e.target.value});toast(p.domain+': DB → '+e.target.value,'success');}}>${dbOpts.map(o=>html`<option selected=${o===p.db_service}>${o}</option>`)}</select></td>
           <td><select class="inline-select" value=${p.search} onChange=${e=>{PATCH('/api/projects/'+p.domain,{search:e.target.value});toast(p.domain+': Search → '+e.target.value,'success');}}>${searchOpts.map(o=>html`<option selected=${o===p.search}>${o}</option>`)}</select></td>
