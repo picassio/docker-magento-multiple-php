@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/labstack/echo/v4"
@@ -134,7 +135,7 @@ func main() {
 	// Terminal (WebSocket PTY)
 	api.GET("/terminal/ws", handlers.TerminalWS)
 
-	// Reverse proxies for embedded tools (strip CSP/X-Frame-Options for iframe)
+	// Reverse proxies for embedded tools (strip all frame-blocking headers for iframe)
 	proxyTool := func(path, host string) {
 		p := httputil.NewSingleHostReverseProxy(&url.URL{Scheme: "http", Host: host})
 		origDir := p.Director
@@ -143,8 +144,19 @@ func main() {
 			r.Host = host
 		}
 		p.ModifyResponse = func(resp *http.Response) error {
+			// Strip all headers that block iframe embedding
 			resp.Header.Del("Content-Security-Policy")
+			resp.Header.Del("X-Content-Security-Policy")
+			resp.Header.Del("X-Webkit-Csp")
 			resp.Header.Del("X-Frame-Options")
+			// Rewrite Location redirects to stay within proxy path
+			if loc := resp.Header.Get("Location"); loc != "" {
+				if strings.HasPrefix(loc, "/") {
+					resp.Header.Set("Location", path+loc)
+				} else if strings.HasPrefix(loc, "http://"+host) {
+					resp.Header.Set("Location", path+strings.TrimPrefix(loc, "http://"+host))
+				}
+			}
 			return nil
 		}
 		e.Any(path+"/*", echo.WrapHandler(http.StripPrefix(path, p)))
