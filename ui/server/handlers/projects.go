@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -229,9 +230,10 @@ func overridesForProject(p Project) []string {
 }
 
 // buildProjectComposeArgs returns the docker compose args for a project
+// Uses container path for -f (file access) and exec.RootDir as working dir
+// so build contexts (./build/php) resolve correctly inside the container.
 func buildProjectComposeArgs(p Project) []string {
-	hostDir := hostProjectDir()
-	args := []string{"compose", "--project-directory", hostDir, "-f", exec.RootDir + "/docker-compose.yml"}
+	args := []string{"compose", "-f", exec.RootDir + "/docker-compose.yml"}
 	for _, ov := range overridesForProject(p) {
 		args = append(args, "-f", exec.RootDir+"/compose/"+ov+".yml")
 	}
@@ -264,13 +266,14 @@ func StartProject(c echo.Context) error {
 }
 
 // StartProjectWS streams project start output via WebSocket (build + pull + start)
+// Uses background context so docker compose finishes even if client disconnects (F5)
 func StartProjectWS(c echo.Context) error {
 	conn, err := websocket.Accept(c.Response(), c.Request(), &websocket.AcceptOptions{InsecureSkipVerify: true})
 	if err != nil { return err }
 	defer conn.Close(websocket.StatusNormalClosure, "done")
-	ctx := c.Request().Context()
 
-	_, msg, err := conn.Read(ctx)
+	wsCtx := c.Request().Context()
+	_, msg, err := conn.Read(wsCtx)
 	if err != nil { return err }
 	var req struct{ Domain string `json:"domain"` }
 	json.Unmarshal(msg, &req)
@@ -280,7 +283,7 @@ func StartProjectWS(c echo.Context) error {
 	p, exists := projects[req.Domain]
 	if !exists {
 		done, _ := json.Marshal(map[string]string{"stream": "done", "line": "Project not found"})
-		conn.Write(ctx, websocket.MessageText, done)
+		conn.Write(wsCtx, websocket.MessageText, done)
 		return nil
 	}
 
@@ -294,7 +297,8 @@ func StartProjectWS(c echo.Context) error {
 	args = append(args, "up", "-d", "--build")
 	args = append(args, projectServices(p)...)
 
-	return exec.StreamToWS(ctx, conn, "docker", args...)
+	// Use background context so docker compose completes even if WS disconnects
+	return exec.StreamToWS(context.Background(), conn, "docker", args...)
 }
 
 func StopProject(c echo.Context) error {

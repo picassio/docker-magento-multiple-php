@@ -128,7 +128,8 @@ function ServicesPage() {
 
   const act = async (svc, action) => {
     setBusy(b => ({...b, [svc]: action}));
-    setActionTarget(svc); setActionLog(`${action}ing ${svc}...\n`);
+    setActionTarget(svc);
+    setActionLog(l => l + `\n\u2501\u2501\u2501 ${action.toUpperCase()} ${svc} \u2501\u2501\u2501\n`);
     const r = await POST('/api/services/'+svc+'/'+action);
     setActionLog(l => l + (r.output || 'Done') + '\n');
     toast(`${svc} ${action}ed`, 'success');
@@ -137,7 +138,8 @@ function ServicesPage() {
   };
 
   const actAll = async (action) => {
-    setActionTarget('all services'); setActionLog(`${action}ing all services...\n`);
+    setActionTarget('all services');
+    setActionLog(l => l + `\n\u2501\u2501\u2501 ${action.toUpperCase()} ALL \u2501\u2501\u2501\n`);
     const r = await POST('/api/services/'+action);
     setActionLog(l => l + (r.output || 'Done') + '\n');
     toast(`All services ${action}ed`, 'success');
@@ -199,16 +201,17 @@ function Projects() {
   const searchOpts = ['opensearch','opensearch1','elasticsearch','elasticsearch7','none'];
 
   const projectAction = async (domain, action) => {
-    setActing(domain+':'+action); setActionTarget(domain); setActionLog('');
+    setActing(domain+':'+action); setActionTarget(domain);
+    const header = `\n━━━ ${action.toUpperCase()} ${domain} ━━━\n`;
+    setActionLog(l => l + header);
     if (action === 'start') {
-      // Use WebSocket for start (streams build + pull + start output)
       const ws = new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/api/projects/${domain}/start/ws`);
       ws.onopen = () => ws.send(JSON.stringify({ domain }));
       ws.onmessage = e => { const d = JSON.parse(e.data); setActionLog(l => l + (d.line||'') + '\n'); if (d.stream==='done') { setActing(''); toast(domain+' started','success'); load(); } };
       ws.onerror = () => { setActing(''); toast('Connection error','error'); };
     } else {
       const r = await POST('/api/projects/'+domain+'/'+action);
-      setActionLog(r.output || 'Done');
+      setActionLog(l => l + (r.output || 'Done') + '\n');
       toast(domain+' '+r.status, r.status === 'error' ? 'error' : 'success');
       setActing('');
       load();
