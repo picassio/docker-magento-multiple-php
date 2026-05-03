@@ -149,12 +149,28 @@ func main() {
 			resp.Header.Del("X-Content-Security-Policy")
 			resp.Header.Del("X-Webkit-Csp")
 			resp.Header.Del("X-Frame-Options")
+			resp.Header.Del("X-Permitted-Cross-Domain-Policies")
 			// Rewrite Location redirects to stay within proxy path
 			if loc := resp.Header.Get("Location"); loc != "" {
 				if strings.HasPrefix(loc, "/") {
 					resp.Header.Set("Location", path+loc)
 				} else if strings.HasPrefix(loc, "http://"+host) {
 					resp.Header.Set("Location", path+strings.TrimPrefix(loc, "http://"+host))
+				}
+			}
+			// Rewrite Set-Cookie paths so cookies work under the proxy prefix
+			if cookies := resp.Header.Values("Set-Cookie"); len(cookies) > 0 {
+				resp.Header.Del("Set-Cookie")
+				for _, c := range cookies {
+					// Replace "path=/;" or trailing "path=/" with proxy prefix
+					// Only replace exact "path=/" (root), not "path=/something"
+					c = strings.Replace(c, "path=/;", "path="+path+"/;", 1)
+					if strings.HasSuffix(c, "path=/") {
+						c = c[:len(c)-len("path=/")] + "path=" + path + "/"
+					}
+					// Remove SameSite=Strict which blocks cookies in iframes
+					c = strings.Replace(c, "; SameSite=Strict", "; SameSite=Lax", 1)
+					resp.Header.Add("Set-Cookie", c)
 				}
 			}
 			return nil
