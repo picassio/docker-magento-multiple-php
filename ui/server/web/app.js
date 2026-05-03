@@ -121,16 +121,27 @@ function Dashboard() {
 function ServicesPage() {
   const [services, setServices] = useState([]);
   const [busy, setBusy] = useState({});
+  const [actionLog, setActionLog] = useState('');
+  const [actionTarget, setActionTarget] = useState('');
   const load = async () => setServices(await GET('/api/services/all') || []);
   useEffect(() => { load(); const t = setInterval(load, 4000); return () => clearInterval(t); }, []);
 
   const act = async (svc, action) => {
     setBusy(b => ({...b, [svc]: action}));
-    toast(`${action}ing ${svc}...`);
-    await POST('/api/services/'+svc+'/'+action);
+    setActionTarget(svc); setActionLog(`${action}ing ${svc}...\n`);
+    const r = await POST('/api/services/'+svc+'/'+action);
+    setActionLog(l => l + (r.output || 'Done') + '\n');
     toast(`${svc} ${action}ed`, 'success');
     await load();
     setBusy(b => { const n = {...b}; delete n[svc]; return n; });
+  };
+
+  const actAll = async (action) => {
+    setActionTarget('all services'); setActionLog(`${action}ing all services...\n`);
+    const r = await POST('/api/services/'+action);
+    setActionLog(l => l + (r.output || 'Done') + '\n');
+    toast(`All services ${action}ed`, 'success');
+    load();
   };
 
   const running = services.filter(s => (s.state||'').toLowerCase().includes('running')).length;
@@ -138,8 +149,8 @@ function ServicesPage() {
 
   return html`<div>
     <div class="page-header"><h1>Services</h1><div class="actions">
-      <button class="btn btn-success" onClick=${async () => { toast('Starting all...'); await POST('/api/services/up'); load(); }}>\u25b6 Start All</button>
-      <button class="btn btn-danger" onClick=${async () => { toast('Stopping all...'); await POST('/api/services/stop'); load(); }}>\u25a0 Stop All</button>
+      <button class="btn btn-success" onClick=${() => actAll('up')}>\u25b6 Start All</button>
+      <button class="btn btn-danger" onClick=${() => actAll('stop')}>\u25a0 Stop All</button>
     </div></div>
 
     <div style="display:flex;gap:12px;margin-bottom:16px">
@@ -167,6 +178,7 @@ function ServicesPage() {
         </tr>`;
       })}
     </tbody></table></div>
+    ${actionLog && html`<div class="card" style="margin-top:16px"><div class="card-header">Output \u2014 ${actionTarget}</div><pre class="log-viewer" style="max-height:300px;overflow-y:auto">${actionLog}</pre></div>`}
   </div>`;
 }
 
