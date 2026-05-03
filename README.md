@@ -87,7 +87,7 @@ bin/mage magento mysite.com cache:flush
 | Service | Image | Port |
 |---|---|---|
 | nginx | `nginx:stable-alpine` | 80, 443 |
-| php81–php84 | `build/php` | — |
+| php81–php84 | `build/php` (compiled from source) | — |
 | mysql | `mysql:8.4` | 3306 |
 | opensearch | `opensearch:2.19.1` | 9200 |
 | redis | `redis:7.4-alpine` | 6379 |
@@ -181,7 +181,7 @@ Tech: Go binary (12MB) with embedded Preact + Ace Editor + xterm.js. Zero CDN de
 |---|---|
 | `setup` | Interactive first-time setup |
 | `doctor [fix]` | Check/fix system settings (sysctl, THP, Docker logs) |
-| `build [php...]` | Build PHP images (or all). Uses `--no-cache` by default. Use `--with=legacy` for PHP 7.x, `--cache` to use Docker cache |
+| `build [php...]` | Build PHP from source (or all). Uses `--no-cache` by default. Use `--with=legacy` for PHP 7.x, `--cache` to use Docker cache |
 | `up [services...]` | Smart start from projects.json (or explicit services) |
 | `up --with=<override>` | Start with specific compose override |
 | `down` | Stop & remove all containers |
@@ -432,6 +432,47 @@ bin/mage build nginx
 #   Run bin/mage up to pull and start.
 ```
 
+> **Note:** PHP is compiled from source — no PPA or external repository needed.
+> Works reliably on any platform including WSL2, VPN, and restricted networks.
+
+### Installing PHP extensions
+
+A built-in `php-ext-install` helper is available inside every PHP container:
+
+```bash
+# Enter a PHP container
+docker compose exec php83 bash
+
+# Install extensions (auto-installs system deps + enables for CLI & FPM)
+php-ext-install redis imagick mongodb
+
+# List known extensions with auto-detected dependencies
+php-ext-install --list
+
+# Show currently enabled extensions
+php-ext-install --enabled
+
+# Enable/disable extensions
+php-ext-install --enable xdebug
+php-ext-install --disable xdebug
+
+# Install without enabling
+php-ext-install --no-enable swoole
+
+# Enable only for FPM (not CLI)
+php-ext-install --fpm-only redis
+
+# Restart FPM to load changes
+kill -USR2 1
+```
+
+To persist extensions across rebuilds, add them to a custom Dockerfile:
+
+```dockerfile
+FROM your-php-image
+RUN php-ext-install redis imagick
+```
+
 ### System tuning (first-time setup)
 
 ```bash
@@ -563,7 +604,7 @@ All fixes persist across reboots (written to `/etc/sysctl.conf` + systemd servic
 | `mailhog` | `mailpit` (port 8025) |
 | `elasticsearch` | `opensearch` (default) |
 | `docker-compose up` | `docker compose up` |
-| Per-version Dockerfiles | `build/php/` + `build/php-legacy/` |
+| Per-version Dockerfiles | `build/php/` + `build/php-legacy/` (both compile from source) |
 | All services in one file | Core + `compose/*.yml` overrides |
 | Manual service selection | `projects.json` + smart `bin/mage up` |
 

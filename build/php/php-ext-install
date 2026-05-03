@@ -1,0 +1,234 @@
+#!/bin/bash
+# ==============================================================================
+# php-ext-install — Easy PHP extension installer for source-built PHP
+#
+# Usage:
+#   php-ext-install <extension> [extension...]
+#   php-ext-install --pecl <extension> [extension...]
+#   php-ext-install --list
+#   php-ext-install --enabled
+#
+# Examples:
+#   php-ext-install redis imagick
+#   php-ext-install --pecl mongodb
+#   php-ext-install redis -- --enable-redis-igbinary
+#
+# Extensions are automatically enabled for both CLI and FPM after install.
+# Restart php-fpm after installing: kill -USR2 1
+# ==============================================================================
+set -e
+
+PHP_VERSION="${PHP_VERSION:-$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')}"
+PHP_INI_DIR="/etc/php/${PHP_VERSION}"
+PHP_FPM_CONF_DIR="${PHP_INI_DIR}/fpm"
+PHP_CLI_CONF_DIR="${PHP_INI_DIR}/cli"
+MODS_DIR="${PHP_INI_DIR}/mods-available"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# Known PECL extensions and their apt dependencies
+declare -A EXT_DEPS=(
+    [redis]=""
+    [imagick]="libmagickwand-dev"
+    [mongodb]=""
+    [memcached]="libmemcached-dev zlib1g-dev"
+    [igbinary]=""
+    [msgpack]=""
+    [swoole]=""
+    [grpc]=""
+    [protobuf]=""
+    [yaml]="libyaml-dev"
+    [uuid]="uuid-dev"
+    [ssh2]="libssh2-1-dev"
+    [mailparse]=""
+    [xlswriter]=""
+    [ds]=""
+    [ast]=""
+    [decimal]="libmpdec-dev"
+    [ev]="libev-dev"
+    [event]="libevent-dev libssl-dev"
+    [inotify]=""
+    [pcov]=""
+    [raphf]=""
+    [propro]=""
+    [amqp]="librabbitmq-dev"
+    [rdkafka]="librdkafka-dev"
+    [maxminddb]="libmaxminddb-dev"
+    [excimer]=""
+    [openswoole]=""
+    [relay]=""
+    [lzf]=""
+    [zstd]="libzstd-dev"
+    [lz4]="liblz4-dev"
+    [snappy]="libsnappy-dev"
+    [brotli]="libbrotli-dev"
+)
+
+usage() {
+    echo -e "${CYAN}php-ext-install${NC} — Easy PHP extension installer"
+    echo ""
+    echo -e "Usage:"
+    echo -e "  php-ext-install <extension> [extension...]     Install PECL extensions"
+    echo -e "  php-ext-install --list                         List known extensions"
+    echo -e "  php-ext-install --enabled                      Show enabled extensions"
+    echo -e "  php-ext-install --enable <ext>                 Enable an installed extension"
+    echo -e "  php-ext-install --disable <ext>                Disable an extension"
+    echo ""
+    echo -e "Options:"
+    echo -e "  --no-enable       Install but don't enable"
+    echo -e "  --fpm-only        Enable only for FPM (not CLI)"
+    echo -e "  --cli-only        Enable only for CLI (not FPM)"
+    echo -e "  -- <flags>        Pass extra configure flags to pecl/phpize"
+    echo ""
+    echo -e "Examples:"
+    echo -e "  php-ext-install redis imagick mongodb"
+    echo -e "  php-ext-install --disable xdebug"
+    echo -e "  php-ext-install --enable xdebug"
+    echo ""
+    echo -e "After install, restart FPM: ${YELLOW}kill -USR2 1${NC}"
+    exit 0
+}
+
+list_known() {
+    echo -e "${CYAN}Known extensions (auto-installs system dependencies):${NC}"
+    echo ""
+    for ext in $(echo "${!EXT_DEPS[@]}" | tr ' ' '\n' | sort); do
+        deps="${EXT_DEPS[$ext]}"
+        if [ -n "$deps" ]; then
+            echo -e "  ${GREEN}${ext}${NC}  (needs: $deps)"
+        else
+            echo -e "  ${GREEN}${ext}${NC}"
+        fi
+    done
+    echo ""
+    echo -e "Any PECL extension can be installed even if not listed above."
+}
+
+show_enabled() {
+    echo -e "${CYAN}Enabled PHP extensions:${NC}"
+    php -m | sort
+}
+
+enable_ext() {
+    local ext="$1"
+    local ini_file="${MODS_DIR}/${ext}.ini"
+
+    if [ ! -f "$ini_file" ]; then
+        # Check if it's a zend_extension
+        local ext_dir=$(php -i 2>/dev/null | grep "^extension_dir" | head -1 | awk '{print $NF}')
+        if [ -f "${ext_dir}/${ext}.so" ]; then
+            echo "extension=${ext}.so" > "$ini_file"
+        else
+            echo -e "${RED}Extension '${ext}' not found. Install it first.${NC}"
+            exit 1
+        fi
+    fi
+
+    ln -sf "$ini_file" "${PHP_CLI_CONF_DIR}/conf.d/20-${ext}.ini" 2>/dev/null || true
+    ln -sf "$ini_file" "${PHP_FPM_CONF_DIR}/conf.d/20-${ext}.ini" 2>/dev/null || true
+    echo -e "${GREEN}✓ Enabled ${ext}${NC}"
+}
+
+disable_ext() {
+    local ext="$1"
+    rm -f "${PHP_CLI_CONF_DIR}/conf.d/"*"${ext}"* 2>/dev/null || true
+    rm -f "${PHP_FPM_CONF_DIR}/conf.d/"*"${ext}"* 2>/dev/null || true
+    echo -e "${GREEN}✓ Disabled ${ext}${NC}"
+}
+
+install_ext() {
+    local ext="$1"
+    local no_enable="$2"
+    local scope="$3"  # "all", "fpm", "cli"
+    local extra_flags="$4"
+
+    echo -e "${CYAN}━━━ Installing ${ext} ━━━${NC}"
+
+    # Install system dependencies if known
+    if [ -n "${EXT_DEPS[$ext]+x}" ] && [ -n "${EXT_DEPS[$ext]}" ]; then
+        echo -e "  ${YELLOW}→ Installing system deps: ${EXT_DEPS[$ext]}${NC}"
+        apt-get update -y -qq && apt-get install -y -qq ${EXT_DEPS[$ext]}
+        apt-get clean && rm -rf /var/lib/apt/lists/*
+    fi
+
+    # Install via PECL
+    echo -e "  ${YELLOW}→ pecl install ${ext}${NC}"
+    if [ -n "$extra_flags" ]; then
+        printf "\n" | pecl install -f "$ext" -- $extra_flags
+    else
+        printf "\n" | pecl install -f "$ext"
+    fi
+
+    # Determine if it's a zend_extension
+    local ini_line="extension=${ext}.so"
+    if [ "$ext" = "xdebug" ] || [ "$ext" = "opcache" ] || [ "$ext" = "pcov" ]; then
+        ini_line="zend_extension=${ext}.so"
+    fi
+
+    # Create ini file
+    mkdir -p "$MODS_DIR"
+    echo "$ini_line" > "${MODS_DIR}/${ext}.ini"
+
+    # Enable unless --no-enable
+    if [ "$no_enable" != "true" ]; then
+        case "$scope" in
+            fpm)
+                ln -sf "${MODS_DIR}/${ext}.ini" "${PHP_FPM_CONF_DIR}/conf.d/20-${ext}.ini"
+                ;;
+            cli)
+                ln -sf "${MODS_DIR}/${ext}.ini" "${PHP_CLI_CONF_DIR}/conf.d/20-${ext}.ini"
+                ;;
+            *)
+                ln -sf "${MODS_DIR}/${ext}.ini" "${PHP_CLI_CONF_DIR}/conf.d/20-${ext}.ini"
+                ln -sf "${MODS_DIR}/${ext}.ini" "${PHP_FPM_CONF_DIR}/conf.d/20-${ext}.ini"
+                ;;
+        esac
+    fi
+
+    echo -e "  ${GREEN}✓ ${ext} installed${NC}"
+}
+
+# --- Main --------------------------------------------------------------------
+if [ $# -eq 0 ]; then
+    usage
+fi
+
+no_enable=false
+scope="all"
+extra_flags=""
+extensions=()
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --help|-h)      usage ;;
+        --list)         list_known; exit 0 ;;
+        --enabled)      show_enabled; exit 0 ;;
+        --enable)       shift; enable_ext "$1"; exit 0 ;;
+        --disable)      shift; disable_ext "$1"; exit 0 ;;
+        --no-enable)    no_enable=true ;;
+        --fpm-only)     scope="fpm" ;;
+        --cli-only)     scope="cli" ;;
+        --)             shift; extra_flags="$*"; break ;;
+        -*)             echo -e "${RED}Unknown option: $1${NC}"; exit 1 ;;
+        *)              extensions+=("$1") ;;
+    esac
+    shift
+done
+
+if [ ${#extensions[@]} -eq 0 ]; then
+    echo -e "${RED}No extensions specified.${NC}"
+    usage
+fi
+
+# Install each extension
+for ext in "${extensions[@]}"; do
+    install_ext "$ext" "$no_enable" "$scope" "$extra_flags"
+done
+
+echo ""
+echo -e "${GREEN}Done!${NC} Restart FPM to load new extensions: ${YELLOW}kill -USR2 1${NC}"
