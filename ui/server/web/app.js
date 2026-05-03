@@ -269,19 +269,25 @@ function DatabasePage() {
 function BuildPage() {
   const [images, setImages] = useState([]);
   const [log, setLog] = useState('');
+  const [building, setBuilding] = useState(false);
+  const [buildTarget, setBuildTarget] = useState('');
   const [extensions, setExtensions] = useState('');
+  const logRef = useRef(null);
   const load = async () => setImages(await GET('/api/images') || []);
   useEffect(() => { load(); }, []);
+  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [log]);
   const build = (versions) => {
-    setLog(''); toast('Building '+versions.join(', ')+'...');
+    setLog(''); setBuilding(true); setBuildTarget(versions.join(', '));
     const ws = new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/api/images/build/ws`);
     ws.onopen = () => ws.send(JSON.stringify({ versions, extensions: extensions.trim() }));
-    ws.onmessage = e => { const d = JSON.parse(e.data); setLog(l => l + (d.line||'') + '\n'); if (d.stream==='done') { toast('Build done','success'); load(); } };
+    ws.onmessage = e => { const d = JSON.parse(e.data); setLog(l => l + (d.line||'') + '\n'); if (d.stream==='done') { setBuilding(false); toast('Build done','success'); load(); } };
+    ws.onerror = () => { setBuilding(false); toast('Build connection error','error'); };
+    ws.onclose = () => { setBuilding(false); };
   };
   return html`<div>
     <div class="page-header"><h1>PHP Images</h1><div class="actions">
-      <button class="btn btn-primary" onClick=${()=>build(images.map(i=>i.version))}>▶ Build All</button>
-      <button class="btn" onClick=${()=>build(images.filter(i=>!i.built).map(i=>i.version))}>Build Missing</button>
+      <button class="btn btn-primary" onClick=${()=>build(images.map(i=>i.version))} disabled=${building}>${building ? '\u23f3 Building...' : '\u25b6 Build All'}</button>
+      <button class="btn" onClick=${()=>build(images.filter(i=>!i.built).map(i=>i.version))} disabled=${building}>Build Missing</button>
     </div></div>
     <div class="card" style="margin-bottom:16px;padding:16px">
       <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
@@ -291,10 +297,16 @@ function BuildPage() {
       </div>
       <div style="margin-top:8px;font-size:12px;opacity:0.7">Extensions listed here are compiled into the image and persist across container restarts.</div>
     </div>
+    ${building && html`<div class="card" style="margin-bottom:16px;padding:16px;border-left:3px solid var(--primary)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="spinner"></span>
+        <span><b>Building ${buildTarget}</b> \u2014 streaming output below...</span>
+      </div>
+    </div>`}
     <div class="card table-wrap"><table><thead><tr><th>Version</th><th>Image</th><th>Status</th><th>Size</th><th></th></tr></thead><tbody>
-      ${images.map(i => html`<tr><td><b>${i.version}</b></td><td style="font-family:var(--mono);font-size:12px">${i.image}</td><td><span class="badge ${i.built?'badge-green':'badge-red'}">${i.built?'built':'—'}</span></td><td>${i.size||'—'}</td><td><button class="btn btn-sm" onClick=${()=>build([i.version])}>${i.built?'↻ Rebuild':'▶ Build'}</button></td></tr>`)}
+      ${images.map(i => html`<tr><td><b>${i.version}</b></td><td style="font-family:var(--mono);font-size:12px">${i.image}</td><td><span class="badge ${i.built?'badge-green':'badge-red'}">${i.built?'built':'\u2014'}</span></td><td>${i.size||'\u2014'}</td><td><button class="btn btn-sm" onClick=${()=>build([i.version])} disabled=${building}>${i.built?'\u21bb Rebuild':'\u25b6 Build'}</button></td></tr>`)}
     </tbody></table></div>
-    ${log && html`<div class="card" style="margin-top:16px"><div class="card-header">Build Output</div><pre class="log-viewer">${log}</pre></div>`}
+    ${(log || building) && html`<div class="card" style="margin-top:16px"><div class="card-header">Build Output ${building ? html`<span class="badge badge-blue" style="margin-left:8px">LIVE</span>` : ''}</div><pre class="log-viewer" ref=${logRef} style="max-height:500px;overflow-y:auto">${log || 'Waiting for output...'}</pre></div>`}
   </div>`;
 }
 
