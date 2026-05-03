@@ -274,8 +274,18 @@ function BuildPage() {
   const [extensions, setExtensions] = useState('');
   const logRef = useRef(null);
   const load = async () => setImages(await GET('/api/images') || []);
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); checkActiveBuild(); }, []);
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [log]);
+  const checkActiveBuild = async () => {
+    const status = await GET('/api/images/build/status');
+    if (status && status.active) {
+      setBuilding(true); setBuildTarget(status.target); setLog('');
+      const ws = new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/api/images/build/reconnect/ws`);
+      ws.onmessage = e => { const d = JSON.parse(e.data); setLog(l => l + (d.line||'') + '\n'); if (d.stream==='done') { setBuilding(false); toast('Build done','success'); load(); } };
+      ws.onerror = () => setBuilding(false);
+      ws.onclose = () => setBuilding(false);
+    }
+  };
   const build = (versions) => {
     setLog(''); setBuilding(true); setBuildTarget(versions.join(', '));
     const ws = new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/api/images/build/ws`);

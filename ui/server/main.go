@@ -81,8 +81,10 @@ func main() {
 
 	// Images + Build (WebSocket)
 	api.GET("/images", handlers.ListImages)
+	api.GET("/images/build/status", handlers.BuildStatus)
 	api.POST("/images/build", handlers.BuildImages)
 	api.GET("/images/build/ws", handlers.BuildImagesWS)
+	api.GET("/images/build/reconnect/ws", handlers.BuildReconnectWS)
 
 	// PHP Extensions
 	api.GET("/extensions", handlers.ListAllExtensions)
