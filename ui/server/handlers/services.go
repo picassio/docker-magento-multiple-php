@@ -39,6 +39,12 @@ func ListServices(c echo.Context) error {
 			})
 		}
 	}
+	sort.SliceStable(containers, func(i, j int) bool {
+		oi, oj := 100, 100
+		if v, ok := svcOrder[containers[i].Service]; ok { oi = v }
+		if v, ok := svcOrder[containers[j].Service]; ok { oj = v }
+		return oi < oj
+	})
 	return ok(c, containers)
 }
 
@@ -81,8 +87,17 @@ func ListAllServices(c echo.Context) error {
 		}
 		services = append(services, entry)
 	}
-	// Stable sort: infra first, then PHP by version, then data, then tools
-	order := map[string]int{
+	sort.SliceStable(services, func(i, j int) bool {
+		oi, oj := 100, 100
+		if v, ok := svcOrder[services[i]["service"]]; ok { oi = v }
+		if v, ok := svcOrder[services[j]["service"]]; ok { oj = v }
+		return oi < oj
+	})
+	return ok(c, services)
+}
+
+// svcOrder defines stable display order for services
+var svcOrder = map[string]int{
 		"nginx": 1,
 		"php70": 10, "php71": 11, "php72": 12, "php73": 13, "php74": 14,
 		"php81": 15, "php82": 16, "php83": 17, "php84": 18, "php85": 19,
@@ -92,14 +107,6 @@ func ListAllServices(c echo.Context) error {
 		"elasticsearch": 52, "elasticsearch7": 53,
 		"rabbitmq": 60,
 		"mailpit": 70, "varnish": 80,
-	}
-	sort.SliceStable(services, func(i, j int) bool {
-		oi, oj := 100, 100
-		if v, ok := order[services[i]["service"]]; ok { oi = v }
-		if v, ok := order[services[j]["service"]]; ok { oj = v }
-		return oi < oj
-	})
-	return ok(c, services)
 }
 
 func ServicesUp(c echo.Context) error {

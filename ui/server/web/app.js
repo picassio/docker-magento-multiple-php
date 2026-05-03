@@ -190,19 +190,29 @@ function Projects() {
   const [actionLog, setActionLog] = useState('');
   const [actionTarget, setActionTarget] = useState('');
   const [acting, setActing] = useState('');
+  const logRef = useRef(null);
   const load = async () => setProjects(await GET('/api/projects') || []);
   useEffect(() => { load(); const t = setInterval(load, 5000); return () => clearInterval(t); }, []);
+  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [actionLog]);
   const phpOpts = ['php70','php71','php72','php73','php74','php81','php82','php83','php84','php85'];
   const dbOpts = ['mysql','mysql80','mariadb'];
   const searchOpts = ['opensearch','opensearch1','elasticsearch','elasticsearch7','none'];
 
   const projectAction = async (domain, action) => {
     setActing(domain+':'+action); setActionTarget(domain); setActionLog('');
-    const r = await POST('/api/projects/'+domain+'/'+action);
-    setActionLog(r.output || 'Done');
-    toast(domain+' '+r.status, r.status === 'error' ? 'error' : 'success');
-    setActing('');
-    load();
+    if (action === 'start') {
+      // Use WebSocket for start (streams build + pull + start output)
+      const ws = new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/api/projects/${domain}/start/ws`);
+      ws.onopen = () => ws.send(JSON.stringify({ domain }));
+      ws.onmessage = e => { const d = JSON.parse(e.data); setActionLog(l => l + (d.line||'') + '\n'); if (d.stream==='done') { setActing(''); toast(domain+' started','success'); load(); } };
+      ws.onerror = () => { setActing(''); toast('Connection error','error'); };
+    } else {
+      const r = await POST('/api/projects/'+domain+'/'+action);
+      setActionLog(r.output || 'Done');
+      toast(domain+' '+r.status, r.status === 'error' ? 'error' : 'success');
+      setActing('');
+      load();
+    }
   };
 
   return html`<div>
@@ -218,7 +228,7 @@ function Projects() {
           <td style="white-space:nowrap"><button class="btn btn-sm btn-success" title="Start project services" onClick=${()=>projectAction(p.domain,'start')} disabled=${isBusy}>${isBusy && acting.endsWith(':start') ? '⏳' : '▶ Start'}</button> <button class="btn btn-sm btn-danger" title="Stop project services" onClick=${()=>projectAction(p.domain,'stop')} disabled=${isBusy}>${isBusy && acting.endsWith(':stop') ? '⏳' : '■ Stop'}</button> <button class="btn btn-sm" title="Run command" onClick=${()=>setCmdProject(p)}>⊞ Run</button> <button class="btn-icon" title="SSL" onClick=${()=>{toast('SSL for '+p.domain);POST('/api/ssl/'+p.domain);}}>🔒</button><button class="btn-icon" style="color:var(--red)" title="Remove" onClick=${async()=>{if(confirm('Remove '+p.domain+'?')){await DELETE('/api/projects/'+p.domain);toast(p.domain+' removed','success');load();}}}>✕</button></td>
         </tr>`; })}
       </tbody></table></div>`}
-    ${actionLog && html`<div class="card" style="margin-top:16px"><div class="card-header">Output — ${actionTarget}</div><pre class="log-viewer" style="max-height:300px;overflow-y:auto">${actionLog}</pre></div>`}
+    ${(actionLog || acting) && html`<div class="card" style="margin-top:16px"><div class="card-header">Output — ${actionTarget} ${acting ? html`<span class="badge badge-blue" style="margin-left:8px">LIVE</span>` : ''}</div><pre class="log-viewer" ref=${logRef} style="max-height:400px;overflow-y:auto">${actionLog || 'Waiting for output...'}</pre></div>`}
     <${AddProjectModal} show=${showAdd} onClose=${()=>{setShowAdd(false);load();}} />
     <${RunCommandModal} show=${!!cmdProject} onClose=${()=>setCmdProject(null)} project=${cmdProject} />
   </div>`;

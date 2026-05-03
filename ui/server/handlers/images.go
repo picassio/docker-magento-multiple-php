@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"os/exec"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -126,6 +127,17 @@ func ListImages(c echo.Context) error {
 		}
 		images = append(images, img)
 	}
+	// Sort by PHP version
+	phpOrder := map[string]int{
+		"php70": 0, "php71": 1, "php72": 2, "php73": 3, "php74": 4,
+		"php81": 5, "php82": 6, "php83": 7, "php84": 8, "php85": 9,
+	}
+	sort.SliceStable(images, func(i, j int) bool {
+		oi, oj := 99, 99
+		if v, ok := phpOrder[images[i].Version]; ok { oi = v }
+		if v, ok := phpOrder[images[j].Version]; ok { oj = v }
+		return oi < oj
+	})
 	return ok(c, images)
 }
 

@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/picassio/docker-magento-multiple-php/ui/server/exec"
+	"nhooyr.io/websocket"
 )
 
 type Project struct {
@@ -87,6 +89,9 @@ func ListProjects(c echo.Context) error {
 		p.Status = computeProjectStatus(p, running)
 		list = append(list, p)
 	}
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].Domain < list[j].Domain
+	})
 	return ok(c, list)
 }
 
@@ -223,6 +228,16 @@ func overridesForProject(p Project) []string {
 	return ov
 }
 
+// buildProjectComposeArgs returns the docker compose args for a project
+func buildProjectComposeArgs(p Project) []string {
+	hostDir := hostProjectDir()
+	args := []string{"compose", "--project-directory", hostDir, "-f", exec.RootDir + "/docker-compose.yml"}
+	for _, ov := range overridesForProject(p) {
+		args = append(args, "-f", exec.RootDir+"/compose/"+ov+".yml")
+	}
+	return args
+}
+
 func StartProject(c echo.Context) error {
 	domain := c.Param("domain")
 	projects, err := readProjects()
@@ -230,21 +245,14 @@ func StartProject(c echo.Context) error {
 	p, exists := projects[domain]
 	if !exists { return fail(c, 404, "project not found") }
 
-	// Enable if disabled
 	if !p.Enabled {
 		p.Enabled = true
 		projects[domain] = p
 		writeProjects(projects)
 	}
 
-	// Build compose command with overrides
-	// Use --project-directory with host path so volume mounts resolve on host
-	hostDir := hostProjectDir()
-	args := []string{"compose", "--project-directory", hostDir, "-f", exec.RootDir + "/docker-compose.yml"}
-	for _, ov := range overridesForProject(p) {
-		args = append(args, "-f", exec.RootDir+"/compose/"+ov+".yml")
-	}
-	args = append(args, "up", "-d")
+	args := buildProjectComposeArgs(p)
+	args = append(args, "up", "-d", "--build")
 	args = append(args, projectServices(p)...)
 
 	res, _ := exec.Run("docker", args...)
@@ -253,6 +261,40 @@ func StartProject(c echo.Context) error {
 	status := "started"
 	if res != nil && res.ExitCode != 0 { status = "error" }
 	return ok(c, map[string]string{"status": status, "output": out})
+}
+
+// StartProjectWS streams project start output via WebSocket (build + pull + start)
+func StartProjectWS(c echo.Context) error {
+	conn, err := websocket.Accept(c.Response(), c.Request(), &websocket.AcceptOptions{InsecureSkipVerify: true})
+	if err != nil { return err }
+	defer conn.Close(websocket.StatusNormalClosure, "done")
+	ctx := c.Request().Context()
+
+	_, msg, err := conn.Read(ctx)
+	if err != nil { return err }
+	var req struct{ Domain string `json:"domain"` }
+	json.Unmarshal(msg, &req)
+
+	projects, err := readProjects()
+	if err != nil { return err }
+	p, exists := projects[req.Domain]
+	if !exists {
+		done, _ := json.Marshal(map[string]string{"stream": "done", "line": "Project not found"})
+		conn.Write(ctx, websocket.MessageText, done)
+		return nil
+	}
+
+	if !p.Enabled {
+		p.Enabled = true
+		projects[req.Domain] = p
+		writeProjects(projects)
+	}
+
+	args := buildProjectComposeArgs(p)
+	args = append(args, "up", "-d", "--build")
+	args = append(args, projectServices(p)...)
+
+	return exec.StreamToWS(ctx, conn, "docker", args...)
 }
 
 func StopProject(c echo.Context) error {

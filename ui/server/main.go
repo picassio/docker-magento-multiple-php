@@ -65,6 +65,7 @@ func main() {
 	api.POST("/projects/:domain/enable", handlers.EnableProject)
 	api.POST("/projects/:domain/disable", handlers.DisableProject)
 	api.POST("/projects/:domain/start", handlers.StartProject)
+	api.GET("/projects/:domain/start/ws", handlers.StartProjectWS)
 	api.POST("/projects/:domain/stop", handlers.StopProject)
 
 	// Services
