@@ -149,9 +149,9 @@ func main() {
 		}
 		e.Any(path+"/*", echo.WrapHandler(http.StripPrefix(path, p)))
 	}
-	proxyTool("/mailpit", "localhost:8025")
-	proxyTool("/phpmyadmin", "localhost:8080")
-	proxyTool("/redis-commander", "localhost:8081")
+	proxyTool("/mailpit", "mailpit:8025")
+	proxyTool("/phpmyadmin", "phpmyadmin:80")
+	proxyTool("/redis-commander", "redis-commander:8081")
 
 	// ── Static files (embedded frontend) ────────────────────────────────
 	webFS, _ := fs.Sub(embeddedWeb, "web")
