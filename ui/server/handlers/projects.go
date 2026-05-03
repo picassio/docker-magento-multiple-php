@@ -254,7 +254,7 @@ func StartProject(c echo.Context) error {
 	}
 
 	args := buildProjectComposeArgs(p)
-	args = append(args, "up", "-d", "--build")
+	args = append(args, "up", "-d")
 	args = append(args, projectServices(p)...)
 
 	res, _ := exec.Run("docker", args...)
@@ -294,7 +294,7 @@ func StartProjectWS(c echo.Context) error {
 	}
 
 	args := buildProjectComposeArgs(p)
-	args = append(args, "up", "-d", "--build")
+	args = append(args, "up", "-d")
 	args = append(args, projectServices(p)...)
 
 	// Use background context so docker compose completes even if WS disconnects
