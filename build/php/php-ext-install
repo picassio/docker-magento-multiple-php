@@ -69,11 +69,173 @@ declare -A EXT_DEPS=(
     [brotli]="libbrotli-dev"
 )
 
+# Non-PECL extensions with custom install methods
+# Format: function name that handles install
+declare -A CUSTOM_INSTALLERS=(
+    [newrelic]="install_newrelic"
+    [ioncube]="install_ioncube"
+    [sourceguardian]="install_sourceguardian"
+    [blackfire]="install_blackfire"
+)
+
+install_newrelic() {
+    local no_enable="$1" scope="$2"
+    echo -e "  ${YELLOW}→ Installing New Relic PHP agent${NC}"
+
+    local nr_version
+    nr_version=$(curl -fsSL https://download.newrelic.com/php_agent/release/ | \
+        grep -oP 'newrelic-php5-[\d.]+-linux\.tar\.gz' | head -1)
+    if [ -z "$nr_version" ]; then
+        # Fallback: use apt repo
+        echo -e "  ${YELLOW}→ Using New Relic apt repository${NC}"
+        curl -fsSL https://download.newrelic.com/548C16BF.gpg | gpg --dearmor -o /usr/share/keyrings/newrelic.gpg
+        echo "deb [signed-by=/usr/share/keyrings/newrelic.gpg] http://apt.newrelic.com/debian/ newrelic non-free" > /etc/apt/sources.list.d/newrelic.list
+        apt-get update -y -qq
+        NEWRELIC_LICENSE_KEY="REPLACE_ME" NR_INSTALL_SILENT=1 apt-get install -y -qq newrelic-php5
+        apt-get clean && rm -rf /var/lib/apt/lists/*
+    else
+        curl -fsSL "https://download.newrelic.com/php_agent/release/${nr_version}" -o /tmp/newrelic.tar.gz
+        mkdir -p /tmp/newrelic && tar xf /tmp/newrelic.tar.gz -C /tmp/newrelic --strip-components=1
+        # Copy the .so for our PHP version
+        local ext_dir=$(php -i 2>/dev/null | grep "^extension_dir" | head -1 | awk '{print $NF}')
+        local php_api=$(php -i 2>/dev/null | grep "PHP API" | awk '{print $NF}')
+        local so_file=$(find /tmp/newrelic/agent/x64/ -name "newrelic-${php_api}.so" 2>/dev/null | head -1)
+        if [ -z "$so_file" ]; then
+            so_file=$(find /tmp/newrelic/agent/ -name "*.so" | head -1)
+        fi
+        if [ -n "$so_file" ]; then
+            cp "$so_file" "${ext_dir}/newrelic.so"
+        fi
+        # Copy daemon
+        cp /tmp/newrelic/daemon/newrelic-daemon.x64 /usr/bin/newrelic-daemon 2>/dev/null || true
+        rm -rf /tmp/newrelic /tmp/newrelic.tar.gz
+    fi
+
+    # Create ini
+    mkdir -p "$MODS_DIR"
+    cat > "${MODS_DIR}/newrelic.ini" <<'EOF'
+extension=newrelic.so
+newrelic.license = "REPLACE_WITH_YOUR_LICENSE_KEY"
+newrelic.appname = "PHP Application"
+newrelic.daemon.address = "/tmp/.newrelic.sock"
+EOF
+
+    _enable_ini "newrelic" "$no_enable" "$scope"
+    echo -e "  ${YELLOW}⚠ Set your license key in: ${MODS_DIR}/newrelic.ini${NC}"
+}
+
+install_ioncube() {
+    local no_enable="$1" scope="$2"
+    echo -e "  ${YELLOW}→ Installing IonCube Loader${NC}"
+
+    local arch=$(dpkg --print-architecture)
+    local dl_arch="lin_x86-64"
+    [[ "$arch" == "arm64" || "$arch" == "aarch64" ]] && dl_arch="lin_aarch64"
+
+    curl -fsSL "https://downloads.ioncube.com/loader_downloads/ioncube_loaders_${dl_arch}.tar.gz" -o /tmp/ioncube.tar.gz
+    mkdir -p /tmp/ioncube && tar xf /tmp/ioncube.tar.gz -C /tmp/ioncube --strip-components=1
+
+    local ext_dir=$(php -i 2>/dev/null | grep "^extension_dir" | head -1 | awk '{print $NF}')
+    local php_ver=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
+    local so_file="/tmp/ioncube/ioncube_loader_lin_${php_ver}.so"
+
+    if [ ! -f "$so_file" ]; then
+        echo -e "  ${RED}IonCube loader not available for PHP ${php_ver}${NC}"
+        rm -rf /tmp/ioncube /tmp/ioncube.tar.gz
+        return 1
+    fi
+
+    cp "$so_file" "${ext_dir}/ioncube_loader.so"
+    rm -rf /tmp/ioncube /tmp/ioncube.tar.gz
+
+    mkdir -p "$MODS_DIR"
+    echo "zend_extension=ioncube_loader.so" > "${MODS_DIR}/ioncube.ini"
+    # IonCube must load first — use priority 00
+    if [ "$no_enable" != "true" ]; then
+        ln -sf "${MODS_DIR}/ioncube.ini" "${PHP_CLI_CONF_DIR}/conf.d/00-ioncube.ini" 2>/dev/null || true
+        ln -sf "${MODS_DIR}/ioncube.ini" "${PHP_FPM_CONF_DIR}/conf.d/00-ioncube.ini" 2>/dev/null || true
+    fi
+    echo -e "  ${GREEN}✓ ioncube installed${NC}"
+}
+
+install_sourceguardian() {
+    local no_enable="$1" scope="$2"
+    echo -e "  ${YELLOW}→ Installing SourceGuardian Loader${NC}"
+
+    local php_ver=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
+    local arch=$(dpkg --print-architecture)
+    local dl_arch="x86_64"
+    [[ "$arch" == "arm64" || "$arch" == "aarch64" ]] && dl_arch="aarch64"
+
+    curl -fsSL "https://www.sourceguardian.com/loaders/download/loaders.linux-${dl_arch}.tar.gz" -o /tmp/sg.tar.gz
+    mkdir -p /tmp/sourceguardian && tar xf /tmp/sg.tar.gz -C /tmp/sourceguardian
+
+    local ext_dir=$(php -i 2>/dev/null | grep "^extension_dir" | head -1 | awk '{print $NF}')
+    local so_file="/tmp/sourceguardian/ixed.${php_ver}.lin"
+
+    if [ ! -f "$so_file" ]; then
+        echo -e "  ${RED}SourceGuardian loader not available for PHP ${php_ver}${NC}"
+        rm -rf /tmp/sourceguardian /tmp/sg.tar.gz
+        return 1
+    fi
+
+    cp "$so_file" "${ext_dir}/sourceguardian.so"
+    rm -rf /tmp/sourceguardian /tmp/sg.tar.gz
+
+    mkdir -p "$MODS_DIR"
+    echo "zend_extension=sourceguardian.so" > "${MODS_DIR}/sourceguardian.ini"
+    _enable_ini "sourceguardian" "$no_enable" "$scope"
+}
+
+install_blackfire() {
+    local no_enable="$1" scope="$2"
+    echo -e "  ${YELLOW}→ Installing Blackfire Probe${NC}"
+
+    local php_ver=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
+    local arch=$(dpkg --print-architecture)
+    local bf_arch="amd64"
+    [[ "$arch" == "arm64" || "$arch" == "aarch64" ]] && bf_arch="arm64"
+
+    local ext_dir=$(php -i 2>/dev/null | grep "^extension_dir" | head -1 | awk '{print $NF}')
+
+    curl -fsSL "https://packages.blackfire.io/binaries/blackfire-php/2.19.2/blackfire-php-linux_${bf_arch}-php-${php_ver//./}.so" \
+        -o "${ext_dir}/blackfire.so"
+
+    mkdir -p "$MODS_DIR"
+    cat > "${MODS_DIR}/blackfire.ini" <<'EOF'
+extension=blackfire.so
+blackfire.agent_socket=tcp://blackfire:8307
+EOF
+
+    _enable_ini "blackfire" "$no_enable" "$scope"
+    echo -e "  ${YELLOW}⚠ Configure agent socket in: ${MODS_DIR}/blackfire.ini${NC}"
+}
+
+# Helper to enable an ini file based on scope
+_enable_ini() {
+    local ext="$1" no_enable="$2" scope="$3"
+    if [ "$no_enable" != "true" ]; then
+        case "$scope" in
+            fpm)
+                ln -sf "${MODS_DIR}/${ext}.ini" "${PHP_FPM_CONF_DIR}/conf.d/20-${ext}.ini"
+                ;;
+            cli)
+                ln -sf "${MODS_DIR}/${ext}.ini" "${PHP_CLI_CONF_DIR}/conf.d/20-${ext}.ini"
+                ;;
+            *)
+                ln -sf "${MODS_DIR}/${ext}.ini" "${PHP_CLI_CONF_DIR}/conf.d/20-${ext}.ini"
+                ln -sf "${MODS_DIR}/${ext}.ini" "${PHP_FPM_CONF_DIR}/conf.d/20-${ext}.ini"
+                ;;
+        esac
+    fi
+    echo -e "  ${GREEN}✓ ${ext} installed${NC}"
+}
+
 usage() {
     echo -e "${CYAN}php-ext-install${NC} — Easy PHP extension installer"
     echo ""
     echo -e "Usage:"
-    echo -e "  php-ext-install <extension> [extension...]     Install PECL extensions"
+    echo -e "  php-ext-install <extension> [extension...]     Install extensions"
     echo -e "  php-ext-install --list                         List known extensions"
     echo -e "  php-ext-install --enabled                      Show enabled extensions"
     echo -e "  php-ext-install --enable <ext>                 Enable an installed extension"
@@ -85,8 +247,13 @@ usage() {
     echo -e "  --cli-only        Enable only for CLI (not FPM)"
     echo -e "  -- <flags>        Pass extra configure flags to pecl/phpize"
     echo ""
+    echo -e "Supports PECL extensions and custom installers for:"
+    echo -e "  newrelic, ioncube, sourceguardian, blackfire"
+    echo ""
     echo -e "Examples:"
     echo -e "  php-ext-install redis imagick mongodb"
+    echo -e "  php-ext-install newrelic"
+    echo -e "  php-ext-install ioncube"
     echo -e "  php-ext-install --disable xdebug"
     echo -e "  php-ext-install --enable xdebug"
     echo ""
@@ -95,7 +262,7 @@ usage() {
 }
 
 list_known() {
-    echo -e "${CYAN}Known extensions (auto-installs system dependencies):${NC}"
+    echo -e "${CYAN}PECL extensions (auto-installs system dependencies):${NC}"
     echo ""
     for ext in $(echo "${!EXT_DEPS[@]}" | tr ' ' '\n' | sort); do
         deps="${EXT_DEPS[$ext]}"
@@ -104,6 +271,12 @@ list_known() {
         else
             echo -e "  ${GREEN}${ext}${NC}"
         fi
+    done
+    echo ""
+    echo -e "${CYAN}Non-PECL extensions (custom installers):${NC}"
+    echo ""
+    for ext in $(echo "${!CUSTOM_INSTALLERS[@]}" | tr ' ' '\n' | sort); do
+        echo -e "  ${GREEN}${ext}${NC}  (custom installer)"
     done
     echo ""
     echo -e "Any PECL extension can be installed even if not listed above."
@@ -149,6 +322,12 @@ install_ext() {
 
     echo -e "${CYAN}━━━ Installing ${ext} ━━━${NC}"
 
+    # Check if this extension has a custom installer (non-PECL)
+    if [ -n "${CUSTOM_INSTALLERS[$ext]+x}" ]; then
+        ${CUSTOM_INSTALLERS[$ext]} "$no_enable" "$scope"
+        return $?
+    fi
+
     # Install system dependencies if known
     if [ -n "${EXT_DEPS[$ext]+x}" ] && [ -n "${EXT_DEPS[$ext]}" ]; then
         echo -e "  ${YELLOW}→ Installing system deps: ${EXT_DEPS[$ext]}${NC}"
@@ -174,23 +353,7 @@ install_ext() {
     mkdir -p "$MODS_DIR"
     echo "$ini_line" > "${MODS_DIR}/${ext}.ini"
 
-    # Enable unless --no-enable
-    if [ "$no_enable" != "true" ]; then
-        case "$scope" in
-            fpm)
-                ln -sf "${MODS_DIR}/${ext}.ini" "${PHP_FPM_CONF_DIR}/conf.d/20-${ext}.ini"
-                ;;
-            cli)
-                ln -sf "${MODS_DIR}/${ext}.ini" "${PHP_CLI_CONF_DIR}/conf.d/20-${ext}.ini"
-                ;;
-            *)
-                ln -sf "${MODS_DIR}/${ext}.ini" "${PHP_CLI_CONF_DIR}/conf.d/20-${ext}.ini"
-                ln -sf "${MODS_DIR}/${ext}.ini" "${PHP_FPM_CONF_DIR}/conf.d/20-${ext}.ini"
-                ;;
-        esac
-    fi
-
-    echo -e "  ${GREEN}✓ ${ext} installed${NC}"
+    _enable_ini "$ext" "$no_enable" "$scope"
 }
 
 # --- Main --------------------------------------------------------------------
