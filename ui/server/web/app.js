@@ -204,18 +204,16 @@ function Projects() {
     setActing(domain+':'+action); setActionTarget(domain);
     const header = `\n━━━ ${action.toUpperCase()} ${domain} ━━━\n`;
     setActionLog(l => l + header);
-    if (action === 'start') {
-      const ws = new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/api/projects/${domain}/start/ws`);
-      ws.onopen = () => ws.send(JSON.stringify({ domain }));
-      ws.onmessage = e => { const d = JSON.parse(e.data); setActionLog(l => l + (d.line||'') + '\n'); if (d.stream==='done') { setActing(''); toast(domain+' started','success'); load(); } };
-      ws.onerror = () => { setActing(''); toast('Connection error','error'); };
+    const r = await POST('/api/projects/'+domain+'/'+action);
+    setActionLog(l => l + (r.output || 'Done') + '\n');
+    if (r.status === 'error' && (r.output||'').includes('No such image')) {
+      toast('Image not built yet — go to Build page first', 'error');
+      setActionLog(l => l + '\n\u26a0 PHP image not built. Go to Build page to build it first.\n');
     } else {
-      const r = await POST('/api/projects/'+domain+'/'+action);
-      setActionLog(l => l + (r.output || 'Done') + '\n');
       toast(domain+' '+r.status, r.status === 'error' ? 'error' : 'success');
-      setActing('');
-      load();
     }
+    setActing('');
+    load();
   };
 
   return html`<div>

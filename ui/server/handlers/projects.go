@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -10,7 +9,6 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/picassio/docker-magento-multiple-php/ui/server/exec"
-	"nhooyr.io/websocket"
 )
 
 type Project struct {
@@ -267,41 +265,6 @@ func StartProject(c echo.Context) error {
 	return ok(c, map[string]string{"status": status, "output": out})
 }
 
-// StartProjectWS streams project start output via WebSocket (build + pull + start)
-// Uses background context so docker compose finishes even if client disconnects (F5)
-func StartProjectWS(c echo.Context) error {
-	conn, err := websocket.Accept(c.Response(), c.Request(), &websocket.AcceptOptions{InsecureSkipVerify: true})
-	if err != nil { return err }
-	defer conn.Close(websocket.StatusNormalClosure, "done")
-
-	wsCtx := c.Request().Context()
-	_, msg, err := conn.Read(wsCtx)
-	if err != nil { return err }
-	var req struct{ Domain string `json:"domain"` }
-	json.Unmarshal(msg, &req)
-
-	projects, err := readProjects()
-	if err != nil { return err }
-	p, exists := projects[req.Domain]
-	if !exists {
-		done, _ := json.Marshal(map[string]string{"stream": "done", "line": "Project not found"})
-		conn.Write(wsCtx, websocket.MessageText, done)
-		return nil
-	}
-
-	if !p.Enabled {
-		p.Enabled = true
-		projects[req.Domain] = p
-		writeProjects(projects)
-	}
-
-	args := buildProjectComposeArgs(p)
-	args = append(args, "up", "-d")
-	args = append(args, projectServices(p)...)
-
-	// Use background context so docker compose completes even if WS disconnects
-	return exec.StreamToWS(context.Background(), conn, "docker", args...)
-}
 
 func StopProject(c echo.Context) error {
 	domain := c.Param("domain")
