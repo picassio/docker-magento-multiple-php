@@ -134,19 +134,24 @@ func main() {
 	// Terminal (WebSocket PTY)
 	api.GET("/terminal/ws", handlers.TerminalWS)
 
-	// Mailpit proxy (strip CSP for iframe embedding)
-	mailpitProxy := httputil.NewSingleHostReverseProxy(&url.URL{Scheme: "http", Host: "localhost:8025"})
-	origDirector := mailpitProxy.Director
-	mailpitProxy.Director = func(r *http.Request) {
-		origDirector(r)
-		r.Host = "localhost:8025"
+	// Reverse proxies for embedded tools (strip CSP/X-Frame-Options for iframe)
+	proxyTool := func(path, host string) {
+		p := httputil.NewSingleHostReverseProxy(&url.URL{Scheme: "http", Host: host})
+		origDir := p.Director
+		p.Director = func(r *http.Request) {
+			origDir(r)
+			r.Host = host
+		}
+		p.ModifyResponse = func(resp *http.Response) error {
+			resp.Header.Del("Content-Security-Policy")
+			resp.Header.Del("X-Frame-Options")
+			return nil
+		}
+		e.Any(path+"/*", echo.WrapHandler(http.StripPrefix(path, p)))
 	}
-	mailpitProxy.ModifyResponse = func(resp *http.Response) error {
-		resp.Header.Del("Content-Security-Policy")
-		resp.Header.Del("X-Frame-Options")
-		return nil
-	}
-	e.Any("/mailpit/*", echo.WrapHandler(http.StripPrefix("/mailpit", mailpitProxy)))
+	proxyTool("/mailpit", "localhost:8025")
+	proxyTool("/phpmyadmin", "localhost:8080")
+	proxyTool("/redis-commander", "localhost:8081")
 
 	// ── Static files (embedded frontend) ────────────────────────────────
 	webFS, _ := fs.Sub(embeddedWeb, "web")

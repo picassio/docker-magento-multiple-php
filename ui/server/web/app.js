@@ -546,8 +546,8 @@ function SQLPage() {
     setResult(r);
   };
 
-  const pmaUrl = location.protocol+'//'+location.hostname+':8080';
-  const redisUrl = location.protocol+'//'+location.hostname+':8081';
+  const pmaUrl = '/phpmyadmin/';
+  const redisUrl = '/redis-commander/';
 
   return html`<div>
     <div class="page-header"><h1>SQL & Data</h1><div class="actions">
