@@ -77,6 +77,36 @@ project_list_enabled() {
     project_list_raw | awk -F'|' '$7 == "true" { print $0 }'
 }
 
+# ── Get services required by a single project ─────────────────────────────────
+project_services() {
+    local domain="$1"
+    local php db_svc search redis_svc
+    php=$(project_get "$domain" "php")
+    db_svc=$(project_get "$domain" "db_service")
+    search=$(project_get "$domain" "search")
+    redis_svc=$(project_get "$domain" "redis")
+    redis_svc="${redis_svc:-redis}"
+
+    local svcs="nginx $php $db_svc mailpit"
+    [[ "$search" != "none" && -n "$search" ]] && svcs="$svcs $search"
+    [[ "$redis_svc" != "none" ]] && svcs="$svcs $redis_svc"
+    echo "$svcs"
+}
+
+# ── Get services used by OTHER enabled projects (excluding given domain) ─────
+project_services_used_by_others() {
+    local exclude_domain="$1"
+    local all_svcs=""
+    while IFS='|' read -r domain php app db_svc db_name search enabled; do
+        [[ -z "$domain" || "$domain" == "$exclude_domain" ]] && continue
+        all_svcs="$all_svcs nginx $php $db_svc mailpit"
+        [[ "$search" != "none" && -n "$search" ]] && all_svcs="$all_svcs $search"
+        local r; r=$(project_get "$domain" "redis"); r="${r:-redis}"
+        [[ "$r" != "none" ]] && all_svcs="$all_svcs $r"
+    done < <(project_list_enabled)
+    echo "$all_svcs" | tr ' ' '\n' | sort -u | tr '\n' ' '
+}
+
 # ── Save/update a project ────────────────────────────────────────────────────
 # Usage: project_set <domain> <php> <app> <db_service> <db_name> <search> <enabled>
 project_set() {

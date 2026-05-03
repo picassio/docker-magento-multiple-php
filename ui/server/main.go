@@ -64,6 +64,8 @@ func main() {
 	api.PATCH("/projects/:domain", handlers.UpdateProject)
 	api.POST("/projects/:domain/enable", handlers.EnableProject)
 	api.POST("/projects/:domain/disable", handlers.DisableProject)
+	api.POST("/projects/:domain/start", handlers.StartProject)
+	api.POST("/projects/:domain/stop", handlers.StopProject)
 
 	// Services
 	api.GET("/services", handlers.ListServices)

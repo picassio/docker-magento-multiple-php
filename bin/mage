@@ -44,6 +44,8 @@ ${_bold}PROJECT MANAGEMENT${_reset}
     ${_green}project remove${_reset} <domain>             Remove project from registry
     ${_green}project enable${_reset} <domain>             Enable project & create vhost
     ${_green}project disable${_reset} <domain>            Disable project & remove vhost
+    ${_green}project start${_reset} <domain>              Start project & its services
+    ${_green}project stop${_reset} <domain>               Stop project (keeps shared services)
     ${_green}project info${_reset} <domain>               Show project configuration
     ${_green}project switch-php${_reset} <domain> <php>   Change PHP version
     ${_green}project switch-db${_reset} <domain> <db>     Change DB service (mysql/mysql80/mariadb)
@@ -119,6 +121,8 @@ cmd_project() {
         enable)        cmd_project_enable "$@" ;;
         disable)       cmd_project_disable "$@" ;;
         info)          cmd_project_info "$@" ;;
+        start)         cmd_project_start "$@" ;;
+        stop)          cmd_project_stop "$@" ;;
         set)           cmd_project_set_field "$@" ;;
         switch-php)    cmd_project_switch_php "$@" ;;
         switch-db)     cmd_project_switch_db "$@" ;;
@@ -275,6 +279,113 @@ cmd_project_disable() {
     fi
 
     _success "Project '$domain' disabled (vhost removed, data kept)"
+}
+
+cmd_project_start() {
+    local domain="${1:-}"
+    [[ -z "$domain" ]] && _die "Usage: bin/mage project start <domain>"
+    require_project "$domain"
+
+    # Enable if disabled
+    local enabled
+    enabled=$(project_get "$domain" "enabled")
+    if [[ "$enabled" != "true" ]]; then
+        _arrow "Enabling project '$domain'..."
+        cmd_project_enable "$domain"
+    fi
+
+    # Get services needed by this project
+    local needed
+    needed=$(project_services "$domain")
+    _header "Starting project: $domain"
+    _arrow "Services needed: $needed"
+
+    # Compute overrides needed
+    local php db_svc search
+    php=$(project_get "$domain" "php")
+    db_svc=$(project_get "$domain" "db_service")
+    search=$(project_get "$domain" "search")
+
+    local overrides=""
+    echo "$php" | grep -qE "^php7[0-4]$" && overrides="$overrides legacy"
+    case "$db_svc" in
+        mariadb) overrides="$overrides mariadb" ;;
+        mysql80) overrides="$overrides mysql80" ;;
+    esac
+    case "$search" in
+        elasticsearch)  overrides="$overrides elasticsearch" ;;
+        elasticsearch7) overrides="$overrides elasticsearch7" ;;
+        opensearch1)    overrides="$overrides opensearch1" ;;
+    esac
+
+    local file_flags
+    file_flags=$(dc_file_flags $overrides)
+
+    # Start only the services that aren't already running
+    local to_start=""
+    for svc in $needed; do
+        if ! is_service_running "$svc" 2>/dev/null; then
+            to_start="$to_start $svc"
+        else
+            _arrow "$svc already running"
+        fi
+    done
+
+    if [[ -n "$to_start" ]]; then
+        export DC_FILE_FLAGS="$file_flags"
+        dc up -d $to_start 2>&1
+        unset DC_FILE_FLAGS
+    fi
+
+    # Reload nginx to pick up vhost
+    if is_service_running nginx 2>/dev/null; then
+        dc exec nginx nginx -s reload 2>/dev/null || true
+    fi
+
+    _success "Project '$domain' started"
+}
+
+cmd_project_stop() {
+    local domain="${1:-}"
+    [[ -z "$domain" ]] && _die "Usage: bin/mage project stop <domain>"
+    require_project "$domain"
+
+    # Services used by this project
+    local my_services
+    my_services=$(project_services "$domain")
+
+    # Services used by OTHER enabled projects
+    local others_services
+    others_services=$(project_services_used_by_others "$domain")
+
+    _header "Stopping project: $domain"
+
+    # Only stop services that no other project needs
+    local to_stop=""
+    for svc in $my_services; do
+        # Never stop nginx or mailpit (shared infrastructure)
+        [[ "$svc" == "nginx" || "$svc" == "mailpit" ]] && continue
+        if echo " $others_services " | grep -q " $svc "; then
+            _arrow "$svc still needed by another project — skipping"
+        else
+            to_stop="$to_stop $svc"
+        fi
+    done
+
+    if [[ -n "$to_stop" ]]; then
+        _arrow "Stopping:$to_stop"
+        dc stop $to_stop 2>&1
+    else
+        _arrow "No services to stop (all shared with other projects)"
+    fi
+
+    # Remove vhost so nginx doesn't try to reach stopped PHP
+    rm -f "${NGINX_CONF_DIR}/${domain}.conf" "${NGINX_CONF_DIR}/${domain}-ssl.conf" 2>/dev/null
+    if is_service_running nginx 2>/dev/null; then
+        dc exec nginx nginx -s reload 2>/dev/null || true
+    fi
+
+    _success "Project '$domain' stopped"
 }
 
 cmd_project_info() {

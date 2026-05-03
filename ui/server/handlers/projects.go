@@ -158,6 +158,26 @@ func UpdateProject(c echo.Context) error {
 func EnableProject(c echo.Context) error  { return setEnabled(c, true) }
 func DisableProject(c echo.Context) error { return setEnabled(c, false) }
 
+func StartProject(c echo.Context) error {
+	domain := c.Param("domain")
+	res, _ := exec.Mage("project", "start", domain)
+	out := ""
+	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	status := "started"
+	if res != nil && res.ExitCode != 0 { status = "error" }
+	return ok(c, map[string]string{"status": status, "output": out})
+}
+
+func StopProject(c echo.Context) error {
+	domain := c.Param("domain")
+	res, _ := exec.Mage("project", "stop", domain)
+	out := ""
+	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	status := "stopped"
+	if res != nil && res.ExitCode != 0 { status = "error" }
+	return ok(c, map[string]string{"status": status, "output": out})
+}
+
 func setEnabled(c echo.Context, enabled bool) error {
 	domain := c.Param("domain")
 	projects, err := readProjects()
