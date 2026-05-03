@@ -158,9 +158,63 @@ func UpdateProject(c echo.Context) error {
 func EnableProject(c echo.Context) error  { return setEnabled(c, true) }
 func DisableProject(c echo.Context) error { return setEnabled(c, false) }
 
+// projectServices returns docker compose services needed by a project
+func projectServices(p Project) []string {
+	svcs := []string{"nginx", p.PHP, p.DBService, "mailpit", "redis"}
+	if p.Search != "" && p.Search != "none" {
+		svcs = append(svcs, p.Search)
+	}
+	return svcs
+}
+
+// overridesForProject returns compose override file names needed
+func overridesForProject(p Project) []string {
+	var ov []string
+	if len(p.PHP) >= 5 && p.PHP[:4] == "php7" {
+		ov = append(ov, "legacy")
+	}
+	switch p.DBService {
+	case "mariadb":
+		ov = append(ov, "mariadb")
+	case "mysql80":
+		ov = append(ov, "mysql80")
+	}
+	switch p.Search {
+	case "elasticsearch":
+		ov = append(ov, "elasticsearch")
+	case "elasticsearch7":
+		ov = append(ov, "elasticsearch7")
+	case "opensearch1":
+		ov = append(ov, "opensearch1")
+	}
+	return ov
+}
+
 func StartProject(c echo.Context) error {
 	domain := c.Param("domain")
-	res, _ := exec.Mage("project", "start", domain)
+	projects, err := readProjects()
+	if err != nil { return fail(c, 500, err.Error()) }
+	p, exists := projects[domain]
+	if !exists { return fail(c, 404, "project not found") }
+
+	// Enable if disabled
+	if !p.Enabled {
+		p.Enabled = true
+		projects[domain] = p
+		writeProjects(projects)
+	}
+
+	// Build compose command with overrides
+	// Use --project-directory with host path so volume mounts resolve on host
+	hostDir := hostProjectDir()
+	args := []string{"compose", "--project-directory", hostDir, "-f", exec.RootDir + "/docker-compose.yml"}
+	for _, ov := range overridesForProject(p) {
+		args = append(args, "-f", exec.RootDir+"/compose/"+ov+".yml")
+	}
+	args = append(args, "up", "-d")
+	args = append(args, projectServices(p)...)
+
+	res, _ := exec.Run("docker", args...)
 	out := ""
 	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
 	status := "started"
@@ -170,12 +224,38 @@ func StartProject(c echo.Context) error {
 
 func StopProject(c echo.Context) error {
 	domain := c.Param("domain")
-	res, _ := exec.Mage("project", "stop", domain)
+	projects, err := readProjects()
+	if err != nil { return fail(c, 500, err.Error()) }
+	p, exists := projects[domain]
+	if !exists { return fail(c, 404, "project not found") }
+
+	// Find services used ONLY by this project (not shared with others)
+	myServices := projectServices(p)
+	shared := map[string]bool{"nginx": true, "mailpit": true}
+	for _, op := range projects {
+		if op.Domain == domain || !op.Enabled { continue }
+		for _, s := range projectServices(op) {
+			shared[s] = true
+		}
+	}
+
+	var toStop []string
+	for _, s := range myServices {
+		if !shared[s] {
+			toStop = append(toStop, s)
+		}
+	}
+
 	out := ""
-	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
-	status := "stopped"
-	if res != nil && res.ExitCode != 0 { status = "error" }
-	return ok(c, map[string]string{"status": status, "output": out})
+	if len(toStop) > 0 {
+		args := append([]string{"stop"}, toStop...)
+		res, _ := exec.DockerCompose(args...)
+		if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	} else {
+		out = "All services shared with other projects — nothing to stop"
+	}
+
+	return ok(c, map[string]string{"status": "stopped", "output": out, "stopped": strings.Join(toStop, ", ")})
 }
 
 func setEnabled(c echo.Context, enabled bool) error {

@@ -99,11 +99,7 @@ function Dashboard() {
   useEffect(() => { load(); const t = setInterval(load, 5000); return () => clearInterval(t); }, []);
   const running = services.filter(s => svcState(s) === 'running').length;
   return html`<div>
-    <div class="page-header"><h1>Dashboard</h1><div class="actions">
-      <button class="btn btn-success" onClick=${async () => { toast('Starting...'); await POST('/api/services/up'); load(); }}>▶ Start</button>
-      <button class="btn btn-danger" onClick=${async () => { await POST('/api/services/stop'); load(); }}>■ Stop</button>
-      <button class="btn" onClick=${async () => { await POST('/api/services/down'); load(); }}>⏏ Down</button>
-    </div></div>
+    <div class="page-header"><h1>Dashboard</h1></div>
     <div class="card-header">Services <span class="badge badge-${running===services.length?'green':'orange'}">${running}/${services.length}</span></div>
     <div class="card-grid">${services.map(s => {
       const st = svcState(s);
@@ -179,24 +175,38 @@ function Projects() {
   const [projects, setProjects] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
   const [cmdProject, setCmdProject] = useState(null);
+  const [actionLog, setActionLog] = useState('');
+  const [actionTarget, setActionTarget] = useState('');
+  const [acting, setActing] = useState('');
   const load = async () => setProjects(await GET('/api/projects') || []);
   useEffect(() => { load(); }, []);
   const phpOpts = ['php70','php71','php72','php73','php74','php81','php82','php83','php84','php85'];
   const dbOpts = ['mysql','mysql80','mariadb'];
   const searchOpts = ['opensearch','opensearch1','elasticsearch','elasticsearch7','none'];
+
+  const projectAction = async (domain, action) => {
+    setActing(domain+':'+action); setActionTarget(domain); setActionLog('');
+    const r = await POST('/api/projects/'+domain+'/'+action);
+    setActionLog(r.output || 'Done');
+    toast(domain+' '+r.status, r.status === 'error' ? 'error' : 'success');
+    setActing('');
+    load();
+  };
+
   return html`<div>
     <div class="page-header"><h1>Projects</h1><div class="actions"><button class="btn btn-primary" onClick=${()=>setShowAdd(true)}>+ Add Project</button></div></div>
     ${projects.length === 0 ? html`<div class="card empty"><div class="icon">📁</div><p>No projects yet</p><button class="btn btn-primary" onClick=${()=>setShowAdd(true)}>Add your first project</button></div>` :
       html`<div class="card table-wrap"><table><thead><tr><th>Domain</th><th>Type</th><th>PHP</th><th>DB</th><th>Search</th><th>Enabled</th><th></th></tr></thead><tbody>
-        ${projects.map(p => { const [label,color] = appBadge(p.app); return html`<tr>
+        ${projects.map(p => { const [label,color] = appBadge(p.app); const isBusy = acting.startsWith(p.domain+':'); return html`<tr>
           <td><b>${p.domain}</b></td><td><span class="badge badge-${color}">${label}</span></td>
           <td><select class="inline-select" value=${p.php} onChange=${e=>{PATCH('/api/projects/'+p.domain,{php:e.target.value});toast(p.domain+': PHP → '+e.target.value,'success');load();}}>${phpOpts.map(o=>html`<option selected=${o===p.php}>${o}</option>`)}</select></td>
           <td><select class="inline-select" value=${p.db_service} onChange=${e=>{PATCH('/api/projects/'+p.domain,{db_service:e.target.value});toast(p.domain+': DB → '+e.target.value,'success');}}>${dbOpts.map(o=>html`<option selected=${o===p.db_service}>${o}</option>`)}</select></td>
           <td><select class="inline-select" value=${p.search} onChange=${e=>{PATCH('/api/projects/'+p.domain,{search:e.target.value});toast(p.domain+': Search → '+e.target.value,'success');}}>${searchOpts.map(o=>html`<option selected=${o===p.search}>${o}</option>`)}</select></td>
           <td><label class="toggle"><input type="checkbox" checked=${p.enabled} onChange=${e=>{POST('/api/projects/'+p.domain+'/'+(e.target.checked?'enable':'disable'));toast(p.domain+' '+(e.target.checked?'enabled':'disabled'),'success');}}/><span class="slider"></span></label></td>
-          <td style="white-space:nowrap"><button class="btn btn-sm btn-success" title="Start project" onClick=${async()=>{toast('Starting '+p.domain+'...');await POST('/api/projects/'+p.domain+'/start');toast(p.domain+' started','success');}}>▶</button> <button class="btn btn-sm btn-danger" title="Stop project" onClick=${async()=>{toast('Stopping '+p.domain+'...');await POST('/api/projects/'+p.domain+'/stop');toast(p.domain+' stopped','success');}}>■</button> <button class="btn btn-sm" title="Run command" onClick=${()=>setCmdProject(p)}>⊞ Run</button> <button class="btn-icon" title="SSL" onClick=${()=>{toast('SSL for '+p.domain);POST('/api/ssl/'+p.domain);}}>🔒</button><button class="btn-icon" style="color:var(--red)" title="Remove" onClick=${async()=>{if(confirm('Remove '+p.domain+'?')){await DELETE('/api/projects/'+p.domain);toast(p.domain+' removed','success');load();}}}>✕</button></td>
+          <td style="white-space:nowrap"><button class="btn btn-sm btn-success" title="Start project services" onClick=${()=>projectAction(p.domain,'start')} disabled=${isBusy}>${isBusy && acting.endsWith(':start') ? '⏳' : '▶ Start'}</button> <button class="btn btn-sm btn-danger" title="Stop project services" onClick=${()=>projectAction(p.domain,'stop')} disabled=${isBusy}>${isBusy && acting.endsWith(':stop') ? '⏳' : '■ Stop'}</button> <button class="btn btn-sm" title="Run command" onClick=${()=>setCmdProject(p)}>⊞ Run</button> <button class="btn-icon" title="SSL" onClick=${()=>{toast('SSL for '+p.domain);POST('/api/ssl/'+p.domain);}}>🔒</button><button class="btn-icon" style="color:var(--red)" title="Remove" onClick=${async()=>{if(confirm('Remove '+p.domain+'?')){await DELETE('/api/projects/'+p.domain);toast(p.domain+' removed','success');load();}}}>✕</button></td>
         </tr>`; })}
       </tbody></table></div>`}
+    ${actionLog && html`<div class="card" style="margin-top:16px"><div class="card-header">Output — ${actionTarget}</div><pre class="log-viewer" style="max-height:300px;overflow-y:auto">${actionLog}</pre></div>`}
     <${AddProjectModal} show=${showAdd} onClose=${()=>{setShowAdd(false);load();}} />
     <${RunCommandModal} show=${!!cmdProject} onClose=${()=>setCmdProject(null)} project=${cmdProject} />
   </div>`;
