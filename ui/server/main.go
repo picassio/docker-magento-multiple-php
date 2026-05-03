@@ -84,6 +84,14 @@ func main() {
 	api.POST("/images/build", handlers.BuildImages)
 	api.GET("/images/build/ws", handlers.BuildImagesWS)
 
+	// PHP Extensions
+	api.GET("/extensions", handlers.ListAllExtensions)
+	api.GET("/extensions/:service", handlers.ListExtensions)
+	api.POST("/extensions/install", handlers.InstallExtension)
+	api.POST("/extensions/enable", handlers.EnableExtension)
+	api.POST("/extensions/disable", handlers.DisableExtension)
+	api.GET("/extensions/install/ws", handlers.InstallExtensionWS)
+
 	// Logs
 	api.GET("/logs/:service", handlers.GetLogs)
 	api.GET("/logs/:service/ws", handlers.StreamLogsWS)

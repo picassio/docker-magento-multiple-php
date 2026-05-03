@@ -182,6 +182,10 @@ Tech: Go binary (12MB) with embedded Preact + Ace Editor + xterm.js. Zero CDN de
 | `setup` | Interactive first-time setup |
 | `doctor [fix]` | Check/fix system settings (sysctl, THP, Docker logs) |
 | `build [php...]` | Build PHP from source (or all). Use `--with=legacy` for PHP 7.x, `--no-cache` to force rebuild |
+| `ext install <ext...>` | Install PHP extensions on running containers. Use `--php=php83` to target one |
+| `ext enable <ext>` | Enable an installed extension |
+| `ext disable <ext>` | Disable an extension |
+| `ext list [php]` | List enabled extensions |
 | `up [services...]` | Smart start from projects.json (or explicit services) |
 | `up --with=<override>` | Start with specific compose override |
 | `down` | Stop & remove all containers |
@@ -437,7 +441,24 @@ bin/mage build nginx
 
 ### Installing PHP extensions
 
-#### Option 1: Build-time (persists across rebuilds) — recommended
+#### Option 1: CLI (recommended)
+
+```bash
+# Install extensions on all running PHP containers
+bin/mage ext install redis imagick mongodb
+
+# Install only on a specific PHP version
+bin/mage ext install redis --php=php83
+
+# Enable/disable extensions
+bin/mage ext enable xdebug --php=php84
+bin/mage ext disable xdebug
+
+# List enabled extensions
+bin/mage ext list php83
+```
+
+#### Option 2: Build-time (persists across rebuilds)
 
 Add `PHP_EXTENSIONS` to your service in `docker-compose.yml`:
 
@@ -456,39 +477,24 @@ Then rebuild:
 bin/mage build php83
 ```
 
-#### Option 2: Runtime (inside a running container)
+#### Option 3: Web UI
 
-A built-in `php-ext-install` helper is available inside every PHP container:
+Open the web dashboard (`bin/mage ui`) → **Extensions** page. Select a PHP version, type extension names, and click Install. Live output streams in real-time.
+
+#### Option 4: Inside a container
 
 ```bash
-# Enter a PHP container
 docker compose exec php83 bash
-
-# Install extensions (auto-installs system deps + enables for CLI & FPM)
 php-ext-install redis imagick mongodb
-
-# List known extensions with auto-detected dependencies
-php-ext-install --list
-
-# Show currently enabled extensions
-php-ext-install --enabled
-
-# Enable/disable extensions
+php-ext-install --list          # known extensions with auto-deps
+php-ext-install --enabled       # currently loaded
 php-ext-install --enable xdebug
 php-ext-install --disable xdebug
-
-# Install without enabling
-php-ext-install --no-enable swoole
-
-# Enable only for FPM (not CLI)
-php-ext-install --fpm-only redis
-
-# Restart FPM to load changes
-kill -USR2 1
+kill -USR2 1                    # restart FPM
 ```
 
-> **Note:** Runtime-installed extensions are lost when the container is rebuilt.
-> Use `PHP_EXTENSIONS` build arg for permanent installs.
+> **Note:** Runtime-installed extensions (Options 1, 3, 4) are lost on container rebuild.
+> Use `PHP_EXTENSIONS` build arg (Option 2) for permanent installs.
 
 ### System tuning (first-time setup)
 

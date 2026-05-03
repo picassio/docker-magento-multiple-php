@@ -64,6 +64,13 @@ ${_bold}DATABASE (project-aware — auto-routes to correct DB service)${_reset}
     ${_green}db export${_reset} <domain|name>              Export database
     ${_green}db import${_reset} <domain> <file.sql>        Import SQL file
 
+${_bold}PHP EXTENSIONS${_reset}
+    ${_green}ext install${_reset} <ext...> [--php=php83]   Install PECL extensions
+    ${_green}ext remove${_reset} <ext...> [--php=php83]    Remove/disable extensions
+    ${_green}ext enable${_reset} <ext...> [--php=php83]    Enable an installed extension
+    ${_green}ext disable${_reset} <ext...> [--php=php83]   Disable an extension
+    ${_green}ext list${_reset} [php83]                     List enabled extensions
+
 ${_bold}HOSTING${_reset}
     ${_green}vhost${_reset} <domain> <app> <php>           Create nginx virtual host
     ${_green}ssl${_reset} <domain>                         Enable SSL for domain
@@ -1126,6 +1133,158 @@ cmd_setup() {
     _success "Setup complete! Run ${_bold}bin/mage help${_reset} for all commands."
 }
 
+# ── Command: ext (PHP extension management) ──────────────────────────────────
+cmd_ext() {
+    local action="${1:-help}"
+    shift 2>/dev/null || true
+
+    case "$action" in
+        install)
+            local php_service="" extensions=()
+            for arg in "$@"; do
+                case "$arg" in
+                    --php=*) php_service="${arg#*=}" ;;
+                    *)       extensions+=("$arg") ;;
+                esac
+            done
+            [[ ${#extensions[@]} -eq 0 ]] && _die "Usage: bin/mage ext install <ext...> [--php=php83]"
+
+            # Resolve target PHP containers
+            local targets=()
+            if [[ -n "$php_service" ]]; then
+                targets=("$php_service")
+            else
+                # Install on all running PHP containers
+                while IFS= read -r svc; do
+                    [[ -n "$svc" ]] && targets+=("$svc")
+                done < <(docker compose ps --format '{{.Service}}' 2>/dev/null | grep '^php')
+                [[ ${#targets[@]} -eq 0 ]] && _die "No running PHP containers. Start with: bin/mage up"
+            fi
+
+            for svc in "${targets[@]}"; do
+                _header "Installing [${extensions[*]}] on $svc"
+                docker compose exec -T "$svc" php-ext-install "${extensions[@]}"
+                _arrow "Restarting PHP-FPM in $svc..."
+                docker compose exec -T "$svc" kill -USR2 1 2>/dev/null || true
+                _success "$svc done"
+                echo ""
+            done
+            ;;
+        remove|uninstall)
+            local php_service="" extensions=()
+            for arg in "$@"; do
+                case "$arg" in
+                    --php=*) php_service="${arg#*=}" ;;
+                    *)       extensions+=("$arg") ;;
+                esac
+            done
+            [[ ${#extensions[@]} -eq 0 ]] && _die "Usage: bin/mage ext remove <ext...> [--php=php83]"
+
+            local targets=()
+            if [[ -n "$php_service" ]]; then
+                targets=("$php_service")
+            else
+                while IFS= read -r svc; do
+                    [[ -n "$svc" ]] && targets+=("$svc")
+                done < <(docker compose ps --format '{{.Service}}' 2>/dev/null | grep '^php')
+                [[ ${#targets[@]} -eq 0 ]] && _die "No running PHP containers."
+            fi
+
+            for svc in "${targets[@]}"; do
+                _header "Disabling [${extensions[*]}] on $svc"
+                for ext in "${extensions[@]}"; do
+                    docker compose exec -T "$svc" php-ext-install --disable "$ext"
+                done
+                docker compose exec -T "$svc" kill -USR2 1 2>/dev/null || true
+                _success "$svc done"
+                echo ""
+            done
+            ;;
+        enable)
+            local php_service="" extensions=()
+            for arg in "$@"; do
+                case "$arg" in
+                    --php=*) php_service="${arg#*=}" ;;
+                    *)       extensions+=("$arg") ;;
+                esac
+            done
+            [[ ${#extensions[@]} -eq 0 ]] && _die "Usage: bin/mage ext enable <ext...> [--php=php83]"
+
+            local targets=()
+            if [[ -n "$php_service" ]]; then
+                targets=("$php_service")
+            else
+                while IFS= read -r svc; do
+                    [[ -n "$svc" ]] && targets+=("$svc")
+                done < <(docker compose ps --format '{{.Service}}' 2>/dev/null | grep '^php')
+                [[ ${#targets[@]} -eq 0 ]] && _die "No running PHP containers."
+            fi
+
+            for svc in "${targets[@]}"; do
+                for ext in "${extensions[@]}"; do
+                    docker compose exec -T "$svc" php-ext-install --enable "$ext"
+                done
+                docker compose exec -T "$svc" kill -USR2 1 2>/dev/null || true
+                _success "Enabled [${extensions[*]}] on $svc"
+            done
+            ;;
+        disable)
+            local php_service="" extensions=()
+            for arg in "$@"; do
+                case "$arg" in
+                    --php=*) php_service="${arg#*=}" ;;
+                    *)       extensions+=("$arg") ;;
+                esac
+            done
+            [[ ${#extensions[@]} -eq 0 ]] && _die "Usage: bin/mage ext disable <ext...> [--php=php83]"
+
+            local targets=()
+            if [[ -n "$php_service" ]]; then
+                targets=("$php_service")
+            else
+                while IFS= read -r svc; do
+                    [[ -n "$svc" ]] && targets+=("$svc")
+                done < <(docker compose ps --format '{{.Service}}' 2>/dev/null | grep '^php')
+                [[ ${#targets[@]} -eq 0 ]] && _die "No running PHP containers."
+            fi
+
+            for svc in "${targets[@]}"; do
+                for ext in "${extensions[@]}"; do
+                    docker compose exec -T "$svc" php-ext-install --disable "$ext"
+                done
+                docker compose exec -T "$svc" kill -USR2 1 2>/dev/null || true
+                _success "Disabled [${extensions[*]}] on $svc"
+            done
+            ;;
+        list)
+            local php_service="${1:-}"
+            if [[ -z "$php_service" ]]; then
+                php_service=$(docker compose ps --format '{{.Service}}' 2>/dev/null | grep '^php' | head -1)
+                [[ -z "$php_service" ]] && _die "No running PHP containers."
+            fi
+            _header "Extensions on $php_service"
+            docker compose exec -T "$php_service" php -m
+            ;;
+        *)
+            echo "${_bold}bin/mage ext${_reset} — PHP extension management"
+            echo ""
+            echo "${_bold}USAGE${_reset}"
+            echo "    bin/mage ext install <ext...> [--php=php83]   Install extensions"
+            echo "    bin/mage ext remove <ext...> [--php=php83]    Disable extensions"
+            echo "    bin/mage ext enable <ext...> [--php=php83]    Enable installed extension"
+            echo "    bin/mage ext disable <ext...> [--php=php83]   Disable extension"
+            echo "    bin/mage ext list [php83]                     List enabled extensions"
+            echo ""
+            echo "${_bold}EXAMPLES${_reset}"
+            echo "    bin/mage ext install redis imagick            # Install on all running PHP containers"
+            echo "    bin/mage ext install redis --php=php83        # Install only on php83"
+            echo "    bin/mage ext enable xdebug --php=php84        # Enable xdebug on php84"
+            echo "    bin/mage ext disable xdebug                   # Disable xdebug everywhere"
+            echo "    bin/mage ext list php83                        # List extensions on php83"
+            ;;
+    esac
+}
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 main() {
     require_root_dir
@@ -1150,6 +1309,7 @@ main() {
         xdebug)         cmd_xdebug "$@" ;;
         ssl)            cmd_ssl "$@" ;;
         varnish)        cmd_varnish "$@" ;;
+        ext)            cmd_ext "$@" ;;
         install)        cmd_install "$@" ;;
         install-laravel) cmd_install_laravel "$@" ;;
         install-wp)     cmd_install_wp "$@" ;;

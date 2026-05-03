@@ -53,6 +53,7 @@ function Sidebar({ page, setPage }) {
     ['/projects', 'Projects', I('<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>')],
     ['/db', 'Database', I('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/>')],
     ['/build', 'Build', I('<path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>')],
+    ['/extensions', 'Extensions', I('<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>')],
     ['/logs', 'Logs', I('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/>')],
     ['/files', 'Files', I('<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M13 2v7h7"/>')],
     ['/sql', 'SQL', I('<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>')],
@@ -285,6 +286,78 @@ function BuildPage() {
       ${images.map(i => html`<tr><td><b>${i.version}</b></td><td style="font-family:var(--mono);font-size:12px">${i.image}</td><td><span class="badge ${i.built?'badge-green':'badge-red'}">${i.built?'built':'—'}</span></td><td>${i.size||'—'}</td><td><button class="btn btn-sm" onClick=${()=>build([i.version])}>${i.built?'↻ Rebuild':'▶ Build'}</button></td></tr>`)}
     </tbody></table></div>
     ${log && html`<div class="card" style="margin-top:16px"><div class="card-header">Build Output</div><pre class="log-viewer">${log}</pre></div>`}
+  </div>`;
+}
+
+// ── Extensions ────────────────────────────────────────────────────────────────
+function ExtensionsPage() {
+  const [allExts, setAllExts] = useState([]);
+  const [selected, setSelected] = useState('');
+  const [installing, setInstalling] = useState(false);
+  const [log, setLog] = useState('');
+  const [newExt, setNewExt] = useState('');
+
+  const load = async () => {
+    const data = await GET('/api/extensions') || [];
+    setAllExts(data);
+    if (!selected && data.length > 0) setSelected(data[0].service);
+  };
+  useEffect(() => { load(); }, []);
+
+  const current = allExts.find(e => e.service === selected);
+  const extensions = current ? current.extensions : [];
+
+  const installExt = () => {
+    const exts = newExt.trim().split(/[\s,]+/).filter(Boolean);
+    if (exts.length === 0) return;
+    setInstalling(true); setLog('');
+    toast('Installing ' + exts.join(', ') + ' on ' + selected + '...');
+    const ws = new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/api/extensions/install/ws`);
+    ws.onopen = () => ws.send(JSON.stringify({ service: selected, extensions: exts }));
+    ws.onmessage = e => {
+      const d = JSON.parse(e.data);
+      setLog(l => l + (d.line||'') + '\n');
+      if (d.stream === 'done') { toast('Install complete', 'success'); setInstalling(false); setNewExt(''); load(); }
+    };
+    ws.onerror = () => { setInstalling(false); toast('WebSocket error', 'error'); };
+  };
+
+  const toggleExt = async (ext, enable) => {
+    const endpoint = enable ? '/api/extensions/enable' : '/api/extensions/disable';
+    await POST(endpoint, { service: selected, extension: ext.name });
+    toast(`${ext.name} ${enable ? 'enabled' : 'disabled'} on ${selected}`, 'success');
+    load();
+  };
+
+  return html`<div>
+    <div class="page-header"><h1>PHP Extensions</h1></div>
+
+    <div class="card" style="margin-bottom:16px;padding:16px">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <select class="input" value=${selected} onChange=${e => setSelected(e.target.value)} style="width:auto">
+          ${allExts.map(s => html`<option value=${s.service}>${s.service}</option>`)}
+        </select>
+        <input class="input" style="flex:1;min-width:200px" placeholder="Extension names (space-separated, e.g. redis imagick mongodb)"
+          value=${newExt} onChange=${e => setNewExt(e.target.value)}
+          onKeyDown=${e => e.key === 'Enter' && installExt()} />
+        <button class="btn btn-primary" onClick=${installExt} disabled=${installing}>
+          ${installing ? '\u23f3 Installing...' : '\u2795 Install'}
+        </button>
+      </div>
+    </div>
+
+    <div class="card table-wrap">
+      <div class="card-header">Enabled on ${selected} (${extensions.length} extensions)</div>
+      <table><thead><tr><th>Extension</th><th>Type</th><th></th></tr></thead><tbody>
+        ${extensions.map(ext => html`<tr>
+          <td><b>${ext.name}</b></td>
+          <td><span class="badge ${ext.type==='zend'?'badge-orange':'badge-blue'}">${ext.type}</span></td>
+          <td><button class="btn btn-sm btn-danger" onClick=${()=>toggleExt(ext, false)} title="Disable">\u2716</button></td>
+        </tr>`)}
+      </tbody></table>
+    </div>
+
+    ${log && html`<div class="card" style="margin-top:16px"><div class="card-header">Install Output</div><pre class="log-viewer">${log}</pre></div>`}
   </div>`;
 }
 
@@ -643,7 +716,7 @@ function App() {
   const [page, setPage] = useState(getPage());
   useEffect(() => { const h = () => setPage(getPage()); window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
   const nav = p => { location.hash = p; setPage(p.split('?')[0]); };
-  const pages = { '/': Dashboard, '/projects': Projects, '/db': DatabasePage, '/build': BuildPage, '/logs': LogsPage, '/files': FilesPage, '/sql': SQLPage, '/mail': MailPage, '/terminal': TerminalPage, '/settings': SettingsPage };
+  const pages = { '/': Dashboard, '/projects': Projects, '/db': DatabasePage, '/build': BuildPage, '/extensions': ExtensionsPage, '/logs': LogsPage, '/files': FilesPage, '/sql': SQLPage, '/mail': MailPage, '/terminal': TerminalPage, '/settings': SettingsPage };
   const Page = pages[page] || Dashboard;
   return html`<div class="app"><${Sidebar} page=${page} setPage=${nav} /><main class="main"><${Page} /></main></div>`;
 }
