@@ -8,6 +8,7 @@ ARG BASE_IMAGE=ubuntu:24.04
 FROM ${BASE_IMAGE}
 
 ARG PHP_VERSION=8.3
+ARG PHP_EXTENSIONS=""
 ARG COMPOSER_VERSION=2.8.4
 ARG NODE_MAJOR=20
 ARG XDEBUG_VERSION=3.3.2
@@ -167,6 +168,18 @@ RUN mkdir -p /home/nginx/.composer && \
 # --- sudo for nginx user (passwordless) -------------------------------------
 RUN echo "nginx ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/nginx && \
     chmod 0440 /etc/sudoers.d/nginx
+
+# --- Extension installer helper -----------------------------------------------
+COPY php-ext-install /usr/local/bin/php-ext-install
+RUN chmod +x /usr/local/bin/php-ext-install
+
+# --- User-requested extensions (via PHP_EXTENSIONS build arg) -----------------
+# Usage in docker-compose.yml:
+#   args:
+#     PHP_EXTENSIONS: "redis imagick mongodb"
+RUN if [ -n "${PHP_EXTENSIONS}" ]; then \
+        php-ext-install ${PHP_EXTENSIONS}; \
+    fi
 
 # --- Entrypoint --------------------------------------------------------------
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

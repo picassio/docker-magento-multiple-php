@@ -437,6 +437,27 @@ bin/mage build nginx
 
 ### Installing PHP extensions
 
+#### Option 1: Build-time (persists across rebuilds) — recommended
+
+Add `PHP_EXTENSIONS` to your service in `docker-compose.yml`:
+
+```yaml
+  php83:
+    build:
+      context: ./build/php
+      args:
+        PHP_VERSION: "8.3"
+        PHP_EXTENSIONS: "redis imagick mongodb"  # space-separated
+```
+
+Then rebuild:
+
+```bash
+bin/mage build php83
+```
+
+#### Option 2: Runtime (inside a running container)
+
 A built-in `php-ext-install` helper is available inside every PHP container:
 
 ```bash
@@ -466,12 +487,8 @@ php-ext-install --fpm-only redis
 kill -USR2 1
 ```
 
-To persist extensions across rebuilds, add them to a custom Dockerfile:
-
-```dockerfile
-FROM your-php-image
-RUN php-ext-install redis imagick
-```
+> **Note:** Runtime-installed extensions are lost when the container is rebuilt.
+> Use `PHP_EXTENSIONS` build arg for permanent installs.
 
 ### System tuning (first-time setup)
 
