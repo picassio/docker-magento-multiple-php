@@ -110,10 +110,12 @@ var svcOrder = map[string]int{
 }
 
 func ServicesUp(c echo.Context) error {
-	res, _ := exec.Mage("up")
+	res, _ := exec.DockerCompose("up", "-d", "--no-build")
 	out := ""
 	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
-	return ok(c, map[string]string{"status": "started", "output": out})
+	status := "started"
+	if res != nil && res.ExitCode != 0 { status = "error" }
+	return ok(c, map[string]string{"status": status, "output": out})
 }
 
 // getNonUIServices returns all running service names except the UI
@@ -164,10 +166,18 @@ func StartService(c echo.Context) error {
 	if hiddenServices[name] {
 		return fail(c, 400, "Cannot control the UI service from the UI")
 	}
-	res, _ := exec.DockerCompose("up", "-d", name)
+	// Use --no-build to prevent hanging on missing images
+	res, _ := exec.DockerCompose("up", "-d", "--no-build", name)
 	out := ""
 	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
-	return ok(c, map[string]string{"status": "started", "service": name, "output": out})
+	status := "started"
+	if res != nil && res.ExitCode != 0 {
+		status = "error"
+		if strings.Contains(out, "no such image") || strings.Contains(out, "No such image") || strings.Contains(out, "pull access denied") {
+			out = "Image for " + name + " not built yet. Go to Build page to build it first.\n\n" + out
+		}
+	}
+	return ok(c, map[string]string{"status": status, "service": name, "output": out})
 }
 
 func StopService(c echo.Context) error {

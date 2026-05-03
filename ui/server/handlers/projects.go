@@ -254,14 +254,19 @@ func StartProject(c echo.Context) error {
 	}
 
 	args := buildProjectComposeArgs(p)
-	args = append(args, "up", "-d")
+	args = append(args, "up", "-d", "--no-build")
 	args = append(args, projectServices(p)...)
 
 	res, _ := exec.Run("docker", args...)
 	out := ""
 	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
 	status := "started"
-	if res != nil && res.ExitCode != 0 { status = "error" }
+	if res != nil && res.ExitCode != 0 {
+		status = "error"
+		if strings.Contains(out, "no such image") || strings.Contains(out, "No such image") || strings.Contains(out, "pull access denied") {
+			out = "Image not built yet. Go to Build page to build it first.\n\n" + out
+		}
+	}
 	return ok(c, map[string]string{"status": status, "output": out})
 }
 
