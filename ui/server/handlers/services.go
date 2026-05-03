@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"sort"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -80,6 +81,24 @@ func ListAllServices(c echo.Context) error {
 		}
 		services = append(services, entry)
 	}
+	// Stable sort: infra first, then PHP by version, then data, then tools
+	order := map[string]int{
+		"nginx": 1,
+		"php70": 10, "php71": 11, "php72": 12, "php73": 13, "php74": 14,
+		"php81": 15, "php82": 16, "php83": 17, "php84": 18, "php85": 19,
+		"mysql": 30, "mysql80": 31, "mariadb": 32,
+		"redis": 40, "redis6": 41,
+		"opensearch": 50, "opensearch1": 51,
+		"elasticsearch": 52, "elasticsearch7": 53,
+		"rabbitmq": 60,
+		"mailpit": 70, "varnish": 80,
+	}
+	sort.SliceStable(services, func(i, j int) bool {
+		oi, oj := 100, 100
+		if v, ok := order[services[i]["service"]]; ok { oi = v }
+		if v, ok := order[services[j]["service"]]; ok { oj = v }
+		return oi < oj
+	})
 	return ok(c, services)
 }
 
