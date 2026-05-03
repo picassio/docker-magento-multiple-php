@@ -181,7 +181,7 @@ Tech: Go binary (12MB) with embedded Preact + Ace Editor + xterm.js. Zero CDN de
 |---|---|
 | `setup` | Interactive first-time setup |
 | `doctor [fix]` | Check/fix system settings (sysctl, THP, Docker logs) |
-| `build [php...]` | Build PHP from source (or all). Uses `--no-cache` by default. Use `--with=legacy` for PHP 7.x, `--cache` to use Docker cache |
+| `build [php...]` | Build PHP from source (or all). Use `--with=legacy` for PHP 7.x, `--no-cache` to force rebuild |
 | `up [services...]` | Smart start from projects.json (or explicit services) |
 | `up --with=<override>` | Start with specific compose override |
 | `down` | Stop & remove all containers |
@@ -421,9 +421,9 @@ bin/mage build php83
 # Build including legacy PHP 7.x
 bin/mage build --with=legacy
 
-# Builds always use --no-cache by default; opt into cache if needed:
-bin/mage build --cache
-bin/mage build php83 --cache
+# Force rebuild without Docker cache
+bin/mage build --no-cache
+bin/mage build php83 --no-cache
 
 # Pre-built images (nginx, mysql, redis, opensearch, etc.) are pulled
 # automatically on 'bin/mage up' — no build needed:
