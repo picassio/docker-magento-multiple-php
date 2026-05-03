@@ -127,7 +127,7 @@ function Projects() {
   const [cmdProject, setCmdProject] = useState(null);
   const load = async () => setProjects(await GET('/api/projects') || []);
   useEffect(() => { load(); }, []);
-  const phpOpts = ['php70','php71','php72','php73','php74','php81','php82','php83','php84'];
+  const phpOpts = ['php70','php71','php72','php73','php74','php81','php82','php83','php84','php85'];
   const dbOpts = ['mysql','mysql80','mariadb'];
   const searchOpts = ['opensearch','opensearch1','elasticsearch','elasticsearch7','none'];
   return html`<div>
@@ -237,7 +237,7 @@ function AddProjectModal({ show, onClose }) {
     <div class="form-group"><label>Domain</label><input value=${form.domain} onInput=${e=>setForm({...form,domain:e.target.value})} placeholder="mysite.test" style="width:100%"/></div>
     <div class="form-row">
       <div class="form-group"><label>Type</label><select value=${form.app} onChange=${e=>setForm({...form,app:e.target.value})} style="width:100%"><option value="magento2">Magento 2</option><option value="laravel">Laravel</option><option value="wordpress">WordPress</option><option value="default">Default</option></select></div>
-      <div class="form-group"><label>PHP</label><select value=${form.php} onChange=${e=>setForm({...form,php:e.target.value})} style="width:100%"><option>php84</option><option>php83</option><option>php82</option><option>php81</option></select></div>
+      <div class="form-group"><label>PHP</label><select value=${form.php} onChange=${e=>setForm({...form,php:e.target.value})} style="width:100%"><option>php85</option><option>php84</option><option>php83</option><option>php82</option><option>php81</option></select></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>DB</label><select value=${form.db_service} onChange=${e=>setForm({...form,db_service:e.target.value})} style="width:100%"><option value="mysql">MySQL 8.4</option><option value="mysql80">MySQL 8.0</option><option value="mariadb">MariaDB</option></select></div>
@@ -726,7 +726,7 @@ function SettingsPage() {
 
     <div class="card" style="margin-bottom:16px"><div class="card-header">Xdebug</div>
       <div style="display:flex;gap:16px;flex-wrap:wrap;padding:8px">
-        ${['php81','php82','php83','php84'].map(p=>html`<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg);border-radius:var(--radius-sm)">
+        ${['php81','php82','php83','php84','php85'].map(p=>html`<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg);border-radius:var(--radius-sm)">
           <b>${p}</b> <button class="btn btn-sm btn-success" onClick=${()=>{toast('Xdebug on '+p);POST('/api/xdebug/'+p+'/on');}}>On</button><button class="btn btn-sm" onClick=${()=>{toast('Xdebug off '+p);POST('/api/xdebug/'+p+'/off');}}>Off</button>
         </div>`)}
       </div>
