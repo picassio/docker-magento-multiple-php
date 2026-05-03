@@ -73,9 +73,17 @@ func BuildImagesWS(c echo.Context) error {
 	ctx := c.Request().Context()
 	_, msg, err := conn.Read(ctx)
 	if err != nil { return err }
-	var req struct{ Versions []string `json:"versions"` }
+	var req struct {
+		Versions   []string `json:"versions"`
+		Extensions string   `json:"extensions"`
+	}
 	json.Unmarshal(msg, &req)
-	return exec.StreamToWS(ctx, conn, exec.RootDir+"/bin/mage", append([]string{"build"}, req.Versions...)...)
+	args := []string{"build"}
+	if req.Extensions != "" {
+		args = append(args, "--ext="+req.Extensions)
+	}
+	args = append(args, req.Versions...)
+	return exec.StreamToWS(ctx, conn, exec.RootDir+"/bin/mage", args...)
 }
 
 func StreamLogsWS(c echo.Context) error {

@@ -434,11 +434,13 @@ cmd_build() {
     local overrides=()
     local services=()
     local no_cache=false
+    local php_extensions=""
 
     for arg in "$@"; do
         case "$arg" in
             --with=*)    overrides+=("${arg#*=}") ;;
             --no-cache)  no_cache=true ;;
+            --ext=*)     php_extensions="${arg#*=}" ;;
             -*)          _die "Unknown option: $arg" ;;
             *)           services+=("$arg") ;;
         esac
@@ -482,11 +484,17 @@ cmd_build() {
     _arrow "Building PHP images..."
     echo ""
 
+    # Build args (extensions override)
+    local build_args=""
+    if [[ -n "$php_extensions" ]]; then
+        build_args="--build-arg PHP_EXTENSIONS=${php_extensions}"
+    fi
+
     export DC_FILE_FLAGS="$file_flags"
     if [[ ${#buildable[@]} -gt 0 ]]; then
-        dc build $cache_flag "${buildable[@]}"
+        dc build $cache_flag $build_args "${buildable[@]}"
     else
-        dc build $cache_flag
+        dc build $cache_flag $build_args
     fi
     unset DC_FILE_FLAGS
     _success "Build complete"

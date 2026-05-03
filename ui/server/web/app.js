@@ -269,12 +269,13 @@ function DatabasePage() {
 function BuildPage() {
   const [images, setImages] = useState([]);
   const [log, setLog] = useState('');
+  const [extensions, setExtensions] = useState('');
   const load = async () => setImages(await GET('/api/images') || []);
   useEffect(() => { load(); }, []);
   const build = (versions) => {
     setLog(''); toast('Building '+versions.join(', ')+'...');
     const ws = new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/api/images/build/ws`);
-    ws.onopen = () => ws.send(JSON.stringify({ versions }));
+    ws.onopen = () => ws.send(JSON.stringify({ versions, extensions: extensions.trim() }));
     ws.onmessage = e => { const d = JSON.parse(e.data); setLog(l => l + (d.line||'') + '\n'); if (d.stream==='done') { toast('Build done','success'); load(); } };
   };
   return html`<div>
@@ -282,6 +283,14 @@ function BuildPage() {
       <button class="btn btn-primary" onClick=${()=>build(images.map(i=>i.version))}>▶ Build All</button>
       <button class="btn" onClick=${()=>build(images.filter(i=>!i.built).map(i=>i.version))}>Build Missing</button>
     </div></div>
+    <div class="card" style="margin-bottom:16px;padding:16px">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <label style="font-weight:600;white-space:nowrap">Bake extensions into image:</label>
+        <input class="input" style="flex:1;min-width:200px" placeholder="e.g. redis imagick newrelic (space-separated, optional)"
+          value=${extensions} onChange=${e => setExtensions(e.target.value)} />
+      </div>
+      <div style="margin-top:8px;font-size:12px;opacity:0.7">Extensions listed here are compiled into the image and persist across container restarts.</div>
+    </div>
     <div class="card table-wrap"><table><thead><tr><th>Version</th><th>Image</th><th>Status</th><th>Size</th><th></th></tr></thead><tbody>
       ${images.map(i => html`<tr><td><b>${i.version}</b></td><td style="font-family:var(--mono);font-size:12px">${i.image}</td><td><span class="badge ${i.built?'badge-green':'badge-red'}">${i.built?'built':'—'}</span></td><td>${i.size||'—'}</td><td><button class="btn btn-sm" onClick=${()=>build([i.version])}>${i.built?'↻ Rebuild':'▶ Build'}</button></td></tr>`)}
     </tbody></table></div>
