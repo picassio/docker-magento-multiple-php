@@ -38,7 +38,7 @@ bin/mage magento mysite.com cache:flush
 - **Multi-framework** — Magento 1/2, Laravel, WordPress, and generic PHP projects in one stack
 - **Project management** — register projects with `bin/mage project add`, switch PHP/DB/search per project, enable/disable without data loss
 - **Smart start** — `bin/mage up` reads `projects.json`, starts only the services your projects need, auto-loads the right compose override files
-- **Multi-PHP** — PHP 7.0–8.4 simultaneously (PPA for 7.4+, compiled from source for 7.0–7.3)
+- **Multi-PHP** — PHP 7.0–8.5 simultaneously (all compiled from source)
 - **Multi-database** — MySQL 8.4, MySQL 8.0, MariaDB 11.4 on separate ports — all at once
 - **Multi-search** — OpenSearch 2.x, OpenSearch 1.x, Elasticsearch 8.x, ES 7.x — all simultaneously
 - **Multi-cache** — Redis 7.x and Redis 6.x on separate ports
@@ -69,7 +69,7 @@ bin/mage magento mysite.com cache:flush
 │   └── dashboards.yml    #   OpenSearch Dashboards
 ├── build/
 │   ├── php/              # Dockerfile for PHP 7.4–8.4 (ondrej PPA)
-│   └── php-legacy/       # Dockerfile for PHP 7.0–7.3 (compiled from source)
+│                         # (unified Dockerfile handles PHP 7.0–8.5)
 ├── conf/                 # Nginx, PHP, MySQL, Varnish configs
 ├── data/                 # Persistent DB data
 ├── databases/import|export/
@@ -627,7 +627,7 @@ All fixes persist across reboots (written to `/etc/sysctl.conf` + systemd servic
 | `mailhog` | `mailpit` (port 8025) |
 | `elasticsearch` | `opensearch` (default) |
 | `docker-compose up` | `docker compose up` |
-| Per-version Dockerfiles | `build/php/` + `build/php-legacy/` (both compile from source) |
+| Per-version Dockerfiles | `build/php/` (single unified Dockerfile for all versions) |
 | All services in one file | Core + `compose/*.yml` overrides |
 | Manual service selection | `projects.json` + smart `bin/mage up` |
 

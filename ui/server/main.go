@@ -69,9 +69,12 @@ func main() {
 
 	// Services
 	api.GET("/services", handlers.ListServices)
+	api.GET("/services/all", handlers.ListAllServices)
 	api.POST("/services/up", handlers.ServicesUp)
 	api.POST("/services/down", handlers.ServicesDown)
 	api.POST("/services/stop", handlers.ServicesStop)
+	api.POST("/services/:name/start", handlers.StartService)
+	api.POST("/services/:name/stop", handlers.StopService)
 	api.POST("/services/:name/restart", handlers.RestartService)
 
 	// Databases

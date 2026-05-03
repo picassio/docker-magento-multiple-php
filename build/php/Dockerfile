@@ -1,6 +1,6 @@
 # ==============================================================================
 # Unified PHP Dockerfile — Builds PHP from source
-# Supports PHP 8.1 – 8.4 via build arguments
+# Supports PHP 7.0 – 8.5 via build arguments
 # No external PPA dependency — works on any network (WSL2, VPN, air-gapped)
 # ==============================================================================
 
@@ -52,7 +52,19 @@ RUN apt-get update -y && \
         libsqlite3-dev zlib1g-dev libpng-dev libjpeg-dev libfreetype6-dev \
         libicu-dev libxslt1-dev libzip-dev libonig-dev libsodium-dev \
         libbz2-dev libgmp-dev libc-client-dev libkrb5-dev libwebp-dev \
-        libargon2-dev libavif-dev xz-utils \
+        libargon2-dev xz-utils \
+    && \
+    # Optional libs (may not exist on older distros)
+    apt-get install -y libavif-dev libmcrypt-dev libfreetype-dev 2>/dev/null || true && \
+    # PHP 7.x configure needs legacy *-config scripts removed in newer distros
+    if ! command -v freetype-config >/dev/null 2>&1; then \
+        printf '#!/bin/sh\ncase "$1" in\n  --cflags) pkg-config --cflags freetype2;;\n  --libs) pkg-config --libs freetype2;;\n  --prefix) pkg-config --variable=prefix freetype2;;\n  --version) pkg-config --modversion freetype2;;\n  *) pkg-config "$@" freetype2;;\nesac\n' > /usr/local/bin/freetype-config && \
+        chmod +x /usr/local/bin/freetype-config; \
+    fi && \
+    if ! command -v icu-config >/dev/null 2>&1; then \
+        printf '#!/bin/sh\ncase "$1" in\n  --cflags|--cppflags) pkg-config --cflags icu-uc icu-io;;\n  --ldflags|--ldflags-searchpath) pkg-config --libs-only-L icu-uc;;\n  --libs) echo "-licui18n -licuuc -licudata";;\n  --prefix) pkg-config --variable=prefix icu-uc;;\n  --version) pkg-config --modversion icu-uc;;\n  --detect-prefix) true;;\n  *) echo "";;\nesac\n' > /usr/local/bin/icu-config && \
+        chmod +x /usr/local/bin/icu-config; \
+    fi \
     && \
     (apt-get install -y tini 2>/dev/null || \
         (curl -fsSL https://github.com/krallin/tini/releases/download/v0.19.0/tini -o /usr/bin/tini && chmod +x /usr/bin/tini)) && \
@@ -74,7 +86,10 @@ RUN if [ -z "${PHP_PATCH_VERSION}" ]; then \
     echo "Building PHP $(cat /tmp/php_patch_version)"
 
 # --- Download & compile PHP from source --------------------------------------
+# Configure flags differ between PHP 7.x and 8.x
 RUN PHP_FULL=$(cat /tmp/php_patch_version) && \
+    PHP_MAJOR=$(echo ${PHP_VERSION} | cut -d. -f1) && \
+    PHP_MINOR=$(echo ${PHP_VERSION} | cut -d. -f2) && \
     mkdir -p /usr/src && cd /usr/src && \
     curl -fsSL "https://www.php.net/distributions/php-${PHP_FULL}.tar.xz" -o php.tar.xz && \
     tar xf php.tar.xz && \
@@ -83,52 +98,53 @@ RUN PHP_FULL=$(cat /tmp/php_patch_version) && \
     gnuArch="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)" && \
     debMultiarch="$(dpkg-architecture --query DEB_BUILD_MULTIARCH)" && \
     \
-    ./configure \
-        --build="$gnuArch" \
+    # Common flags for all versions
+    CONFIGURE_FLAGS="\
+        --build=$gnuArch \
         --prefix=${PHP_PREFIX} \
         --sbindir=${PHP_PREFIX}/sbin \
         --sysconfdir=${PHP_INI_DIR} \
         --with-config-file-path=${PHP_INI_DIR}/cli \
         --with-config-file-scan-dir=${PHP_INI_DIR}/cli/conf.d \
-        --with-libdir="lib/$debMultiarch" \
-        \
-        # FPM
+        --with-libdir=lib/$debMultiarch \
         --enable-fpm --with-fpm-user=nginx --with-fpm-group=nginx \
-        \
-        # Core extensions (built-in)
-        --enable-mbstring \
-        --enable-mysqlnd \
-        --enable-opcache \
-        --enable-intl \
-        --enable-bcmath \
-        --enable-soap \
-        --enable-exif \
-        --enable-sockets \
-        --enable-pcntl \
-        --enable-ftp \
-        --enable-gd --with-jpeg --with-freetype --with-webp --with-avif \
-        \
-        # Shared libraries
-        --with-curl \
-        --with-zip \
-        --with-iconv \
-        --with-openssl \
-        --with-readline \
-        --with-zlib \
-        --with-pdo-mysql=mysqlnd \
-        --with-mysqli=mysqlnd \
-        --with-mysql-sock \
-        --with-xsl \
-        --with-mhash \
-        --with-bz2 \
-        --with-gmp \
-        --with-sodium \
-        --with-password-argon2 \
-        --with-pear \
-        --with-pic \
-        \
-        --disable-cgi \
-        --disable-phpdbg \
+        --enable-mbstring --enable-mysqlnd --enable-opcache \
+        --enable-intl --enable-bcmath --enable-soap \
+        --enable-exif --enable-sockets \
+        --with-curl --with-iconv --with-openssl \
+        --with-readline --with-zlib --with-pdo-mysql=mysqlnd \
+        --with-mysqli=mysqlnd --with-mysql-sock --with-xsl \
+        --with-mhash --with-bz2 --with-gmp \
+        --with-pic --with-pear --disable-cgi --disable-phpdbg" && \
+    \
+    if [ "$PHP_MAJOR" = "7" ]; then \
+        # PHP 7.x flags (legacy GD API, mcrypt, xmlrpc, enable-zip)
+        CONFIGURE_FLAGS="$CONFIGURE_FLAGS \
+            --enable-zip \
+            --with-gd --with-jpeg-dir=/usr --with-png-dir=/usr \
+            --with-freetype-dir=/usr --with-xmlrpc"; \
+        # --with-webp-dir: PHP 7.1+
+        if [ "$PHP_MINOR" -ge 1 ]; then \
+            CONFIGURE_FLAGS="$CONFIGURE_FLAGS --with-webp-dir=/usr"; \
+        fi; \
+        # --with-mcrypt: built-in for PHP 7.0-7.1
+        if [ "$PHP_MINOR" -le 1 ]; then \
+            CONFIGURE_FLAGS="$CONFIGURE_FLAGS --with-mcrypt"; \
+        fi; \
+    else \
+        # PHP 8.x flags (new GD API, sodium, argon2, pcntl, ftp, avif)
+        CONFIGURE_FLAGS="$CONFIGURE_FLAGS \
+            --enable-pcntl --enable-ftp \
+            --with-zip \
+            --enable-gd --with-jpeg --with-freetype --with-webp \
+            --with-sodium --with-password-argon2"; \
+        # --with-avif: PHP 8.1+
+        if pkg-config --exists libavif 2>/dev/null; then \
+            CONFIGURE_FLAGS="$CONFIGURE_FLAGS --with-avif"; \
+        fi; \
+    fi && \
+    \
+    ./configure $CONFIGURE_FLAGS \
     && \
     make -j "$(nproc)" && \
     make install && \

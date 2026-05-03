@@ -46,6 +46,43 @@ func str(m map[string]interface{}, k string) string {
 	return ""
 }
 
+// ListAllServices returns all defined services (running or not) from compose config
+func ListAllServices(c echo.Context) error {
+	// Get all defined services
+	res, _ := exec.DockerCompose("config", "--services")
+	if res == nil {
+		return ok(c, []map[string]string{})
+	}
+
+	// Get running services
+	runningRes, _ := exec.DockerCompose("ps", "--format", "{{.Service}}\t{{.State}}\t{{.Status}}\t{{.Ports}}", "-a")
+	running := map[string]map[string]string{}
+	if runningRes != nil {
+		for _, line := range strings.Split(runningRes.Stdout, "\n") {
+			parts := strings.SplitN(strings.TrimSpace(line), "\t", 4)
+			if len(parts) >= 2 {
+				running[parts[0]] = map[string]string{"state": parts[1]}
+				if len(parts) >= 3 { running[parts[0]]["status"] = parts[2] }
+				if len(parts) >= 4 { running[parts[0]]["ports"] = parts[3] }
+			}
+		}
+	}
+
+	var services []map[string]string
+	for _, svc := range strings.Split(res.Stdout, "\n") {
+		svc = strings.TrimSpace(svc)
+		if svc == "" || hiddenServices[svc] { continue }
+		entry := map[string]string{"service": svc, "state": "stopped", "status": "", "ports": ""}
+		if r, ok := running[svc]; ok {
+			entry["state"] = r["state"]
+			entry["status"] = r["status"]
+			entry["ports"] = r["ports"]
+		}
+		services = append(services, entry)
+	}
+	return ok(c, services)
+}
+
 func ServicesUp(c echo.Context) error {
 	res, _ := exec.Mage("up")
 	out := ""
@@ -96,10 +133,32 @@ func ServicesStop(c echo.Context) error {
 	return ok(c, map[string]string{"status": "stopped", "output": out})
 }
 
+func StartService(c echo.Context) error {
+	name := c.Param("name")
+	if hiddenServices[name] {
+		return fail(c, 400, "Cannot control the UI service from the UI")
+	}
+	res, _ := exec.DockerCompose("up", "-d", name)
+	out := ""
+	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	return ok(c, map[string]string{"status": "started", "service": name, "output": out})
+}
+
+func StopService(c echo.Context) error {
+	name := c.Param("name")
+	if hiddenServices[name] {
+		return fail(c, 400, "Cannot control the UI service from the UI")
+	}
+	res, _ := exec.DockerCompose("stop", name)
+	out := ""
+	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	return ok(c, map[string]string{"status": "stopped", "service": name, "output": out})
+}
+
 func RestartService(c echo.Context) error {
 	name := c.Param("name")
 	if hiddenServices[name] {
-		return fail(c, 400, "Cannot restart the UI service from the UI")
+		return fail(c, 400, "Cannot control the UI service from the UI")
 	}
 	res, _ := exec.Mage("restart", name)
 	out := ""

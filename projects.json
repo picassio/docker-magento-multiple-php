@@ -1,4 +1,12 @@
 {
+  "Fffgg.kglg": {
+    "app": "magento2",
+    "db_name": "Fffgg_kglg",
+    "db_service": "mysql",
+    "enabled": true,
+    "php": "php85",
+    "search": "opensearch"
+  },
   "app.test": {
     "app": "default",
     "db_name": "app_test",

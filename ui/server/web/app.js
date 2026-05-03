@@ -50,6 +50,7 @@ function Sidebar({ page, setPage }) {
   const I = (d) => html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" dangerouslySetInnerHTML=${{__html:d}}/>`;
   const items = [
     ['/', 'Dashboard', I('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>')],
+    ['/services', 'Services', I('<circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>')],
     ['/projects', 'Projects', I('<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>')],
     ['/db', 'Database', I('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/>')],
     ['/build', 'Build', I('<path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>')],
@@ -117,6 +118,59 @@ function Dashboard() {
       html`<div class="card table-wrap"><table><thead><tr><th>Domain</th><th>Type</th><th>PHP</th><th>DB</th><th>Search</th><th>Status</th></tr></thead><tbody>
         ${projects.map(p => { const [label,color] = appBadge(p.app); return html`<tr><td><b>${p.domain}</b></td><td><span class="badge badge-${color}">${label}</span></td><td>${p.php}</td><td>${p.db_service}</td><td>${p.search}</td><td><span class="badge ${p.enabled?'badge-green':'badge-red'}">${p.enabled?'on':'off'}</span></td></tr>`; })}
       </tbody></table></div>`}
+  </div>`;
+}
+
+// ── Services ─────────────────────────────────────────────────────────────────
+function ServicesPage() {
+  const [services, setServices] = useState([]);
+  const [busy, setBusy] = useState({});
+  const load = async () => setServices(await GET('/api/services/all') || []);
+  useEffect(() => { load(); const t = setInterval(load, 4000); return () => clearInterval(t); }, []);
+
+  const act = async (svc, action) => {
+    setBusy(b => ({...b, [svc]: action}));
+    toast(`${action}ing ${svc}...`);
+    await POST('/api/services/'+svc+'/'+action);
+    toast(`${svc} ${action}ed`, 'success');
+    await load();
+    setBusy(b => { const n = {...b}; delete n[svc]; return n; });
+  };
+
+  const running = services.filter(s => (s.state||'').toLowerCase().includes('running')).length;
+  const stopped = services.length - running;
+
+  return html`<div>
+    <div class="page-header"><h1>Services</h1><div class="actions">
+      <button class="btn btn-success" onClick=${async () => { toast('Starting all...'); await POST('/api/services/up'); load(); }}>\u25b6 Start All</button>
+      <button class="btn btn-danger" onClick=${async () => { toast('Stopping all...'); await POST('/api/services/stop'); load(); }}>\u25a0 Stop All</button>
+    </div></div>
+
+    <div style="display:flex;gap:12px;margin-bottom:16px">
+      <div class="badge badge-green" style="padding:6px 12px">${running} running</div>
+      <div class="badge badge-red" style="padding:6px 12px">${stopped} stopped</div>
+    </div>
+
+    <div class="card table-wrap"><table><thead><tr><th>Service</th><th>State</th><th>Status</th><th>Ports</th><th style="text-align:right">Actions</th></tr></thead><tbody>
+      ${services.map(s => {
+        const isRunning = (s.state||'').toLowerCase().includes('running');
+        const isBusy = !!busy[s.service];
+        return html`<tr>
+          <td><b>${s.service}</b></td>
+          <td><span class="badge ${isRunning?'badge-green':'badge-red'}">${isRunning?'running':'stopped'}</span></td>
+          <td style="font-size:12px;color:var(--text2)">${s.status||'\u2014'}</td>
+          <td style="font-family:var(--mono);font-size:12px">${s.ports||'\u2014'}</td>
+          <td style="text-align:right;white-space:nowrap">
+            ${isRunning ? html`
+              <button class="btn btn-sm btn-danger" onClick=${()=>act(s.service,'stop')} disabled=${isBusy}>${isBusy?'...':'\u25a0 Stop'}</button>
+              <button class="btn btn-sm" onClick=${()=>act(s.service,'restart')} disabled=${isBusy}>${isBusy?'...':'\u21bb Restart'}</button>
+            ` : html`
+              <button class="btn btn-sm btn-success" onClick=${()=>act(s.service,'start')} disabled=${isBusy}>${isBusy?'...':'\u25b6 Start'}</button>
+            `}
+          </td>
+        </tr>`;
+      })}
+    </tbody></table></div>
   </div>`;
 }
 
@@ -747,7 +801,7 @@ function App() {
   const [page, setPage] = useState(getPage());
   useEffect(() => { const h = () => setPage(getPage()); window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
   const nav = p => { location.hash = p; setPage(p.split('?')[0]); };
-  const pages = { '/': Dashboard, '/projects': Projects, '/db': DatabasePage, '/build': BuildPage, '/extensions': ExtensionsPage, '/logs': LogsPage, '/files': FilesPage, '/sql': SQLPage, '/mail': MailPage, '/terminal': TerminalPage, '/settings': SettingsPage };
+  const pages = { '/': Dashboard, '/services': ServicesPage, '/projects': Projects, '/db': DatabasePage, '/build': BuildPage, '/extensions': ExtensionsPage, '/logs': LogsPage, '/files': FilesPage, '/sql': SQLPage, '/mail': MailPage, '/terminal': TerminalPage, '/settings': SettingsPage };
   const Page = pages[page] || Dashboard;
   return html`<div class="app"><${Sidebar} page=${page} setPage=${nav} /><main class="main"><${Page} /></main></div>`;
 }

@@ -2,7 +2,7 @@
 services:
   php70:
     build:
-      context: ./build/php-legacy
+      context: ./build/php
       args:
         BASE_IMAGE: ubuntu:bionic
         PHP_VERSION: "7.0"
@@ -23,7 +23,7 @@ services:
 
   php71:
     build:
-      context: ./build/php-legacy
+      context: ./build/php
       args:
         BASE_IMAGE: ubuntu:bionic
         PHP_VERSION: "7.1"
@@ -44,7 +44,7 @@ services:
 
   php72:
     build:
-      context: ./build/php-legacy
+      context: ./build/php
       args:
         BASE_IMAGE: ubuntu:focal
         PHP_VERSION: "7.2"
@@ -65,7 +65,7 @@ services:
 
   php73:
     build:
-      context: ./build/php-legacy
+      context: ./build/php
       args:
         BASE_IMAGE: ubuntu:focal
         PHP_VERSION: "7.3"
