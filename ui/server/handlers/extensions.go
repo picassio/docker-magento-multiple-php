@@ -55,6 +55,7 @@ func ListAllExtensions(c echo.Context) error {
 	for _, svc := range strings.Split(res.Stdout, "\n") {
 		svc = strings.TrimSpace(svc)
 		if !strings.HasPrefix(svc, "php") { continue }
+		if svc == "phpmyadmin" { continue }
 		phpRes, _ := exec.DockerCompose("exec", "-T", svc, "php", "-m")
 		if phpRes == nil || phpRes.ExitCode != 0 { continue }
 
