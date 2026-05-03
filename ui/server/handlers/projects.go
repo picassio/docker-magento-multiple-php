@@ -259,7 +259,7 @@ func StartProject(c echo.Context) error {
 
 	res, _ := exec.Run("docker", args...)
 	out := ""
-	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
 	status := "started"
 	if res != nil && res.ExitCode != 0 {
 		status = "error"
@@ -299,7 +299,7 @@ func StopProject(c echo.Context) error {
 	if len(toStop) > 0 {
 		args := append([]string{"stop"}, toStop...)
 		res, _ := exec.DockerCompose(args...)
-		if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+		if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
 	} else {
 		out = "All services shared with other projects — nothing to stop"
 	}

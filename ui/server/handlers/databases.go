@@ -62,7 +62,7 @@ func CreateDatabase(c echo.Context) error {
 	if req.Name == "" { return fail(c, 400, "name required") }
 	if req.Service == "" { req.Service = "mysql" }
 	res, _ := exec.Run(exec.RootDir+"/scripts/database", "create", "--database-name="+req.Name, "--db-service="+req.Service)
-	if res != nil && res.ExitCode != 0 { return fail(c, 400, exec.StripAnsi(res.Stderr+"\n"+res.Stdout)) }
+	if res != nil && res.ExitCode != 0 { return fail(c, 400, exec.StripNoise(res.Stderr+"\n"+res.Stdout)) }
 	return ok(c, map[string]string{"status": "created", "name": req.Name})
 }
 
@@ -116,6 +116,6 @@ func ImportDatabase(c echo.Context) error {
 	res, _ := exec.Run(exec.RootDir+"/scripts/database", "import", "--source="+file.Filename, "--target="+target, "--db-service="+svc)
 	os.Remove(filepath.Join(dir, file.Filename))
 	out := ""
-	if res != nil { out = exec.StripAnsi(res.Stdout) }
+	if res != nil { out = exec.StripNoise(res.Stdout) }
 	return c.JSON(http.StatusOK, map[string]string{"status": "imported", "output": out})
 }

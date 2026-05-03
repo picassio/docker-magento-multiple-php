@@ -14,7 +14,7 @@ import (
 func Doctor(c echo.Context) error {
 	res, _ := exec.Run(exec.RootDir+"/scripts/doctor", "check")
 	output := ""
-	if res != nil { output = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	if res != nil { output = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
 	var checks []map[string]string
 	for _, l := range strings.Split(output, "\n") {
 		l = strings.TrimSpace(l)
@@ -30,7 +30,7 @@ func Doctor(c echo.Context) error {
 func DoctorFix(c echo.Context) error {
 	res, _ := exec.Run(exec.RootDir+"/scripts/doctor", "fix")
 	out := ""
-	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
 	return ok(c, map[string]string{"status": "fixed", "output": out})
 }
 
@@ -77,7 +77,7 @@ func XdebugStatus(c echo.Context) error {
 	php := c.Param("php")
 	res, _ := exec.Mage("xdebug", "status", php)
 	out := ""
-	if res != nil { out = exec.StripAnsi(res.Stdout) }
+	if res != nil { out = exec.StripNoise(res.Stdout) }
 	enabled := strings.Contains(strings.ToLower(out), "enabled")
 	return ok(c, map[string]interface{}{"php": php, "enabled": enabled, "output": out})
 }
@@ -87,7 +87,7 @@ func XdebugToggle(c echo.Context) error {
 	if action != "on" && action != "off" { return fail(c, 400, "action must be on or off") }
 	res, _ := exec.Mage("xdebug", action, php)
 	out := ""
-	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
 	return ok(c, map[string]string{"status": action, "php": php, "output": out})
 }
 
@@ -99,7 +99,7 @@ func ExecCommand(c echo.Context) error {
 	res, _ := exec.MageTimeout(5*time.Minute, append([]string{req.Command}, req.Args...)...)
 	out, stderr := "", ""
 	exitCode := 0
-	if res != nil { out = exec.StripAnsi(res.Stdout); stderr = exec.StripAnsi(res.Stderr); exitCode = res.ExitCode }
+	if res != nil { out = exec.StripNoise(res.Stdout); stderr = exec.StripNoise(res.Stderr); exitCode = res.ExitCode }
 	return ok(c, map[string]interface{}{"command": req.Command, "stdout": out, "stderr": stderr, "exitCode": exitCode})
 }
 
@@ -128,7 +128,7 @@ func DebugStart(c echo.Context) error {
 		"-f", exec.RootDir+"/compose/debug.yml",
 		"up", "-d", "phpmyadmin", "redis-commander")
 	out := ""
-	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
 	return ok(c, map[string]string{"status": "started", "output": out})
 }
 
@@ -147,7 +147,7 @@ func EnableSSL(c echo.Context) error {
 	domain := c.Param("domain")
 	res, _ := exec.MageTimeout(60*time.Second, "ssl", domain)
 	out := ""
-	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
 	return ok(c, map[string]string{"status": "ok", "domain": domain, "output": out})
 }
 
@@ -155,7 +155,7 @@ func VarnishToggle(c echo.Context) error {
 	domain, action := c.Param("domain"), c.Param("action")
 	res, _ := exec.MageTimeout(30*time.Second, "varnish", action, domain)
 	out := ""
-	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
 	return ok(c, map[string]string{"status": action, "domain": domain, "output": out})
 }
 
@@ -181,6 +181,6 @@ func Install(c echo.Context) error {
 	res, _ := exec.MageTimeout(10*time.Minute, args...)
 	out, stderr := "", ""
 	exitCode := 0
-	if res != nil { out = exec.StripAnsi(res.Stdout); stderr = exec.StripAnsi(res.Stderr); exitCode = res.ExitCode }
+	if res != nil { out = exec.StripNoise(res.Stdout); stderr = exec.StripNoise(res.Stderr); exitCode = res.ExitCode }
 	return ok(c, map[string]interface{}{"status": "installed", "type": req.Type, "domain": req.Domain, "stdout": out, "stderr": stderr, "exitCode": exitCode})
 }

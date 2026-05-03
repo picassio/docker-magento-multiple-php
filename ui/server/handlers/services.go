@@ -112,7 +112,7 @@ var svcOrder = map[string]int{
 func ServicesUp(c echo.Context) error {
 	res, _ := exec.DockerCompose("up", "-d", "--no-build")
 	out := ""
-	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
 	status := "started"
 	if res != nil && res.ExitCode != 0 { status = "error" }
 	return ok(c, map[string]string{"status": status, "output": out})
@@ -144,7 +144,7 @@ func ServicesDown(c echo.Context) error {
 	rmArgs := append([]string{"rm", "-f"}, svcs...)
 	exec.DockerCompose(rmArgs...)
 	out := ""
-	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
 	return ok(c, map[string]string{"status": "stopped", "output": out})
 }
 
@@ -157,7 +157,7 @@ func ServicesStop(c echo.Context) error {
 	args := append([]string{"stop"}, svcs...)
 	res, _ := exec.DockerCompose(args...)
 	out := ""
-	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
 	return ok(c, map[string]string{"status": "stopped", "output": out})
 }
 
@@ -169,7 +169,7 @@ func StartService(c echo.Context) error {
 	// Use --no-build to prevent hanging on missing images
 	res, _ := exec.DockerCompose("up", "-d", "--no-build", name)
 	out := ""
-	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
 	status := "started"
 	if res != nil && res.ExitCode != 0 {
 		status = "error"
@@ -187,7 +187,7 @@ func StopService(c echo.Context) error {
 	}
 	res, _ := exec.DockerCompose("stop", name)
 	out := ""
-	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
 	return ok(c, map[string]string{"status": "stopped", "service": name, "output": out})
 }
 
@@ -198,6 +198,6 @@ func RestartService(c echo.Context) error {
 	}
 	res, _ := exec.Mage("restart", name)
 	out := ""
-	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
 	return ok(c, map[string]string{"status": "restarted", "service": name, "output": out})
 }

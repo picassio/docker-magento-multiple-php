@@ -108,6 +108,18 @@ func StreamToWS(ctx context.Context, conn *websocket.Conn, name string, args ...
 	return nil
 }
 
+// StripNoise removes ANSI codes and Docker compose warnings from output
+func StripNoise(s string) string {
+	s = StripAnsi(s)
+	var lines []string
+	for _, line := range strings.Split(s, "\n") {
+		if strings.Contains(line, "Found orphan containers") { continue }
+		if strings.Contains(line, "you can run this command with the --remove-orphans") { continue }
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n")
+}
+
 func StripAnsi(s string) string {
 	var b strings.Builder
 	esc := false

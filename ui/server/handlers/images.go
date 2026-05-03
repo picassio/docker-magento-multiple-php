@@ -157,7 +157,7 @@ func BuildImages(c echo.Context) error {
 	c.Bind(&req)
 	res, _ := appexec.Mage(append([]string{"build"}, req.Versions...)...)
 	out := ""
-	if res != nil { out = appexec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	if res != nil { out = appexec.StripNoise(res.Stdout + "\n" + res.Stderr) }
 	return ok(c, map[string]string{"status": "built", "output": out})
 }
 

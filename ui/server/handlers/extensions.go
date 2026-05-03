@@ -93,7 +93,7 @@ func InstallExtension(c echo.Context) error {
 	args = append(args, "--php="+req.Service)
 	res, _ := exec.Mage(args...)
 	out := ""
-	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
 	status := "installed"
 	if res != nil && res.ExitCode != 0 { status = "error" }
 	return ok(c, map[string]string{"status": status, "output": out})
@@ -117,7 +117,7 @@ func EnableExtension(c echo.Context) error {
 
 	res, _ := exec.Mage("ext", "enable", req.Extension, "--php="+req.Service)
 	out := ""
-	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
 	return ok(c, map[string]string{"status": "enabled", "output": out})
 }
 
@@ -139,7 +139,7 @@ func DisableExtension(c echo.Context) error {
 
 	res, _ := exec.Mage("ext", "disable", req.Extension, "--php="+req.Service)
 	out := ""
-	if res != nil { out = exec.StripAnsi(res.Stdout + "\n" + res.Stderr) }
+	if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
 	return ok(c, map[string]string{"status": "disabled", "output": out})
 }
 
