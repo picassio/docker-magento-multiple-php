@@ -122,6 +122,26 @@ services:
       - ./conf/php/php84/php.ini:/etc/php/8.4/cli/php.ini:ro
     restart: unless-stopped
 
+  php85:
+    build:
+      context: ./build/php
+      args:
+        BASE_IMAGE: ubuntu:24.04
+        PHP_VERSION: "8.5"
+        COMPOSER_VERSION: "2.8.4"
+        NODE_MAJOR: "20"
+        XDEBUG_VERSION: "3.5.1"
+    hostname: php85
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./sources:/home/public_html
+      - composer_cache:/home/nginx/.composer
+      - ./conf/php/php85/magento.conf:/etc/php/8.5/fpm/pool.d/www.conf:ro
+      - ./conf/php/php85/php.ini:/etc/php/8.5/fpm/php.ini:ro
+      - ./conf/php/php85/php.ini:/etc/php/8.5/cli/php.ini:ro
+    restart: unless-stopped
+
   # ── Database (default: MySQL 8.4) ───────────────────────────────────────────
 
   mysql:

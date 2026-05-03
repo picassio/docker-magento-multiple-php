@@ -87,7 +87,7 @@ bin/mage magento mysite.com cache:flush
 | Service | Image | Port |
 |---|---|---|
 | nginx | `nginx:stable-alpine` | 80, 443 |
-| php81–php84 | `build/php` (compiled from source) | — |
+| php81–php85 | `build/php` (compiled from source) | — |
 | mysql | `mysql:8.4` | 3306 |
 | opensearch | `opensearch:2.19.1` | 9200 |
 | redis | `redis:7.4-alpine` | 6379 |
@@ -416,7 +416,7 @@ bin/mage varnish off shop.test    # Disable
 ### Building images
 
 ```bash
-# Build all PHP images (core PHP 8.1–8.4)
+# Build all PHP images (core PHP 8.1–8.5)
 bin/mage build
 
 # Build specific PHP version
