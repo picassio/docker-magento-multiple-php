@@ -230,10 +230,12 @@ func overridesForProject(p Project) []string {
 }
 
 // buildProjectComposeArgs returns the docker compose args for a project
-// Uses container path for -f (file access) and exec.RootDir as working dir
-// so build contexts (./build/php) resolve correctly inside the container.
+// Uses --project-directory with HOST path so volume mounts match existing
+// containers (prevents unnecessary recreates). Uses container paths for -f
+// since files must be readable from where the command runs.
 func buildProjectComposeArgs(p Project) []string {
-	args := []string{"compose", "-f", exec.RootDir + "/docker-compose.yml"}
+	hostDir := hostProjectDir()
+	args := []string{"compose", "--project-directory", hostDir, "-f", exec.RootDir + "/docker-compose.yml"}
 	for _, ov := range overridesForProject(p) {
 		args = append(args, "-f", exec.RootDir+"/compose/"+ov+".yml")
 	}
