@@ -132,7 +132,11 @@ function ServicesPage() {
     setActionLog(l => l + `\n\u2501\u2501\u2501 ${action.toUpperCase()} ${svc} \u2501\u2501\u2501\n`);
     const r = await POST('/api/services/'+svc+'/'+action);
     setActionLog(l => l + (r.output || 'Done') + '\n');
-    toast(`${svc} ${action}ed`, 'success');
+    if (r.status === 'error' && ((r.output||'').includes('No such image') || (r.output||'').includes('not built yet'))) {
+      toast(`Image for ${svc} not built yet. Go to Build page first.`, 'error');
+    } else {
+      toast(`${svc} ${action}ed`, 'success');
+    }
     await load();
     setBusy(b => { const n = {...b}; delete n[svc]; return n; });
   };
@@ -206,9 +210,8 @@ function Projects() {
     setActionLog(l => l + header);
     const r = await POST('/api/projects/'+domain+'/'+action);
     setActionLog(l => l + (r.output || 'Done') + '\n');
-    if (r.status === 'error' && (r.output||'').includes('No such image')) {
-      toast('Image not built yet — go to Build page first', 'error');
-      setActionLog(l => l + '\n\u26a0 PHP image not built. Go to Build page to build it first.\n');
+    if (r.status === 'error' && ((r.output||'').includes('No such image') || (r.output||'').includes('not built yet'))) {
+      toast('Image not built yet. Go to Build page first.', 'error');
     } else {
       toast(domain+' '+r.status, r.status === 'error' ? 'error' : 'success');
     }
