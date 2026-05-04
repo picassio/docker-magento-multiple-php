@@ -228,6 +228,8 @@ function Projects() {
           <td><select class="inline-select" value=${p.php} onChange=${e=>{PATCH('/api/projects/'+p.domain,{php:e.target.value});toast(p.domain+': PHP → '+e.target.value,'success');load();}}>${phpOpts.map(o=>html`<option selected=${o===p.php}>${o}</option>`)}</select></td>
           <td><select class="inline-select" value=${p.db_service} onChange=${e=>{PATCH('/api/projects/'+p.domain,{db_service:e.target.value});toast(p.domain+': DB → '+e.target.value,'success');}}>${dbOpts.map(o=>html`<option selected=${o===p.db_service}>${o}</option>`)}</select></td>
           <td><select class="inline-select" value=${p.search} onChange=${e=>{PATCH('/api/projects/'+p.domain,{search:e.target.value});toast(p.domain+': Search → '+e.target.value,'success');}}>${searchOpts.map(o=>html`<option selected=${o===p.search}>${o}</option>`)}</select></td>
+          <td><select class="inline-select" value=${p.redis||'redis'} onChange=${e=>{PATCH('/api/projects/'+p.domain,{redis:e.target.value});toast(p.domain+': Redis → '+e.target.value,'success');}}>${redisOpts.map(o=>html`<option selected=${o===(p.redis||'redis')}>${o}</option>`)}</select></td>
+          <td><select class="inline-select" value=${p.rabbitmq||'none'} onChange=${e=>{PATCH('/api/projects/'+p.domain,{rabbitmq:e.target.value});toast(p.domain+': RMQ → '+e.target.value,'success');}}>${rabbitmqOpts.map(o=>html`<option selected=${o===(p.rabbitmq||'none')}>${o}</option>`)}</select></td>
           <td><label class="toggle"><input type="checkbox" checked=${p.enabled} onChange=${e=>{POST('/api/projects/'+p.domain+'/'+(e.target.checked?'enable':'disable'));toast(p.domain+' '+(e.target.checked?'enabled':'disabled'),'success');}}/><span class="slider"></span></label></td>
           <td style="white-space:nowrap"><button class="btn btn-sm btn-success" title="Start project services" onClick=${()=>projectAction(p.domain,'start')} disabled=${isBusy}>${isBusy && acting.endsWith(':start') ? '⏳' : '▶ Start'}</button> <button class="btn btn-sm btn-danger" title="Stop project services" onClick=${()=>projectAction(p.domain,'stop')} disabled=${isBusy}>${isBusy && acting.endsWith(':stop') ? '⏳' : '■ Stop'}</button> <button class="btn btn-sm" title="Run command" onClick=${()=>setCmdProject(p)}>⊞ Run</button> <button class="btn-icon" title="SSL" onClick=${()=>{toast('SSL for '+p.domain);POST('/api/ssl/'+p.domain);}}>🔒</button><button class="btn-icon" style="color:var(--red)" title="Remove" onClick=${async()=>{if(confirm('Remove '+p.domain+'?')){await DELETE('/api/projects/'+p.domain);toast(p.domain+' removed','success');load();}}}>✕</button></td>
         </tr>`; })}
@@ -315,7 +317,7 @@ function RunCommandModal({ show, onClose, project }) {
 }
 
 function AddProjectModal({ show, onClose }) {
-  const [form, setForm] = useState({ domain:'', app:'magento2', php:'php83', db_service:'mysql', search:'opensearch' });
+  const [form, setForm] = useState({ domain:'', app:'magento2', php:'php83', db_service:'mysql', search:'opensearch', redis:'redis', rabbitmq:'none' });
   if (!show) return null;
   const submit = async () => {
     if (!form.domain) { toast('Domain required','error'); return; }
@@ -331,7 +333,11 @@ function AddProjectModal({ show, onClose }) {
     </div>
     <div class="form-row">
       <div class="form-group"><label>DB</label><select value=${form.db_service} onChange=${e=>setForm({...form,db_service:e.target.value})} style="width:100%"><option value="mysql">MySQL 8.4</option><option value="mysql80">MySQL 8.0</option><option value="mariadb">MariaDB</option></select></div>
-      <div class="form-group"><label>Search</label><select value=${form.search} onChange=${e=>setForm({...form,search:e.target.value})} style="width:100%"><option value="opensearch">OpenSearch</option><option value="none">None</option></select></div>
+      <div class="form-group"><label>Search</label><select value=${form.search} onChange=${e=>setForm({...form,search:e.target.value})} style="width:100%"><option value="opensearch">OpenSearch 2.x</option><option value="opensearch1">OpenSearch 1.3</option><option value="elasticsearch">ES 8.x</option><option value="elasticsearch7">ES 7.x</option><option value="none">None</option></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Redis</label><select value=${form.redis} onChange=${e=>setForm({...form,redis:e.target.value})} style="width:100%"><option value="redis">Redis 7.4</option><option value="redis6">Redis 6.2</option><option value="none">None</option></select></div>
+      <div class="form-group"><label>RabbitMQ</label><select value=${form.rabbitmq} onChange=${e=>setForm({...form,rabbitmq:e.target.value})} style="width:100%"><option value="none">None</option><option value="rabbitmq">RabbitMQ</option></select></div>
     </div>
     <div class="modal-actions"><button class="btn" onClick=${onClose}>Cancel</button><button class="btn btn-primary" onClick=${submit}>Add</button></div>
   <//>`;

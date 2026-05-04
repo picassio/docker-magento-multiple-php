@@ -18,6 +18,8 @@ type Project struct {
 	DBService string `json:"db_service"`
 	DBName    string `json:"db_name"`
 	Search    string `json:"search"`
+	Redis     string `json:"redis"`
+	Rabbitmq  string `json:"rabbitmq"`
 	Enabled   bool   `json:"enabled"`
 	Status    string `json:"status"`
 }
@@ -45,10 +47,13 @@ func readProjects() (map[string]Project, error) {
 func writeProjects(projects map[string]Project) error {
 	out := make(map[string]interface{}, len(projects))
 	for d, p := range projects {
-		out[d] = map[string]interface{}{
+		m := map[string]interface{}{
 			"php": p.PHP, "app": p.App, "db_service": p.DBService,
 			"db_name": p.DBName, "search": p.Search, "enabled": p.Enabled,
 		}
+		if p.Redis != "" { m["redis"] = p.Redis }
+		if p.Rabbitmq != "" { m["rabbitmq"] = p.Rabbitmq }
+		out[d] = m
 	}
 	data, _ := json.MarshalIndent(out, "", "  ")
 	return os.WriteFile(projectsFile(), data, 0644)
@@ -161,6 +166,8 @@ func UpdateProject(c echo.Context) error {
 	if v, ok := u["db_service"].(string); ok { p.DBService = v }
 	if v, ok := u["db_name"].(string); ok { p.DBName = v }
 	if v, ok := u["search"].(string); ok { p.Search = v }
+	if v, ok := u["redis"].(string); ok { p.Redis = v }
+	if v, ok := u["rabbitmq"].(string); ok { p.Rabbitmq = v }
 	projects[domain] = p
 	writeProjects(projects)
 	return ok(c, p)
@@ -197,9 +204,17 @@ func computeProjectStatus(p Project, running map[string]bool) string {
 
 // projectServices returns docker compose services needed by a project
 func projectServices(p Project) []string {
-	svcs := []string{"nginx", p.PHP, p.DBService, "mailpit", "redis"}
+	redis := p.Redis
+	if redis == "" { redis = "redis" }
+	svcs := []string{"nginx", p.PHP, p.DBService, "mailpit"}
+	if redis != "none" {
+		svcs = append(svcs, redis)
+	}
 	if p.Search != "" && p.Search != "none" {
 		svcs = append(svcs, p.Search)
+	}
+	if p.Rabbitmq != "" && p.Rabbitmq != "none" {
+		svcs = append(svcs, "rabbitmq")
 	}
 	return svcs
 }
@@ -223,6 +238,9 @@ func overridesForProject(p Project) []string {
 		ov = append(ov, "elasticsearch7")
 	case "opensearch1":
 		ov = append(ov, "opensearch1")
+	}
+	if p.Redis == "redis6" {
+		ov = append(ov, "redis6")
 	}
 	return ov
 }
