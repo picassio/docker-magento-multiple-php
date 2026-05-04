@@ -742,7 +742,7 @@ function SearchPage() {
     setDashUp(false); setLog('');
   };
 
-  const dashUrl = '/opensearch-dashboards/app/home';
+  const dashUrl = '/opensearch-dashboards/app/dev_tools';
   return html`<div>
     <div class="page-header"><h1>Search</h1><div class="actions">
       ${dashUp ? html`<a href=${dashUrl} target="_blank" class="btn btn-sm">Open in new tab ↗</a>
