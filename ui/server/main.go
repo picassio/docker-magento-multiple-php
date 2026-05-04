@@ -200,8 +200,16 @@ func main() {
 	}
 	e.Any("/mailpit/*", echo.WrapHandler(mp))
 
-	// OpenSearch Dashboards
-	proxyTool("/opensearch-dashboards", "opensearch-dashboards:5601")
+	// OpenSearch Dashboards: pass-through (uses SERVER_BASEPATH=/opensearch-dashboards)
+	osd := httputil.NewSingleHostReverseProxy(&url.URL{Scheme: "http", Host: "opensearch-dashboards:5601"})
+	osdDir := osd.Director
+	osd.Director = func(r *http.Request) { osdDir(r); r.Host = "opensearch-dashboards:5601" }
+	osd.ModifyResponse = func(resp *http.Response) error {
+		resp.Header.Del("Content-Security-Policy")
+		resp.Header.Del("X-Frame-Options")
+		return nil
+	}
+	e.Any("/opensearch-dashboards/*", echo.WrapHandler(osd))
 
 	// ── Static files (embedded frontend) ────────────────────────────────
 	webFS, _ := fs.Sub(embeddedWeb, "web")
