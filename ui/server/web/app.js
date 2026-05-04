@@ -745,7 +745,8 @@ function SearchPage() {
   const dashUrl = '/opensearch-dashboards/app/home';
   return html`<div>
     <div class="page-header"><h1>Search</h1><div class="actions">
-      ${dashUp ? html`<button class="btn btn-danger" onClick=${stopDash}>■ Stop Dashboards</button>`
+      ${dashUp ? html`<a href=${dashUrl} target="_blank" class="btn btn-sm">Open in new tab ↗</a>
+        <button class="btn btn-danger" onClick=${stopDash}>■ Stop Dashboards</button>`
               : html`<button class="btn btn-success" onClick=${startDash} disabled=${starting}>${starting ? '⏳ Starting...' : '▶ Start Dashboards'}</button>`}
     </div></div>
     ${dashUp ? html`<div class="card" style="overflow:hidden">
