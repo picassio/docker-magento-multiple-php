@@ -2,7 +2,7 @@
 
 > Multi-PHP Docker development stack for Magento (and WordPress, Laravel)
 
-**PHP 7.0 – 8.4** · **Magento 2.1 – 2.4.8** · **Linux-focused** · **Docker Compose v2**
+**PHP 7.0 - 8.4** · **Magento 2.1 - 2.4.8** · **Linux-focused** · **Docker Compose v2**
 
 ---
 
@@ -20,10 +20,10 @@ bin/mage doctor fix
 bin/mage project add mysite.com
 # → Picks: PHP 8.3, magento2, mysql, mysite_com DB, opensearch
 
-# Start — only starts services your projects actually need
+# Start - only starts services your projects actually need
 bin/mage up
 
-# Everything uses your domain name — no need to remember service names
+# Everything uses your domain name - no need to remember service names
 bin/mage shell mysite.com              # Opens bash in the right PHP container
 bin/mage composer mysite.com install   # Runs composer in the right container
 bin/mage db import mysite.com dump.sql # Imports into the right DB service
@@ -34,18 +34,18 @@ bin/mage magento mysite.com cache:flush
 
 ## Features
 
-- **Web UI** — `bin/mage ui` launches a full dashboard (10 pages, Go binary, works offline)
-- **Multi-framework** — Magento 1/2, Laravel, WordPress, and generic PHP projects in one stack
-- **Project management** — register projects with `bin/mage project add`, switch PHP/DB/search per project, enable/disable without data loss
-- **Smart start** — `bin/mage up` reads `projects.json`, starts only the services your projects need, auto-loads the right compose override files
-- **Multi-PHP** — PHP 7.0–8.5 simultaneously (all compiled from source)
-- **Multi-database** — MySQL 8.4, MySQL 8.0, MariaDB 11.4 on separate ports — all at once
-- **Multi-search** — OpenSearch 2.x, OpenSearch 1.x, Elasticsearch 8.x, ES 7.x — all simultaneously
-- **Multi-cache** — Redis 7.x and Redis 6.x on separate ports
-- **Project-aware commands** — `bin/mage shell mysite.com` auto-resolves PHP version and `cd`'s into the project directory
-- **Compose overrides** — clean core compose file (10 services); variants in `compose/*.yml` loaded on demand
-- **Runtime DNS** — nginx starts even if a PHP backend is stopped (returns 502, doesn't crash)
-- **Zero password warnings** — DB exports are clean SQL, no `Using a password` contamination
+- **Web UI** - `bin/mage ui` launches a full dashboard (10 pages, Go binary, works offline)
+- **Multi-framework** - Magento 1/2, Laravel, WordPress, and generic PHP projects in one stack
+- **Project management** - register projects with `bin/mage project add`, switch PHP/DB/search per project, enable/disable without data loss
+- **Smart start** - `bin/mage up` reads `projects.json`, starts only the services your projects need, auto-loads the right compose override files
+- **Multi-PHP** - PHP 7.0-8.5 simultaneously (all compiled from source)
+- **Multi-database** - MySQL 8.4, MySQL 8.0, MariaDB 11.4 on separate ports - all at once
+- **Multi-search** - OpenSearch 2.x, OpenSearch 1.x, Elasticsearch 8.x, ES 7.x - all simultaneously
+- **Multi-cache** - Redis 7.x and Redis 6.x on separate ports
+- **Project-aware commands** - `bin/mage shell mysite.com` auto-resolves PHP version and `cd`'s into the project directory
+- **Compose overrides** - clean core compose file (10 services); variants in `compose/*.yml` loaded on demand
+- **Runtime DNS** - nginx starts even if a PHP backend is stopped (returns 502, doesn't crash)
+- **Zero password warnings** - DB exports are clean SQL, no `Using a password` contamination
 
 ---
 
@@ -53,11 +53,11 @@ bin/mage magento mysite.com cache:flush
 
 ```
 .
-├── bin/mage              # CLI — single entrypoint for everything
+├── bin/mage              # CLI - single entrypoint for everything
 ├── projects.json         # Project registry
 ├── docker-compose.yml    # Core services (nginx, php81-84, mysql, opensearch, redis, rabbitmq, mailpit)
 ├── compose/              # Override files loaded on demand
-│   ├── legacy.yml        #   PHP 7.0–7.4
+│   ├── legacy.yml        #   PHP 7.0-7.4
 │   ├── mysql80.yml       #   MySQL 8.0 (:3307)
 │   ├── mariadb.yml       #   MariaDB 11.4 (:3308)
 │   ├── opensearch1.yml   #   OpenSearch 1.3 (:9201)
@@ -68,8 +68,8 @@ bin/mage magento mysite.com cache:flush
 │   ├── varnish.yml       #   Varnish 7.6
 │   └── dashboards.yml    #   OpenSearch Dashboards
 ├── build/
-│   ├── php/              # Dockerfile for PHP 7.4–8.4 (ondrej PPA)
-│                         # (unified Dockerfile handles PHP 7.0–8.5)
+│   ├── php/              # Dockerfile for PHP 7.4-8.4 (ondrej PPA)
+│                         # (unified Dockerfile handles PHP 7.0-8.5)
 ├── conf/                 # Nginx, PHP, MySQL, Varnish configs
 ├── data/                 # Persistent DB data
 ├── databases/import|export/
@@ -87,30 +87,30 @@ bin/mage magento mysite.com cache:flush
 | Service | Image | Port |
 |---|---|---|
 | nginx | `nginx:stable-alpine` | 80, 443 |
-| php81–php85 | `build/php` (compiled from source) | — |
+| php81-php85 | `build/php` (compiled from source) | - |
 | mysql | `mysql:8.4` | 3306 |
 | opensearch | `opensearch:2.19.1` | 9200 |
 | redis | `redis:7.4-alpine` | 6379 |
 | rabbitmq | `rabbitmq:4.1` | 5672, 15672 |
 | mailpit | `axllent/mailpit` | 1025, 8025 |
 
-### Override files (`compose/*.yml` — loaded when projects need them)
+### Override files (`compose/*.yml` - loaded when projects need them)
 
 | File | Service | Port | Use case |
 |---|---|---|---|
-| `legacy.yml` | php70–php74 | — | Magento 2.1–2.4.3 |
+| `legacy.yml` | php70-php74 | - | Magento 2.1-2.4.3 |
 | `mysql80.yml` | MySQL 8.0 | 3307 | Legacy Magento |
 | `mariadb.yml` | MariaDB 11.4 | 3308 | Magento 2.4.8 |
-| `opensearch1.yml` | OpenSearch 1.3 | 9201 | Magento 2.4.4–2.4.5 |
+| `opensearch1.yml` | OpenSearch 1.3 | 9201 | Magento 2.4.4-2.4.5 |
 | `elasticsearch.yml` | ES 8.17 | 9202 | Alternative to OpenSearch |
-| `elasticsearch7.yml` | ES 7.17 | 9203 | Magento 2.3–2.4.5 |
-| `redis6.yml` | Redis 6.2 | 6380 | Magento 2.4.0–2.4.5 |
+| `elasticsearch7.yml` | ES 7.17 | 9203 | Magento 2.3-2.4.5 |
+| `redis6.yml` | Redis 6.2 | 6380 | Magento 2.4.0-2.4.5 |
 | `debug.yml` | phpMyAdmin, Redis Commander | 8080, 8081 | DB/cache inspection |
 | `varnish.yml` | Varnish 7.6 | 6081 | Full-page cache |
 | `dashboards.yml` | OpenSearch Dashboards | 5601 | Search analytics |
 | `ui.yml` | Mage UI dashboard | 8888 | Web management UI |
 
-> All ports are unique — every service variant can run simultaneously.
+> All ports are unique - every service variant can run simultaneously.
 
 ---
 
@@ -118,10 +118,10 @@ bin/mage magento mysite.com cache:flush
 
 | Magento | PHP | Search | Database | Redis | Override files needed |
 |---|---|---|---|---|---|
-| 2.1–2.2 | 7.0, 7.1 | — | MySQL | 5.x | `legacy.yml` |
-| 2.3.x | 7.2–7.4 | ES 7.x | MySQL 8.0 | 6.x | `legacy.yml` `elasticsearch7.yml` `mysql80.yml` `redis6.yml` |
-| 2.4.0–2.4.3 | 7.4 | ES 7.x | MySQL 8.0 | 6.x | `legacy.yml` `elasticsearch7.yml` `mysql80.yml` `redis6.yml` |
-| 2.4.4–2.4.5 | 8.1 | OS 1.x / ES 7.17 | MySQL 8.0 | 6.x+ | `opensearch1.yml` or `elasticsearch7.yml` `mysql80.yml` |
+| 2.1-2.2 | 7.0, 7.1 | - | MySQL | 5.x | `legacy.yml` |
+| 2.3.x | 7.2-7.4 | ES 7.x | MySQL 8.0 | 6.x | `legacy.yml` `elasticsearch7.yml` `mysql80.yml` `redis6.yml` |
+| 2.4.0-2.4.3 | 7.4 | ES 7.x | MySQL 8.0 | 6.x | `legacy.yml` `elasticsearch7.yml` `mysql80.yml` `redis6.yml` |
+| 2.4.4-2.4.5 | 8.1 | OS 1.x / ES 7.17 | MySQL 8.0 | 6.x+ | `opensearch1.yml` or `elasticsearch7.yml` `mysql80.yml` |
 | 2.4.6 | 8.1, 8.2 | OS 2.x / ES 8.x | MySQL 8.0 | 7.x | *(core only)* |
 | 2.4.7 | 8.2, 8.3 | OS 2.x / ES 8.x | MySQL 8.4 | 7.x | *(core only)* |
 | 2.4.8 | 8.3, 8.4 | OS 2.x+ | MySQL 8.4 / MariaDB 11.4 | 7.x | `mariadb.yml` *(optional)* |
@@ -139,22 +139,69 @@ bin/mage ui build    # rebuild after code changes
 bin/mage ui logs     # tail UI container logs
 ```
 
-Full web dashboard at `http://localhost:8888` with 10 pages:
+Full web dashboard at `http://localhost:8888` with 12 pages. All tools (phpMyAdmin, Mailpit, OpenSearch Dashboards, Kibana) are embedded via reverse proxy — works on any host/IP, no port conflicts.
 
-| Page | What |
-|------|------|
-| **Dashboard** | Service status cards (live), project list, Start/Stop/Down |
-| **Projects** | CRUD, inline PHP/DB/Search switch, enable/disable toggle, Run Command modal |
-| **Database** | List, create, export, import, drop databases |
-| **Build** | PHP image list, build all/missing/individual, live WebSocket output |
-| **Logs** | Service selector, fetch/follow mode, WebSocket live tail |
-| **Files** | Project file browser, Ace editor (syntax highlighting), log viewer |
-| **SQL** | phpMyAdmin (embedded), Redis Commander (embedded), Quick Query |
-| **Mail** | Mailpit (embedded) — captured SMTP emails from PHP |
-| **Terminal** | xterm.js shell inside project’s PHP container (or host) |
-| **Settings** | Doctor checks + auto-fix, Xdebug toggle, .env editor, Install wizard |
+### Dashboard
 
-Tech: Go binary (12MB) with embedded Preact + Ace Editor + xterm.js. Zero CDN deps, works fully offline.
+Service status cards with live health, project list with status badges (live/partial/stopped).
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+### Services
+
+Start/stop/restart individual services. Sorted by category. Shows ports, status, uptime.
+
+![Services](docs/screenshots/services.png)
+
+### Projects
+
+Full project management — add, start, stop, configure PHP/DB/Search/Redis/RabbitMQ per project. Live status badges. SSL with one click.
+
+![Projects](docs/screenshots/projects.png)
+
+### Build
+
+Build PHP images from source. Live WebSocket output streaming. Bake extensions into images at build time. Progress survives page refresh.
+
+![Build](docs/screenshots/build.png)
+
+### Extensions
+
+Install/enable/disable PHP extensions on running containers. Supports PECL + custom installers (New Relic, IonCube, Blackfire).
+
+![Extensions](docs/screenshots/extensions.png)
+
+### SQL & Data
+
+phpMyAdmin and Redis Commander embedded in iframes. Quick Query tab for direct SQL. Auto-login, no configuration needed.
+
+![SQL](docs/screenshots/sql.png)
+
+### Mail
+
+Mailpit embedded — all SMTP emails from PHP containers are captured here.
+
+![Mail](docs/screenshots/mail.png)
+
+### Search
+
+OpenSearch Dashboards + Kibana 8.x/7.x in tabs. Auto-detects running search engines. Start/stop from the UI.
+
+![Search](docs/screenshots/search.png)
+
+### Terminal
+
+Full interactive terminal (xterm.js) with tab completion, arrow keys, history. Connect to any PHP container or host shell.
+
+![Terminal](docs/screenshots/terminal.png)
+
+### Settings
+
+System health checks (Docker, sysctl, disk), Xdebug status/toggle per PHP version, .env editor.
+
+![Settings](docs/screenshots/settings.png)
+
+**Tech:** Go binary with embedded Preact + Ace Editor + xterm.js. Zero CDN deps, works fully offline.
 
 ---
 
@@ -248,7 +295,7 @@ bin/mage project set legacy.test redis redis6
 bin/mage project add new-shop.test
 # → php84, mariadb, opensearch
 
-# Start everything — smart start loads the right overrides
+# Start everything - smart start loads the right overrides
 bin/mage up
 # → Services: nginx php83 php72 php84 mysql mysql80 mariadb opensearch elasticsearch7 redis redis6 mailpit
 # → Overrides: legacy mysql80 mariadb elasticsearch7 redis6
@@ -365,7 +412,7 @@ bin/mage wp blog.test core install --url=blog.test --title="My Blog" \
 ### Fresh Magento install (one command)
 
 ```bash
-# Magento 2.4.7 — auto-detects: php83 + mysql + opensearch
+# Magento 2.4.7 - auto-detects: php83 + mysql + opensearch
 bin/mage install 2.4.7 community shop.test
 # → Registers project in projects.json
 # → Starts required services automatically
@@ -375,7 +422,7 @@ bin/mage install 2.4.7 community shop.test
 # Magento 2.4.8 with explicit PHP
 bin/mage install 2.4.8 enterprise new-shop.test php84
 
-# Legacy Magento 2.3.7 — auto-detects: php74 + mysql80 + elasticsearch7
+# Legacy Magento 2.3.7 - auto-detects: php74 + mysql80 + elasticsearch7
 bin/mage install 2.3.7 community legacy.test
 # → Loads compose/legacy.yml + compose/mysql80.yml + compose/elasticsearch7.yml
 
@@ -416,7 +463,7 @@ bin/mage varnish off shop.test    # Disable
 ### Building images
 
 ```bash
-# Build all PHP images (core PHP 8.1–8.5)
+# Build all PHP images (core PHP 8.1-8.5)
 bin/mage build
 
 # Build specific PHP version
@@ -430,13 +477,13 @@ bin/mage build --no-cache
 bin/mage build php83 --no-cache
 
 # Pre-built images (nginx, mysql, redis, opensearch, etc.) are pulled
-# automatically on 'bin/mage up' — no build needed:
+# automatically on 'bin/mage up' - no build needed:
 bin/mage build nginx
-# → ⚠ 'nginx' uses a pre-built image — nothing to build.
+# → ⚠ 'nginx' uses a pre-built image - nothing to build.
 #   Run bin/mage up to pull and start.
 ```
 
-> **Note:** PHP is compiled from source — no PPA or external repository needed.
+> **Note:** PHP is compiled from source - no PPA or external repository needed.
 > Works reliably on any platform including WSL2, VPN, and restricted networks.
 
 ### Installing PHP extensions
@@ -588,8 +635,8 @@ See `env-example` for the full list including credentials and other ports.
 ## Prerequisites
 
 - **Docker Engine 20.10+** with Compose plugin v2 (`docker compose`)
-- **Linux** (Ubuntu 22.04+ recommended) — works on macOS/WSL2 (see [WSL2 section](#wsl2--windows) below)
-- **mkcert** — optional, for local SSL certificates
+- **Linux** (Ubuntu 22.04+ recommended) - works on macOS/WSL2 (see [WSL2 section](#wsl2--windows) below)
+- **mkcert** - optional, for local SSL certificates
 
 ### System Health Check
 
