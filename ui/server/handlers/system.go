@@ -103,25 +103,12 @@ func ExecCommand(c echo.Context) error {
 	return ok(c, map[string]interface{}{"command": req.Command, "stdout": out, "stderr": stderr, "exitCode": exitCode})
 }
 
-// hostProjectDir resolves the host path of the /project mount.
-// Inside the UI container, /project is a bind mount from the host.
-// We need the host path for docker compose volume mounts to resolve.
-func hostProjectDir() string {
-	// Try reading from Docker inspect (UI container mounts)
-	res, _ := exec.Run("docker", "inspect", "mage-ui", "--format",
-		"{{range .Mounts}}{{if eq .Destination \"/project\"}}{{.Source}}{{end}}{{end}}")
-	if res != nil && res.Stdout != "" {
-		return strings.TrimSpace(res.Stdout)
-	}
-	// Fallback: assume running on host directly
-	return exec.RootDir
-}
 
 // POST /api/debug/start — start phpMyAdmin + Redis Commander
 // Uses --project-directory with host path so volume mounts resolve on the host,
 // but -f flags use container paths (where files are accessible).
 func DebugStart(c echo.Context) error {
-	hostDir := hostProjectDir()
+	hostDir := exec.HostProjectDir()
 	res, _ := exec.Run("docker", "compose",
 		"--project-directory", hostDir,
 		"-f", exec.RootDir+"/docker-compose.yml",
@@ -134,7 +121,7 @@ func DebugStart(c echo.Context) error {
 
 // POST /api/debug/stop
 func DebugStop(c echo.Context) error {
-	hostDir := hostProjectDir()
+	hostDir := exec.HostProjectDir()
 	exec.Run("docker", "compose",
 		"--project-directory", hostDir,
 		"-f", exec.RootDir+"/docker-compose.yml",

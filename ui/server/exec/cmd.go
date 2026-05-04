@@ -60,11 +60,36 @@ func MageTimeout(timeout time.Duration, args ...string) (*Result, error) {
 	return RunCtx(ctx, RootDir+"/bin/mage", args...)
 }
 
+// hostProjectDir resolves the host path of the /project mount.
+// Inside the UI container, /project is a bind mount from the host.
+// We need the host path so volume mounts resolve correctly on the host.
+var cachedHostDir string
+
+func HostProjectDir() string {
+	if cachedHostDir != "" {
+		return cachedHostDir
+	}
+	res, _ := Run("docker", "inspect", "mage-ui", "--format",
+		"{{range .Mounts}}{{if eq .Destination \"/project\"}}{{.Source}}{{end}}{{end}}")
+	if res != nil && strings.TrimSpace(res.Stdout) != "" {
+		cachedHostDir = strings.TrimSpace(res.Stdout)
+	} else {
+		cachedHostDir = RootDir
+	}
+	return cachedHostDir
+}
+
 func DockerCompose(args ...string) (*Result, error) {
 	base := []string{"compose"}
 	// Pass project name if set (for running inside a container)
 	if pn := os.Getenv("COMPOSE_PROJECT_NAME"); pn != "" {
 		base = append(base, "-p", pn)
+	}
+	// Use host project dir so volume mounts resolve correctly on the host.
+	// Keep -f with container path since compose needs to READ the file.
+	hostDir := HostProjectDir()
+	if hostDir != RootDir {
+		base = append(base, "--project-directory", hostDir, "-f", RootDir+"/docker-compose.yml")
 	}
 	return Run("docker", append(base, args...)...)
 }
