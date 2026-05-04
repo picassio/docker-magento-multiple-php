@@ -1,0 +1,16 @@
+# Kibana 7.x — for Elasticsearch 7.x
+services:
+  kibana7:
+    image: kibana:${ELASTICSEARCH7_VERSION:-7.17.27}
+    hostname: kibana7
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch7:9200
+      - SERVER_BASEPATH=/kibana7
+      - SERVER_REWRITEBASEPATH=true
+      - XPACK_SECURITY_ENABLED=false
+    ports:
+      - "5603:5601"
+    depends_on:
+      elasticsearch7:
+        condition: service_healthy
+    restart: unless-stopped

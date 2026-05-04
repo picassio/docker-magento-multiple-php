@@ -171,6 +171,66 @@ func DashboardsStop(c echo.Context) error {
 	return ok(c, map[string]string{"status": "stopped"})
 }
 
+// POST /api/kibana/start — start Kibana (auto-detects ES version)
+func KibanaStart(c echo.Context) error {
+	// Detect which Elasticsearch is running
+	runRes, _ := exec.DockerCompose("ps", "--format", "{{.Service}}", "--status", "running")
+	hasES8, hasES7 := false, false
+	if runRes != nil {
+		for _, svc := range strings.Split(runRes.Stdout, "\n") {
+			switch strings.TrimSpace(svc) {
+			case "elasticsearch":
+				hasES8 = true
+			case "elasticsearch7":
+				hasES7 = true
+			}
+		}
+	}
+	if !hasES8 && !hasES7 {
+		return ok(c, map[string]string{"status": "error", "output": "No Elasticsearch instances running. Start Elasticsearch first from the Services page."})
+	}
+
+	hostDir := exec.HostProjectDir()
+	out := ""
+	if hasES8 {
+		res, _ := exec.Run("docker", "compose",
+			"--project-directory", hostDir,
+			"-f", exec.RootDir+"/docker-compose.yml",
+			"-f", exec.RootDir+"/compose/elasticsearch.yml",
+			"-f", exec.RootDir+"/compose/kibana.yml",
+			"up", "-d", "kibana")
+		if res != nil { out += "Kibana 8.x: " + exec.StripNoise(res.Stdout+"\n"+res.Stderr) + "\n" }
+	}
+	if hasES7 {
+		res, _ := exec.Run("docker", "compose",
+			"--project-directory", hostDir,
+			"-f", exec.RootDir+"/docker-compose.yml",
+			"-f", exec.RootDir+"/compose/elasticsearch7.yml",
+			"-f", exec.RootDir+"/compose/kibana7.yml",
+			"up", "-d", "kibana7")
+		if res != nil { out += "Kibana 7.x: " + exec.StripNoise(res.Stdout+"\n"+res.Stderr) + "\n" }
+	}
+	return ok(c, map[string]string{"status": "started", "output": out})
+}
+
+// POST /api/kibana/stop
+func KibanaStop(c echo.Context) error {
+	hostDir := exec.HostProjectDir()
+	exec.Run("docker", "compose",
+		"--project-directory", hostDir,
+		"-f", exec.RootDir+"/docker-compose.yml",
+		"-f", exec.RootDir+"/compose/elasticsearch.yml",
+		"-f", exec.RootDir+"/compose/kibana.yml",
+		"rm", "-sf", "kibana")
+	exec.Run("docker", "compose",
+		"--project-directory", hostDir,
+		"-f", exec.RootDir+"/docker-compose.yml",
+		"-f", exec.RootDir+"/compose/elasticsearch7.yml",
+		"-f", exec.RootDir+"/compose/kibana7.yml",
+		"rm", "-sf", "kibana7")
+	return ok(c, map[string]string{"status": "stopped"})
+}
+
 func EnableSSL(c echo.Context) error {
 	domain := c.Param("domain")
 	res, _ := exec.MageTimeout(60*time.Second, "ssl", domain)

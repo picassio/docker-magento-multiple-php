@@ -722,55 +722,72 @@ function MailPage() {
 
 // ── OpenSearch Dashboards ────────────────────────────────────────────────────
 function SearchPage() {
-  const [dashUp, setDashUp] = useState(false);
-  const [searchEngines, setSearchEngines] = useState([]);
-  const [starting, setStarting] = useState(false);
+  const [tab, setTab] = useState('dashboards');
+  const [services, setServices] = useState({});
+  const [starting, setStarting] = useState('');
   const [log, setLog] = useState('');
   const checkStatus = () => GET('/api/services').then(s => {
     if (!s) return;
-    setDashUp(s.some(x => x.service === 'opensearch-dashboards'));
-    setSearchEngines(s.filter(x => ['opensearch','opensearch1','elasticsearch','elasticsearch7'].includes(x.service)));
+    const m = {};
+    s.forEach(x => m[x.service] = (x.state||'').includes('running'));
+    setServices(m);
   });
   useEffect(() => { checkStatus(); const t = setInterval(checkStatus, 5000); return () => clearInterval(t); }, []);
 
-  const startDash = async () => {
-    setStarting(true); setLog('Starting OpenSearch Dashboards...\n');
-    const r = await POST('/api/dashboards/start');
+  const startTool = async (api, label) => {
+    setStarting(label); setLog(l => l + '\n━━━ START ' + label + ' ━━━\n');
+    const r = await POST('/api/' + api + '/start');
     setLog(l => l + (r.output || 'Done') + '\n');
-    setStarting(false);
-    toast(r.status === 'started' ? 'Dashboards started' : 'Error', r.status === 'started' ? 'success' : 'error');
+    setStarting('');
+    toast(r.status === 'started' ? label + ' started' : (r.output||'Error'), r.status === 'started' ? 'success' : 'error');
     checkStatus();
   };
-  const stopDash = async () => {
-    await POST('/api/dashboards/stop');
-    toast('Dashboards stopped', 'success');
-    setDashUp(false); setLog('');
+  const stopTool = async (api, label) => {
+    await POST('/api/' + api + '/stop');
+    toast(label + ' stopped', 'success');
+    checkStatus();
   };
 
-  const dashUrl = '/opensearch-dashboards/app/dev_tools';
+  const engines = ['opensearch','opensearch1','elasticsearch','elasticsearch7'];
+  const dashboards = ['opensearch-dashboards','kibana','kibana7'];
+
+  const tabs = [
+    { id: 'dashboards', label: 'OpenSearch Dashboards', url: '/opensearch-dashboards/app/dev_tools', svc: 'opensearch-dashboards', api: 'dashboards', needs: 'OpenSearch' },
+    { id: 'kibana', label: 'Kibana 8.x', url: '/kibana/app/dev_tools', svc: 'kibana', api: 'kibana', needs: 'Elasticsearch 8.x' },
+    { id: 'kibana7', label: 'Kibana 7.x', url: '/kibana7/app/dev_tools', svc: 'kibana7', api: 'kibana', needs: 'Elasticsearch 7.x' },
+  ];
+  const active = tabs.find(t => t.id === tab) || tabs[0];
+  const isUp = services[active.svc];
+
   return html`<div>
     <div class="page-header"><h1>Search</h1><div class="actions">
-      ${dashUp ? html`<a href=${dashUrl} target="_blank" class="btn btn-sm">Open in new tab ↗</a>
-        <button class="btn btn-danger" onClick=${stopDash}>■ Stop Dashboards</button>`
-              : html`<button class="btn btn-success" onClick=${startDash} disabled=${starting}>${starting ? '⏳ Starting...' : '▶ Start Dashboards'}</button>`}
+      ${isUp && html`<a href=${active.url} target="_blank" class="btn btn-sm">Open in new tab ↗</a>`}
     </div></div>
-    ${searchEngines.length > 0 && html`<div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
-      ${searchEngines.map(e => html`<div class="badge badge-${(e.state||'').includes('running')?'green':'red'}" style="padding:6px 12px">${e.service} ${(e.state||'').includes('running')?'\u25cf running':'\u25cb stopped'}</div>`)}
-    </div>`}
-    ${dashUp ? html`<div class="card" style="overflow:hidden">
-      <iframe src=${dashUrl} style="width:100%;height:calc(85vh - 100px);border:none"/>
+
+    <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+      ${engines.filter(e => services[e] !== undefined).map(e => html`<div class="badge badge-${services[e]?'green':'red'}" style="padding:6px 12px">${e} ${services[e]?'● running':'○ stopped'}</div>`)}
     </div>
-    <div style="padding:8px 0;font-size:12px;color:var(--text3)">OpenSearch Dashboards — visualize, query, and monitor your search indices</div>`
+
+    <div style="display:flex;gap:0;margin-bottom:16px">
+      ${tabs.map((t,i,a) => html`<button class="btn ${tab===t.id?'btn-primary':''}" style="border-radius:${i===0?'var(--radius-sm) 0 0 var(--radius-sm)':i===a.length-1?'0 var(--radius-sm) var(--radius-sm) 0':'0'};margin-left:${i>0?'-1px':'0'}" onClick=${()=>setTab(t.id)}>${t.label}</button>`)}
+    </div>
+
+    ${isUp ? html`<div class="card" style="overflow:hidden">
+      <iframe src=${active.url} style="width:100%;height:calc(80vh - 200px);border:none"/>
+      <div style="padding:8px 14px;border-top:1px solid var(--border);font-size:12px;display:flex;justify-content:space-between;align-items:center">
+        <span>${active.label} — connected to ${active.needs}</span>
+        <button class="btn btn-sm btn-danger" onClick=${() => stopTool(active.api, active.label)}>■ Stop</button>
+      </div>
+    </div>`
     : html`<div class="card empty" style="padding:40px;text-align:center">
-      <p>OpenSearch Dashboards is not running</p>
-      <p style="font-size:13px;color:var(--text3);margin-top:8px">Connects to OpenSearch 2.x automatically. Start OpenSearch from the Services page first.</p>
-      <p style="font-size:12px;color:var(--text3);margin-top:4px">Note: Elasticsearch requires Kibana (not included). OpenSearch 1.3 needs a compatible Dashboards version.</p>
-      <button class="btn btn-primary" style="margin-top:16px" onClick=${startDash} disabled=${starting}>${starting ? '⏳ Starting...' : '▶ Start Dashboards'}</button>
+      <p>${active.label} is not running</p>
+      <p style="font-size:13px;color:var(--text3);margin-top:8px">Requires ${active.needs} to be running first. Start it from the Services page.</p>
+      <button class="btn btn-primary" style="margin-top:16px" onClick=${() => startTool(active.api, active.label)} disabled=${!!starting}>${starting ? '⏳ ' + starting + '...' : '▶ Start ' + active.label}</button>
     </div>`}
+
     ${log && html`<div class="card" style="margin-top:16px"><div class="card-header">Output</div><pre class="log-viewer" style="max-height:200px;overflow-y:auto">${log}</pre></div>`}
   </div>`;
 }
-
 // ── Terminal ─────────────────────────────────────────────────────────────────
 function TerminalPage() {
   const [projects, setProjects] = useState([]);

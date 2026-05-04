@@ -1,0 +1,16 @@
+# Kibana 8.x — for Elasticsearch 8.x
+services:
+  kibana:
+    image: kibana:${ELASTICSEARCH_VERSION:-8.17.0}
+    hostname: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - SERVER_BASEPATH=/kibana
+      - SERVER_REWRITEBASEPATH=true
+      - XPACK_SECURITY_ENABLED=false
+    ports:
+      - "5602:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
