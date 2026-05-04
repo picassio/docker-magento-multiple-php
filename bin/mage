@@ -613,6 +613,19 @@ cmd_build() {
 
 # ── Command: up (smart start) ────────────────────────────────────────────────
 cmd_up() {
+    # Ensure critical config files exist (WSL2/Docker Desktop fails on missing single-file mounts)
+    local required_files=("conf/nginx/nginx.conf" ".env")
+    for f in "${required_files[@]}"; do
+        if [[ ! -f "${MAGE_ROOT}/${f}" ]]; then
+            if [[ "$f" == ".env" && -f "${MAGE_ROOT}/env-example" ]]; then
+                cp "${MAGE_ROOT}/env-example" "${MAGE_ROOT}/.env"
+                _arrow "Created .env from env-example"
+            else
+                _die "Missing required file: ${f}\nRun: git checkout -- ${f}"
+            fi
+        fi
+    done
+
     local overrides=()
     local services=()
     local explicit=false
