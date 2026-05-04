@@ -50,13 +50,25 @@ processArgs() {
 # ── mkcert check ──────────────────────────────────────────────────────────────
 checkSslCommand() {
     if ! command -v mkcert &>/dev/null; then
-        _error "Missing mkcert command"
-        _warning "Install mkcert on Ubuntu:"
-        echo "    sudo apt-get install libnss3-tools -y"
-        echo "    sudo wget https://github.com/FiloSottile/mkcert/releases/download/v1.4.3/mkcert-v1.4.3-linux-amd64 -O /usr/local/bin/mkcert"
-        echo "    sudo chmod +x /usr/local/bin/mkcert"
-        echo "    mkcert -install"
-        exit 1
+        _arrow "mkcert not found, installing..."
+        local arch=$(dpkg --print-architecture 2>/dev/null || uname -m)
+        local mkcert_arch="amd64"
+        case "$arch" in
+            arm64|aarch64) mkcert_arch="arm64" ;;
+        esac
+        local mkcert_url="https://github.com/FiloSottile/mkcert/releases/download/v1.4.3/mkcert-v1.4.3-linux-${mkcert_arch}"
+        if curl -fsSL "$mkcert_url" -o /usr/local/bin/mkcert 2>/dev/null || \
+           sudo curl -fsSL "$mkcert_url" -o /usr/local/bin/mkcert 2>/dev/null; then
+            chmod +x /usr/local/bin/mkcert 2>/dev/null || sudo chmod +x /usr/local/bin/mkcert
+            mkcert -install 2>/dev/null || true
+            _success "mkcert installed"
+        else
+            _error "Failed to install mkcert. Install manually:"
+            echo "    sudo wget $mkcert_url -O /usr/local/bin/mkcert"
+            echo "    sudo chmod +x /usr/local/bin/mkcert"
+            echo "    mkcert -install"
+            exit 1
+        fi
     fi
 }
 
