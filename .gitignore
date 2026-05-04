@@ -25,3 +25,5 @@ gitInfo.md/data/mysql80/*
 /data/mariadb/*
 !/data/mariadb/.keepme
 bin/mkcert
+*.crt
+*.key
