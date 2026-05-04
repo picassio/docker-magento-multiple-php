@@ -203,6 +203,8 @@ function Projects() {
   const phpOpts = ['php70','php71','php72','php73','php74','php81','php82','php83','php84','php85'];
   const dbOpts = ['mysql','mysql80','mariadb'];
   const searchOpts = ['opensearch','opensearch1','elasticsearch','elasticsearch7','none'];
+  const redisOpts = ['redis','redis6','none'];
+  const rabbitmqOpts = ['none','rabbitmq'];
 
   const projectAction = async (domain, action) => {
     setActing(domain+':'+action); setActionTarget(domain);
@@ -222,7 +224,7 @@ function Projects() {
   return html`<div>
     <div class="page-header"><h1>Projects</h1><div class="actions"><button class="btn btn-primary" onClick=${()=>setShowAdd(true)}>+ Add Project</button></div></div>
     ${projects.length === 0 ? html`<div class="card empty"><div class="icon">📁</div><p>No projects yet</p><button class="btn btn-primary" onClick=${()=>setShowAdd(true)}>Add your first project</button></div>` :
-      html`<div class="card table-wrap"><table><thead><tr><th>Domain</th><th>Status</th><th>Type</th><th>PHP</th><th>DB</th><th>Search</th><th>Enabled</th><th></th></tr></thead><tbody>
+      html`<div class="card table-wrap"><table><thead><tr><th>Domain</th><th>Status</th><th>Type</th><th>PHP</th><th>DB</th><th>Search</th><th>Redis</th><th>RMQ</th><th>Enabled</th><th></th></tr></thead><tbody>
         ${projects.map(p => { const [label,color] = appBadge(p.app); const isBusy = acting.startsWith(p.domain+':'); const stColor = {live:'green',partial:'orange',stopped:'red',disabled:'purple'}[p.status]||'red'; return html`<tr>
           <td><b>${p.domain}</b></td><td><span class="badge badge-${stColor}">${p.status||'unknown'}</span></td><td><span class="badge badge-${color}">${label}</span></td>
           <td><select class="inline-select" value=${p.php} onChange=${e=>{PATCH('/api/projects/'+p.domain,{php:e.target.value});toast(p.domain+': PHP → '+e.target.value,'success');load();}}>${phpOpts.map(o=>html`<option selected=${o===p.php}>${o}</option>`)}</select></td>
