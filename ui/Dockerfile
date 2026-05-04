@@ -17,9 +17,13 @@ COPY ui/server/ ./
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /mage-ui .
 
 # ── Runtime ──────────────────────────────────────────────────────────────────
-FROM alpine:3.20
+FROM ubuntu:24.04
 
-RUN apk add --no-cache bash docker-cli docker-cli-compose curl
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update -y && \
+    apt-get install -y --no-install-recommends \
+        bash bash-completion docker.io docker-compose-v2 curl ca-certificates && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /mage-ui /usr/local/bin/mage-ui
 
