@@ -182,9 +182,19 @@ func main() {
 		}
 		e.Any(path+"/*", echo.WrapHandler(http.StripPrefix(path, p)))
 	}
-	proxyTool("/mailpit", "mailpit:8025")
 	proxyTool("/phpmyadmin", "phpmyadmin:80")
 	proxyTool("/redis-commander", "redis-commander:8081")
+
+	// Mailpit: pass-through without stripping prefix (uses MP_WEBROOT=/mailpit)
+	mp := httputil.NewSingleHostReverseProxy(&url.URL{Scheme: "http", Host: "mailpit:8025"})
+	mpDir := mp.Director
+	mp.Director = func(r *http.Request) { mpDir(r); r.Host = "mailpit:8025" }
+	mp.ModifyResponse = func(resp *http.Response) error {
+		resp.Header.Del("Content-Security-Policy")
+		resp.Header.Del("X-Frame-Options")
+		return nil
+	}
+	e.Any("/mailpit/*", echo.WrapHandler(mp))
 
 	// ── Static files (embedded frontend) ────────────────────────────────
 	webFS, _ := fs.Sub(embeddedWeb, "web")
