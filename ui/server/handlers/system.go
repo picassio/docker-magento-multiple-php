@@ -130,6 +130,30 @@ func DebugStop(c echo.Context) error {
 	return ok(c, map[string]string{"status": "stopped"})
 }
 
+// POST /api/dashboards/start — start OpenSearch Dashboards
+func DashboardsStart(c echo.Context) error {
+	hostDir := exec.HostProjectDir()
+	res, _ := exec.Run("docker", "compose",
+		"--project-directory", hostDir,
+		"-f", exec.RootDir+"/docker-compose.yml",
+		"-f", exec.RootDir+"/compose/dashboards.yml",
+		"up", "-d", "opensearch-dashboards")
+	out := ""
+	if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
+	return ok(c, map[string]string{"status": "started", "output": out})
+}
+
+// POST /api/dashboards/stop
+func DashboardsStop(c echo.Context) error {
+	hostDir := exec.HostProjectDir()
+	exec.Run("docker", "compose",
+		"--project-directory", hostDir,
+		"-f", exec.RootDir+"/docker-compose.yml",
+		"-f", exec.RootDir+"/compose/dashboards.yml",
+		"rm", "-sf", "opensearch-dashboards")
+	return ok(c, map[string]string{"status": "stopped"})
+}
+
 func EnableSSL(c echo.Context) error {
 	domain := c.Param("domain")
 	res, _ := exec.MageTimeout(60*time.Second, "ssl", domain)

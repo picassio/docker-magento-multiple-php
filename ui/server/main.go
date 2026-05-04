@@ -131,6 +131,10 @@ func main() {
 	api.POST("/debug/start", handlers.DebugStart)
 	api.POST("/debug/stop", handlers.DebugStop)
 
+	// OpenSearch Dashboards
+	api.POST("/dashboards/start", handlers.DashboardsStart)
+	api.POST("/dashboards/stop", handlers.DashboardsStop)
+
 	// Commands
 	api.POST("/exec", handlers.ExecCommand)
 	api.POST("/ssl/:domain", handlers.EnableSSL)
@@ -195,6 +199,9 @@ func main() {
 		return nil
 	}
 	e.Any("/mailpit/*", echo.WrapHandler(mp))
+
+	// OpenSearch Dashboards
+	proxyTool("/opensearch-dashboards", "opensearch-dashboards:5601")
 
 	// ── Static files (embedded frontend) ────────────────────────────────
 	webFS, _ := fs.Sub(embeddedWeb, "web")

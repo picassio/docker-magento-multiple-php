@@ -59,6 +59,7 @@ function Sidebar({ page, setPage }) {
     ['/files', 'Files', I('<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M13 2v7h7"/>')],
     ['/sql', 'SQL', I('<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>')],
     ['/mail', 'Mail', I('<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>')],
+    ['/search', 'Search', I('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>')],
     ['/terminal', 'Terminal', I('<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>')],
     ['/settings', 'Settings', I('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.2.65.77 1.09 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>')],
   ];
@@ -719,6 +720,47 @@ function MailPage() {
   </div>`;
 }
 
+// ── OpenSearch Dashboards ────────────────────────────────────────────────────
+function SearchPage() {
+  const [dashUp, setDashUp] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [log, setLog] = useState('');
+  const checkStatus = () => GET('/api/services').then(s => setDashUp((s||[]).some(x => x.service === 'opensearch-dashboards')));
+  useEffect(() => { checkStatus(); const t = setInterval(checkStatus, 5000); return () => clearInterval(t); }, []);
+
+  const startDash = async () => {
+    setStarting(true); setLog('Starting OpenSearch Dashboards...\n');
+    const r = await POST('/api/dashboards/start');
+    setLog(l => l + (r.output || 'Done') + '\n');
+    setStarting(false);
+    toast(r.status === 'started' ? 'Dashboards started' : 'Error', r.status === 'started' ? 'success' : 'error');
+    checkStatus();
+  };
+  const stopDash = async () => {
+    await POST('/api/dashboards/stop');
+    toast('Dashboards stopped', 'success');
+    setDashUp(false); setLog('');
+  };
+
+  const dashUrl = '/opensearch-dashboards/app/home';
+  return html`<div>
+    <div class="page-header"><h1>Search</h1><div class="actions">
+      ${dashUp ? html`<button class="btn btn-danger" onClick=${stopDash}>■ Stop Dashboards</button>`
+              : html`<button class="btn btn-success" onClick=${startDash} disabled=${starting}>${starting ? '⏳ Starting...' : '▶ Start Dashboards'}</button>`}
+    </div></div>
+    ${dashUp ? html`<div class="card" style="overflow:hidden">
+      <iframe src=${dashUrl} style="width:100%;height:calc(85vh - 100px);border:none"/>
+    </div>
+    <div style="padding:8px 0;font-size:12px;color:var(--text3)">OpenSearch Dashboards — visualize, query, and monitor your search indices</div>`
+    : html`<div class="card empty" style="padding:40px;text-align:center">
+      <p>OpenSearch Dashboards is not running</p>
+      <p style="font-size:13px;color:var(--text3);margin-top:8px">Requires OpenSearch service to be running first</p>
+      <button class="btn btn-primary" style="margin-top:16px" onClick=${startDash} disabled=${starting}>${starting ? '⏳ Starting...' : '▶ Start Dashboards'}</button>
+    </div>`}
+    ${log && html`<div class="card" style="margin-top:16px"><div class="card-header">Output</div><pre class="log-viewer" style="max-height:200px;overflow-y:auto">${log}</pre></div>`}
+  </div>`;
+}
+
 // ── Terminal ─────────────────────────────────────────────────────────────────
 function TerminalPage() {
   const [projects, setProjects] = useState([]);
@@ -845,7 +887,7 @@ function App() {
   const [page, setPage] = useState(getPage());
   useEffect(() => { const h = () => setPage(getPage()); window.addEventListener('hashchange', h); return () => window.removeEventListener('hashchange', h); }, []);
   const nav = p => { location.hash = p; setPage(p.split('?')[0]); };
-  const pages = { '/': Dashboard, '/services': ServicesPage, '/projects': Projects, '/db': DatabasePage, '/build': BuildPage, '/extensions': ExtensionsPage, '/logs': LogsPage, '/files': FilesPage, '/sql': SQLPage, '/mail': MailPage, '/terminal': TerminalPage, '/settings': SettingsPage };
+  const pages = { '/': Dashboard, '/services': ServicesPage, '/projects': Projects, '/db': DatabasePage, '/build': BuildPage, '/extensions': ExtensionsPage, '/logs': LogsPage, '/files': FilesPage, '/sql': SQLPage, '/mail': MailPage, '/search': SearchPage, '/terminal': TerminalPage, '/settings': SettingsPage };
   const Page = pages[page] || Dashboard;
   return html`<div class="app"><${Sidebar} page=${page} setPage=${nav} /><main class="main"><${Page} /></main></div>`;
 }
