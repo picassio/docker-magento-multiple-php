@@ -869,6 +869,44 @@ function TerminalPage() {
 }
 
 // ── Settings ─────────────────────────────────────────────────────────────────
+function XdebugPanel() {
+  const phpVersions = ['php81','php82','php83','php84','php85'];
+  const [status, setStatus] = useState({});
+  const loadStatus = async () => {
+    const svcs = await GET('/api/services') || [];
+    const running = svcs.filter(s => s.service.startsWith('php') && s.service !== 'phpmyadmin' && (s.state||'').includes('running')).map(s => s.service);
+    const st = {};
+    for (const php of running) {
+      const r = await GET('/api/xdebug/' + php);
+      if (r) st[php] = r.enabled === true;
+    }
+    setStatus(st);
+  };
+  useEffect(() => { loadStatus(); }, []);
+  const toggle = async (php, action) => {
+    toast('Xdebug ' + action + ' on ' + php + '...');
+    await POST('/api/xdebug/' + php + '/' + action);
+    toast('Xdebug ' + action + ' on ' + php, 'success');
+    loadStatus();
+  };
+  return html`<div class="card" style="margin-bottom:16px"><div class="card-header">Xdebug</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;padding:8px">
+      ${phpVersions.map(p => {
+        const isOn = status[p] === true;
+        const isOff = status[p] === false;
+        const unknown = status[p] === undefined;
+        return html`<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg);border-radius:var(--radius-sm)">
+          <b>${p}</b>
+          <span class="badge badge-${isOn?'green':isOff?'red':'purple'}" style="font-size:11px">${isOn?'on':isOff?'off':'—'}</span>
+          ${!unknown && html`${isOn
+            ? html`<button class="btn btn-sm btn-danger" onClick=${()=>toggle(p,'off')}>Disable</button>`
+            : html`<button class="btn btn-sm btn-success" onClick=${()=>toggle(p,'on')}>Enable</button>`
+          }`}
+        </div>`;
+      })}
+    </div>
+  </div>`;
+}
 function SettingsPage() {
   const [doctor, setDoctor] = useState(null);
   const [env, setEnv] = useState([]);
@@ -891,13 +929,7 @@ function SettingsPage() {
       ${doctor && doctor.checks && doctor.checks.map(ch => ch.status!=='info'||ch.raw.includes(':') ? html`<div class="doctor-check ${ch.status}"><span class="icon">${ch.status==='pass'?'✔':ch.status==='fail'?'✖':'ℹ'}</span><span>${ch.raw}</span></div>` : null)}
     </div>
 
-    <div class="card" style="margin-bottom:16px"><div class="card-header">Xdebug</div>
-      <div style="display:flex;gap:16px;flex-wrap:wrap;padding:8px">
-        ${['php81','php82','php83','php84','php85'].map(p=>html`<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg);border-radius:var(--radius-sm)">
-          <b>${p}</b> <button class="btn btn-sm btn-success" onClick=${()=>{toast('Xdebug on '+p);POST('/api/xdebug/'+p+'/on');}}>On</button><button class="btn btn-sm" onClick=${()=>{toast('Xdebug off '+p);POST('/api/xdebug/'+p+'/off');}}>Off</button>
-        </div>`)}
-      </div>
-    </div>
+    <${XdebugPanel} />
 
     <div class="card"><div class="card-header">.env <button class="btn btn-sm btn-primary" onClick=${saveEnv}>💾 Save</button></div>
       ${env.map(e => e.type==='comment' ? html`<div class="env-row comment">${e.value}</div>` :
