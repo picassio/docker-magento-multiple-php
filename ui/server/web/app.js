@@ -723,9 +723,14 @@ function MailPage() {
 // ── OpenSearch Dashboards ────────────────────────────────────────────────────
 function SearchPage() {
   const [dashUp, setDashUp] = useState(false);
+  const [searchEngines, setSearchEngines] = useState([]);
   const [starting, setStarting] = useState(false);
   const [log, setLog] = useState('');
-  const checkStatus = () => GET('/api/services').then(s => setDashUp((s||[]).some(x => x.service === 'opensearch-dashboards')));
+  const checkStatus = () => GET('/api/services').then(s => {
+    if (!s) return;
+    setDashUp(s.some(x => x.service === 'opensearch-dashboards'));
+    setSearchEngines(s.filter(x => ['opensearch','opensearch1','elasticsearch','elasticsearch7'].includes(x.service)));
+  });
   useEffect(() => { checkStatus(); const t = setInterval(checkStatus, 5000); return () => clearInterval(t); }, []);
 
   const startDash = async () => {
@@ -749,13 +754,17 @@ function SearchPage() {
         <button class="btn btn-danger" onClick=${stopDash}>■ Stop Dashboards</button>`
               : html`<button class="btn btn-success" onClick=${startDash} disabled=${starting}>${starting ? '⏳ Starting...' : '▶ Start Dashboards'}</button>`}
     </div></div>
+    ${searchEngines.length > 0 && html`<div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+      ${searchEngines.map(e => html`<div class="badge badge-${(e.state||'').includes('running')?'green':'red'}" style="padding:6px 12px">${e.service} ${(e.state||'').includes('running')?'\u25cf running':'\u25cb stopped'}</div>`)}
+    </div>`}
     ${dashUp ? html`<div class="card" style="overflow:hidden">
       <iframe src=${dashUrl} style="width:100%;height:calc(85vh - 100px);border:none"/>
     </div>
     <div style="padding:8px 0;font-size:12px;color:var(--text3)">OpenSearch Dashboards — visualize, query, and monitor your search indices</div>`
     : html`<div class="card empty" style="padding:40px;text-align:center">
       <p>OpenSearch Dashboards is not running</p>
-      <p style="font-size:13px;color:var(--text3);margin-top:8px">Requires OpenSearch service to be running first</p>
+      <p style="font-size:13px;color:var(--text3);margin-top:8px">Connects to OpenSearch 2.x automatically. Start OpenSearch from the Services page first.</p>
+      <p style="font-size:12px;color:var(--text3);margin-top:4px">Note: Elasticsearch requires Kibana (not included). OpenSearch 1.3 needs a compatible Dashboards version.</p>
       <button class="btn btn-primary" style="margin-top:16px" onClick=${startDash} disabled=${starting}>${starting ? '⏳ Starting...' : '▶ Start Dashboards'}</button>
     </div>`}
     ${log && html`<div class="card" style="margin-top:16px"><div class="card-header">Output</div><pre class="log-viewer" style="max-height:200px;overflow-y:auto">${log}</pre></div>`}

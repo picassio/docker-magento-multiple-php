@@ -131,7 +131,24 @@ func DebugStop(c echo.Context) error {
 }
 
 // POST /api/dashboards/start — start OpenSearch Dashboards
+// Checks that OpenSearch is running first
 func DashboardsStart(c echo.Context) error {
+	// Check if any OpenSearch instance is running
+	runRes, _ := exec.DockerCompose("ps", "--format", "{{.Service}}", "--status", "running")
+	hasOS := false
+	if runRes != nil {
+		for _, svc := range strings.Split(runRes.Stdout, "\n") {
+			svc = strings.TrimSpace(svc)
+			if svc == "opensearch" || svc == "opensearch1" {
+				hasOS = true
+				break
+			}
+		}
+	}
+	if !hasOS {
+		return ok(c, map[string]string{"status": "error", "output": "No OpenSearch instances running. Start OpenSearch first from the Services page."})
+	}
+
 	hostDir := exec.HostProjectDir()
 	res, _ := exec.Run("docker", "compose",
 		"--project-directory", hostDir,
