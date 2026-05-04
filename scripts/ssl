@@ -71,7 +71,9 @@ checkSslCommand() {
         if curl -fsSL "$mkcert_url" -o "${ROOT_DIR}/bin/mkcert"; then
             chmod +x "${ROOT_DIR}/bin/mkcert"
             export PATH="${ROOT_DIR}/bin:$PATH"
-            mkcert -install 2>/dev/null || true
+            # Install CA root into system trust store
+            apt-get install -y libnss3-tools 2>/dev/null || sudo apt-get install -y libnss3-tools 2>/dev/null || true
+            mkcert -install 2>/dev/null || sudo mkcert -install 2>/dev/null || true
             _success "mkcert installed to bin/mkcert"
         else
             _error "Failed to download mkcert"
