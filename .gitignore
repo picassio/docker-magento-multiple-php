@@ -24,3 +24,4 @@ gitInfo.md/data/mysql80/*
 !/data/mysql80/.keepme
 /data/mariadb/*
 !/data/mariadb/.keepme
+bin/mkcert

@@ -49,7 +49,16 @@ processArgs() {
 
 # ── mkcert check ──────────────────────────────────────────────────────────────
 checkSslCommand() {
-    if ! command -v mkcert &>/dev/null; then
+    # Check host path first, then container path, then project-local bin
+    local mkcert_bin=""
+    if command -v mkcert &>/dev/null; then
+        mkcert_bin="mkcert"
+    elif [[ -x "${ROOT_DIR}/bin/mkcert" ]]; then
+        mkcert_bin="${ROOT_DIR}/bin/mkcert"
+        export PATH="${ROOT_DIR}/bin:$PATH"
+    fi
+
+    if [[ -z "$mkcert_bin" ]]; then
         _arrow "mkcert not found, installing..."
         local arch=$(dpkg --print-architecture 2>/dev/null || uname -m)
         local mkcert_arch="amd64"
@@ -57,16 +66,15 @@ checkSslCommand() {
             arm64|aarch64) mkcert_arch="arm64" ;;
         esac
         local mkcert_url="https://github.com/FiloSottile/mkcert/releases/download/v1.4.3/mkcert-v1.4.3-linux-${mkcert_arch}"
-        if curl -fsSL "$mkcert_url" -o /usr/local/bin/mkcert 2>/dev/null || \
-           sudo curl -fsSL "$mkcert_url" -o /usr/local/bin/mkcert 2>/dev/null; then
-            chmod +x /usr/local/bin/mkcert 2>/dev/null || sudo chmod +x /usr/local/bin/mkcert
+        # Install to project bin/ (persists across container recreates)
+        mkdir -p "${ROOT_DIR}/bin"
+        if curl -fsSL "$mkcert_url" -o "${ROOT_DIR}/bin/mkcert"; then
+            chmod +x "${ROOT_DIR}/bin/mkcert"
+            export PATH="${ROOT_DIR}/bin:$PATH"
             mkcert -install 2>/dev/null || true
-            _success "mkcert installed"
+            _success "mkcert installed to bin/mkcert"
         else
-            _error "Failed to install mkcert. Install manually:"
-            echo "    sudo wget $mkcert_url -O /usr/local/bin/mkcert"
-            echo "    sudo chmod +x /usr/local/bin/mkcert"
-            echo "    mkcert -install"
+            _error "Failed to download mkcert"
             exit 1
         fi
     fi
