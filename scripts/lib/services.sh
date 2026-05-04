@@ -11,6 +11,7 @@
 _SERVICES_SH_LOADED=1
 
 source "$(dirname "${BASH_SOURCE[0]}")/docker.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/projects.sh"
 
 # ── Path constants ────────────────────────────────────────────────────────────
 NGINX_CONF_DIR="${CONF_DIR}/nginx/conf.d"
@@ -48,7 +49,18 @@ validate_domain() {
 require_domain_config() {
     local domain="$1"
     if [[ ! -f "${NGINX_CONF_DIR}/${domain}.conf" ]]; then
-        _die "No nginx config found for '${domain}'. Create it first with: ./scripts/create-vhost"
+        # Auto-create vhost from project config if project exists
+        if project_exists "$domain" 2>/dev/null; then
+            local php app root_dir
+            php=$(project_get "$domain" "php")
+            app=$(project_get "$domain" "app")
+            root_dir="$domain"
+            [[ "$app" == "laravel" ]] && root_dir="$domain/public"
+            _arrow "Creating missing vhost for ${domain}..."
+            "${SCRIPTS_DIR}/create-vhost" --domain="$domain" --app="$app" --root-dir="$root_dir" --php-version="$php" 2>&1 || true
+        else
+            _die "No nginx config found for '${domain}'. Create it first with: ./scripts/create-vhost"
+        fi
     fi
     _success "Domain config exists: ${domain}.conf"
 }

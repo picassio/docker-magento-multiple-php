@@ -271,6 +271,15 @@ func StartProject(c echo.Context) error {
 		writeProjects(projects)
 	}
 
+	// Ensure vhost config exists
+	vhostFile := filepath.Join(exec.RootDir, "conf", "nginx", "conf.d", domain+".conf")
+	if _, err := os.Stat(vhostFile); os.IsNotExist(err) {
+		rootDir := domain
+		if p.App == "laravel" { rootDir = domain + "/public" }
+		exec.Run(exec.RootDir+"/scripts/create-vhost",
+			"--domain="+domain, "--app="+p.App, "--root-dir="+rootDir, "--php-version="+p.PHP)
+	}
+
 	args := buildProjectComposeArgs(p)
 	args = append(args, "up", "-d", "--no-build")
 	args = append(args, projectServices(p)...)

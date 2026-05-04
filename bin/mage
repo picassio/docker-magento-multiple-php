@@ -379,11 +379,8 @@ cmd_project_stop() {
         _arrow "No services to stop (all shared with other projects)"
     fi
 
-    # Remove vhost so nginx doesn't try to reach stopped PHP
-    rm -f "${NGINX_CONF_DIR}/${domain}.conf" "${NGINX_CONF_DIR}/${domain}-ssl.conf" 2>/dev/null
-    if is_service_running nginx 2>/dev/null; then
-        dc exec nginx nginx -s reload 2>/dev/null || true
-    fi
+    # Keep vhost configs intact — nginx returns 502 for stopped projects
+    # which is expected. Vhosts + SSL certs survive stop/start cycles.
 
     _success "Project '$domain' stopped"
 }
