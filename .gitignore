@@ -27,3 +27,4 @@ gitInfo.md/data/mysql80/*
 bin/mkcert
 *.crt
 *.key
+projects.json
