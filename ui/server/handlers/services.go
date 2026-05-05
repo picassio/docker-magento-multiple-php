@@ -53,16 +53,28 @@ func str(m map[string]interface{}, k string) string {
 	return ""
 }
 
-// ListAllServices returns all defined services (running or not) from compose config
-func ListAllServices(c echo.Context) error {
-	// Get all defined services
-	res, _ := exec.DockerCompose("config", "--services")
-	if res == nil {
-		return ok(c, []map[string]string{})
-	}
+// allKnownServices is the static list of all services across all compose files.
+// No need to query compose config — just list what we support.
+var allKnownServices = []string{
+	"nginx",
+	"php70", "php71", "php72", "php73", "php74",
+	"php81", "php82", "php83", "php84", "php85",
+	"mysql", "mysql80", "mariadb", "postgres", "mongodb",
+	"redis", "redis6",
+	"opensearch", "opensearch1", "elasticsearch", "elasticsearch7",
+	"rabbitmq",
+	"mailpit", "varnish",
+	"phpmyadmin", "pgadmin", "mongo-express", "redis-commander",
+	"opensearch-dashboards", "kibana", "kibana7",
+}
 
-	// Get running services
-	runningRes, _ := exec.DockerCompose("ps", "--format", "{{.Service}}\t{{.State}}\t{{.Status}}\t{{.Ports}}", "-a")
+// ListAllServices returns all supported services with their running status
+func ListAllServices(c echo.Context) error {
+	// Get running containers from the project
+	pn := "docker-magento-multiple-php"
+	runningRes, _ := exec.Run("docker", "ps", "-a",
+		"--filter", "label=com.docker.compose.project="+pn,
+		"--format", "{{.Label \"com.docker.compose.service\"}}\t{{.State}}\t{{.Status}}\t{{.Ports}}")
 	running := map[string]map[string]string{}
 	if runningRes != nil {
 		for _, line := range strings.Split(runningRes.Stdout, "\n") {
@@ -76,9 +88,8 @@ func ListAllServices(c echo.Context) error {
 	}
 
 	var services []map[string]string
-	for _, svc := range strings.Split(res.Stdout, "\n") {
-		svc = strings.TrimSpace(svc)
-		if svc == "" || hiddenServices[svc] { continue }
+	for _, svc := range allKnownServices {
+		if hiddenServices[svc] { continue }
 		entry := map[string]string{"service": svc, "state": "stopped", "status": "", "ports": ""}
 		if r, ok := running[svc]; ok {
 			entry["state"] = r["state"]
@@ -107,6 +118,8 @@ var svcOrder = map[string]int{
 		"elasticsearch": 52, "elasticsearch7": 53,
 		"rabbitmq": 60,
 		"mailpit": 70, "varnish": 80,
+		"phpmyadmin": 90, "pgadmin": 91, "mongo-express": 92, "redis-commander": 93,
+		"opensearch-dashboards": 94, "kibana": 95, "kibana7": 96,
 }
 
 func ServicesUp(c echo.Context) error {
@@ -161,13 +174,39 @@ func ServicesStop(c echo.Context) error {
 	return ok(c, map[string]string{"status": "stopped", "output": out})
 }
 
+// svcOverrides maps services to their compose override files
+var svcOverrides = map[string][]string{
+	"php70": {"legacy"}, "php71": {"legacy"}, "php72": {"legacy"}, "php73": {"legacy"}, "php74": {"legacy"},
+	"mysql80": {"mysql80"}, "mariadb": {"mariadb"}, "postgres": {"postgres"},
+	"mongodb": {"mongodb"}, "mongo-express": {"mongodb", "mongoexpress"},
+	"opensearch1": {"opensearch1"},
+	"elasticsearch": {"elasticsearch"}, "elasticsearch7": {"elasticsearch7"},
+	"redis6": {"redis6"}, "varnish": {"varnish"},
+	"opensearch-dashboards": {"dashboards"},
+	"kibana": {"elasticsearch", "kibana"}, "kibana7": {"elasticsearch7", "kibana7"},
+	"phpmyadmin": {"debug"}, "redis-commander": {"debug"},
+	"pgadmin": {"postgres", "pgadmin"},
+}
+
+func composeArgsForService(name string) []string {
+	hostDir := exec.HostProjectDir()
+	args := []string{"compose", "--project-directory", hostDir, "-f", exec.RootDir + "/docker-compose.yml"}
+	if overrides, ok := svcOverrides[name]; ok {
+		for _, ov := range overrides {
+			args = append(args, "-f", exec.RootDir+"/compose/"+ov+".yml")
+		}
+	}
+	return args
+}
+
 func StartService(c echo.Context) error {
 	name := c.Param("name")
 	if hiddenServices[name] {
 		return fail(c, 400, "Cannot control the UI service from the UI")
 	}
-	// Use --no-build to prevent hanging on missing images
-	res, _ := exec.DockerCompose("up", "-d", "--no-build", name)
+	args := composeArgsForService(name)
+	args = append(args, "up", "-d", "--no-build", name)
+	res, _ := exec.Run("docker", args...)
 	out := ""
 	if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
 	status := "started"
@@ -185,7 +224,9 @@ func StopService(c echo.Context) error {
 	if hiddenServices[name] {
 		return fail(c, 400, "Cannot control the UI service from the UI")
 	}
-	res, _ := exec.DockerCompose("stop", name)
+	args := composeArgsForService(name)
+	args = append(args, "stop", name)
+	res, _ := exec.Run("docker", args...)
 	out := ""
 	if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
 	return ok(c, map[string]string{"status": "stopped", "service": name, "output": out})
@@ -196,7 +237,9 @@ func RestartService(c echo.Context) error {
 	if hiddenServices[name] {
 		return fail(c, 400, "Cannot control the UI service from the UI")
 	}
-	res, _ := exec.Mage("restart", name)
+	args := composeArgsForService(name)
+	args = append(args, "restart", name)
+	res, _ := exec.Run("docker", args...)
 	out := ""
 	if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
 	return ok(c, map[string]string{"status": "restarted", "service": name, "output": out})
