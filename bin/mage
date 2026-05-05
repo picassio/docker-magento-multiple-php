@@ -202,6 +202,7 @@ cmd_project_add() {
     # Create source dir
     if [[ ! -d "${SOURCE_DIR}/${domain}" ]]; then
         mkdir -p "${SOURCE_DIR}/${domain}"
+        fix_ownership "${SOURCE_DIR}/${domain}"
         _success "Created sources/${domain}/"
     fi
 

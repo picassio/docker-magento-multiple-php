@@ -74,6 +74,19 @@ SOURCE_DIR="${ROOT_DIR}/sources"
 CONF_DIR="${ROOT_DIR}/conf"
 
 # ── Root dir validation ───────────────────────────────────────────────────────
+# ── Fix ownership (when running as root/sudo) ─────────────────────────────────
+fix_ownership() {
+    # Match ownership to the project root dir's owner
+    if [[ $EUID -eq 0 ]]; then
+        local owner
+        owner=$(stat -c '%u:%g' "$ROOT_DIR" 2>/dev/null) || return 0
+        [[ "$owner" == "0:0" ]] && return 0
+        for f in "$@"; do
+            [[ -e "$f" ]] && chown "$owner" "$f" 2>/dev/null || true
+        done
+    fi
+}
+
 require_root_dir() {
     if [[ ! -f "${ROOT_DIR}/docker-compose.yml" ]]; then
         _die "Cannot find docker-compose.yml. Please run this command from the project root directory."

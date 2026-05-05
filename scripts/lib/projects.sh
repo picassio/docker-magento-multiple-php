@@ -128,6 +128,7 @@ with open('${PROJECTS_FILE}', 'w') as f:
     json.dump(data, f, indent=2)
 " 2>/dev/null
 }
+    fix_ownership "${PROJECTS_FILE}"
 
 # ── Update a single field ────────────────────────────────────────────────────
 # Usage: project_update <domain> <field> <value>
@@ -147,6 +148,7 @@ if '${domain}' in data:
         json.dump(data, f, indent=2)
 " 2>/dev/null
 }
+    fix_ownership "${PROJECTS_FILE}"
 
 # ── Remove a project ─────────────────────────────────────────────────────────
 project_remove() {
