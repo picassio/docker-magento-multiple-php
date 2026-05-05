@@ -679,7 +679,7 @@ function SQLPage() {
     </div>`}
 
     ${tab === 'pgadmin' && html`<div class="card" style="overflow:hidden">
-      ${pgadminUp ? html`<iframe src="/pgadmin/" style="width:100%;height:calc(80vh - 160px);border:none"/>` :
+      ${pgadminUp ? html`<iframe src="/pgadmin/browser/" style="width:100%;height:calc(80vh - 160px);border:none"/>` :
         html`<div class="empty" style="padding:40px"><p>pgAdmin is not running</p><button class="btn btn-primary" onClick=${startPgAdmin}>Start pgAdmin</button></div>`}
       <div style="padding:8px 14px;border-top:1px solid var(--border);font-size:12px;color:var(--text3);display:flex;justify-content:space-between;align-items:center">
         <span>pgAdmin — PostgreSQL database management</span>

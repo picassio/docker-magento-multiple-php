@@ -242,6 +242,8 @@ func main() {
 	pga.ModifyResponse = func(resp *http.Response) error {
 		resp.Header.Del("Content-Security-Policy")
 		resp.Header.Del("X-Frame-Options")
+		resp.Header.Del("Cross-Origin-Opener-Policy")
+		resp.Header.Del("Cross-Origin-Embedder-Policy")
 		return nil
 	}
 	e.Any("/pgadmin/*", echo.WrapHandler(pga))
