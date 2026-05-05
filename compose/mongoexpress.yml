@@ -1,0 +1,17 @@
+# Mongo Express — MongoDB web dashboard
+services:
+  mongo-express:
+    image: mongo-express:latest
+    hostname: mongo-express
+    environment:
+      ME_CONFIG_MONGODB_SERVER: mongodb
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGODB_USER:-root}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGODB_PASSWORD:-root}
+      ME_CONFIG_BASICAUTH: "false"
+      ME_CONFIG_SITE_BASEURL: /mongo-express
+    ports:
+      - "${MONGOEXPRESS_PORT:-8082}:8081"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped

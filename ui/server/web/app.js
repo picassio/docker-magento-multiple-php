@@ -624,6 +624,7 @@ function SQLPage() {
   const [result, setResult] = useState(null);
   const [toolsUp, setToolsUp] = useState(false);
   const [pgadminUp, setPgadminUp] = useState(false);
+  const [mongoUp, setMongoUp] = useState(false);
 
   useEffect(() => {
     GET('/api/databases').then(d => { setDbs(d||[]); if(d&&d.length){setDb(d[0].name);setSvc(d[0].service);} });
@@ -631,6 +632,7 @@ function SQLPage() {
       if (!s) return;
       setToolsUp(s.some(x => x.service === 'phpmyadmin'));
       setPgadminUp(s.some(x => x.service === 'pgadmin'));
+      setMongoUp(s.some(x => x.service === 'mongo-express'));
     });
   }, []);
   useEffect(() => { if(db&&svc&&tab==='query') GET('/api/dbmanager/tables?db='+db+'&service='+svc).then(t=>setTables(t||[])); }, [db,svc,tab]);
@@ -646,6 +648,12 @@ function SQLPage() {
     await POST('/api/pgadmin/start');
     setPgadminUp(true);
     toast('pgAdmin started','success');
+  };
+  const startMongo = async () => {
+    toast('Starting MongoDB + Mongo Express...');
+    await POST('/api/mongo/start');
+    setMongoUp(true);
+    toast('MongoDB started','success');
   };
 
   const runQuery = async () => {
@@ -664,7 +672,7 @@ function SQLPage() {
     </div></div>
 
     <div style="display:flex;gap:0;margin-bottom:16px">
-      ${[['phpmyadmin','phpMyAdmin'],['pgadmin','pgAdmin'],['redis','Redis'],['query','Quick Query']].map(([id,label],i,a)=>
+      ${[['phpmyadmin','phpMyAdmin'],['pgadmin','pgAdmin'],['mongo','MongoDB'],['redis','Redis'],['query','Quick Query']].map(([id,label],i,a)=>
         html`<button class="btn ${tab===id?'btn-primary':''}" style="border-radius:${i===0?'var(--radius-sm) 0 0 var(--radius-sm)':i===a.length-1?'0 var(--radius-sm) var(--radius-sm) 0':'0'};margin-left:${i>0?'-1px':'0'}" onClick=${()=>setTab(id)}>${label}</button>`
       )}
     </div>
@@ -684,6 +692,15 @@ function SQLPage() {
       <div style="padding:8px 14px;border-top:1px solid var(--border);font-size:12px;color:var(--text3);display:flex;justify-content:space-between;align-items:center">
         <span>pgAdmin — PostgreSQL database management</span>
         <a href="/pgadmin/" target="_blank" class="btn btn-sm">Open in new tab</a>
+      </div>
+    </div>`}
+
+    ${tab === 'mongo' && html`<div class="card" style="overflow:hidden">
+      ${mongoUp ? html`<iframe src="/mongo-express/" style="width:100%;height:calc(80vh - 160px);border:none"/>` :
+        html`<div class="empty" style="padding:40px"><p>MongoDB is not running</p><button class="btn btn-primary" onClick=${startMongo}>Start MongoDB</button></div>`}
+      <div style="padding:8px 14px;border-top:1px solid var(--border);font-size:12px;color:var(--text3);display:flex;justify-content:space-between;align-items:center">
+        <span>Mongo Express \u2014 MongoDB web interface</span>
+        <a href="/mongo-express/" target="_blank" class="btn btn-sm">Open in new tab</a>
       </div>
     </div>`}
 

@@ -1,0 +1,18 @@
+# MongoDB 7 — for custom apps, headless CMS
+services:
+  mongodb:
+    image: mongo:${MONGODB_VERSION:-7}
+    hostname: mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USER:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD:-root}
+    volumes:
+      - ./data/mongodb:/data/db
+    ports:
+      - "${MONGODB_PORT:-27017}:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--quiet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped

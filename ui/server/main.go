@@ -138,6 +138,8 @@ func main() {
 	api.POST("/kibana/stop", handlers.KibanaStop)
 	api.POST("/pgadmin/start", handlers.PgAdminStart)
 	api.POST("/pgadmin/stop", handlers.PgAdminStop)
+	api.POST("/mongo/start", handlers.MongoStart)
+	api.POST("/mongo/stop", handlers.MongoStop)
 
 	// Commands
 	api.POST("/exec", handlers.ExecCommand)
@@ -247,6 +249,17 @@ func main() {
 		return nil
 	}
 	e.Any("/pgadmin/*", echo.WrapHandler(pga))
+
+	// Mongo Express: pass-through (uses ME_CONFIG_SITE_BASEURL=/mongo-express)
+	me := httputil.NewSingleHostReverseProxy(&url.URL{Scheme: "http", Host: "mongo-express:8081"})
+	meDir := me.Director
+	me.Director = func(r *http.Request) { meDir(r); r.Host = "mongo-express:8081" }
+	me.ModifyResponse = func(resp *http.Response) error {
+		resp.Header.Del("Content-Security-Policy")
+		resp.Header.Del("X-Frame-Options")
+		return nil
+	}
+	e.Any("/mongo-express/*", echo.WrapHandler(me))
 
 	// ── Static files (embedded frontend) ────────────────────────────────
 	webFS, _ := fs.Sub(embeddedWeb, "web")

@@ -108,6 +108,8 @@ bin/mage magento mysite.com cache:flush
 | `postgres.yml` | PostgreSQL 17 | 5432 | Laravel, custom apps |
 | `debug.yml` | phpMyAdmin, Redis Commander | 8080, 8081 | DB/cache inspection |
 | `pgadmin.yml` | pgAdmin 4 | 5050 | PostgreSQL dashboard |
+| `mongodb.yml` | MongoDB 7 | 27017 | Document database |
+| `mongoexpress.yml` | Mongo Express | 8082 | MongoDB dashboard |
 | `kibana.yml` | Kibana 8.x | 5602 | Elasticsearch 8.x dashboard |
 | `kibana7.yml` | Kibana 7.x | 5603 | Elasticsearch 7.x dashboard |
 | `varnish.yml` | Varnish 7.6 | 6081 | Full-page cache |
@@ -606,7 +608,8 @@ mysql      8.4   3306    opensearch    2.x    9200
 mysql80    8.0   3307    opensearch1   1.3    9201
 mariadb   11.4   3308    elasticsearch 8.x    9202
 postgres    17   5432    elasticsearch7 7.x   9203
-redis      7.4   6379    pgadmin             5050
+mongodb      7  27017    pgadmin             5050
+redis      7.4   6379    mongo-express       8082
 redis6     6.2   6380
 ```
 

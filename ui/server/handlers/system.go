@@ -257,6 +257,32 @@ func PgAdminStop(c echo.Context) error {
 	return ok(c, map[string]string{"status": "stopped"})
 }
 
+// POST /api/mongo/start
+func MongoStart(c echo.Context) error {
+	hostDir := exec.HostProjectDir()
+	res, _ := exec.Run("docker", "compose",
+		"--project-directory", hostDir,
+		"-f", exec.RootDir+"/docker-compose.yml",
+		"-f", exec.RootDir+"/compose/mongodb.yml",
+		"-f", exec.RootDir+"/compose/mongoexpress.yml",
+		"up", "-d", "mongodb", "mongo-express")
+	out := ""
+	if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
+	return ok(c, map[string]string{"status": "started", "output": out})
+}
+
+// POST /api/mongo/stop
+func MongoStop(c echo.Context) error {
+	hostDir := exec.HostProjectDir()
+	exec.Run("docker", "compose",
+		"--project-directory", hostDir,
+		"-f", exec.RootDir+"/docker-compose.yml",
+		"-f", exec.RootDir+"/compose/mongodb.yml",
+		"-f", exec.RootDir+"/compose/mongoexpress.yml",
+		"rm", "-sf", "mongodb", "mongo-express")
+	return ok(c, map[string]string{"status": "stopped"})
+}
+
 func EnableSSL(c echo.Context) error {
 	domain := c.Param("domain")
 	res, _ := exec.MageTimeout(60*time.Second, "ssl", domain)
