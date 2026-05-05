@@ -110,7 +110,15 @@ function Dashboard() {
         <button class="btn-icon" onClick=${async () => { toast('Restarting '+s.service); await POST('/api/services/'+(s.service)+'/restart'); load(); }}>↻</button>
       </div>`;
     })}</div>
-    <div class="card-header" style="margin-top:24px">Projects <span class="badge badge-blue">${projects.length}</span></div>
+    <div class="card-header" style="margin-top:24px">Connection Info</div>
+    <div class="card" style="padding:16px;font-size:13px;margin-bottom:16px">
+      <table style="width:100%;border-collapse:collapse"><thead><tr style="text-align:left;opacity:0.6"><th style="padding:4px 8px">Service</th><th style="padding:4px 8px">Host</th><th style="padding:4px 8px">Port</th><th style="padding:4px 8px">User</th><th style="padding:4px 8px">Password</th><th style="padding:4px 8px">Database</th></tr></thead><tbody>
+        ${[{s:'mysql',h:'mysql',p:'3306',u:'root',pw:'root',db:'magento'},{s:'mysql80',h:'mysql80',p:'3307',u:'root',pw:'root',db:'magento'},{s:'mariadb',h:'mariadb',p:'3308',u:'root',pw:'root',db:'magento'},{s:'postgres',h:'postgres',p:'5432',u:'postgres',pw:'postgres',db:'app'},{s:'mongodb',h:'mongodb',p:'27017',u:'root',pw:'root',db:'admin'},{s:'redis',h:'redis',p:'6379',u:'',pw:'',db:''},{s:'redis6',h:'redis6',p:'6380',u:'',pw:'',db:''},{s:'opensearch',h:'opensearch',p:'9200',u:'',pw:'',db:''},{s:'elasticsearch',h:'elasticsearch',p:'9202',u:'',pw:'',db:''},{s:'rabbitmq',h:'rabbitmq',p:'5672',u:'admin',pw:'admin',db:''},].filter(r=>services.some(s=>(s.service===r.s)&&svcState(s)==='running')).map(r=>html`<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px"><b>${r.s}</b></td><td style="padding:6px 8px;font-family:var(--mono)">${r.h}</td><td style="padding:6px 8px;font-family:var(--mono)">${r.p}</td><td style="padding:6px 8px;font-family:var(--mono)">${r.u||'\u2014'}</td><td style="padding:6px 8px;font-family:var(--mono)">${r.pw||'\u2014'}</td><td style="padding:6px 8px;font-family:var(--mono)">${r.db||'\u2014'}</td></tr>`)}
+      </tbody></table>
+      <div style="margin-top:8px;font-size:11px;opacity:0.5">Credentials from .env — edit in Settings page. Host names are Docker service names (use from inside containers).</div>
+    </div>
+
+    <div class="card-header">Projects <span class="badge badge-blue">${projects.length}</span></div>
     ${projects.length === 0 ? html`<div class="card empty"><div class="icon">📁</div><p>No projects</p></div>` :
       html`<div class="card table-wrap"><table><thead><tr><th>Domain</th><th>Status</th><th>Type</th><th>PHP</th><th>DB</th><th>Search</th></tr></thead><tbody>
         ${projects.map(p => { const [label,color] = appBadge(p.app); const stColor = {live:'green',partial:'orange',stopped:'red',disabled:'purple'}[p.status]||'red'; return html`<tr><td><b>${p.domain}</b></td><td><span class="badge badge-${stColor}">${p.status||'unknown'}</span></td><td><span class="badge badge-${color}">${label}</span></td><td>${p.php}</td><td>${p.db_service}</td><td>${p.search}</td></tr>`; })}
