@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 
 	"github.com/labstack/echo/v4"
 	"github.com/picassio/docker-magento-multiple-php/ui/server/exec"
@@ -56,7 +57,19 @@ func writeProjects(projects map[string]Project) error {
 		out[d] = m
 	}
 	data, _ := json.MarshalIndent(out, "", "  ")
-	return os.WriteFile(projectsFile(), data, 0644)
+	err := os.WriteFile(projectsFile(), data, 0644)
+	// Match ownership to host user
+	chownToHostUser(projectsFile())
+	return err
+}
+
+// chownToHostUser sets file ownership to match the host user (from sources/ dir)
+func chownToHostUser(path string) {
+	if info, err := os.Stat(filepath.Join(exec.RootDir, "sources")); err == nil {
+		if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+			os.Chown(path, int(stat.Uid), int(stat.Gid))
+		}
+	}
 }
 
 func ListProjects(c echo.Context) error {
@@ -129,7 +142,14 @@ func AddProject(c echo.Context) error {
 	if _, exists := projects[p.Domain]; exists { return fail(c, 409, "project already exists") }
 	projects[p.Domain] = p
 	writeProjects(projects)
-	os.MkdirAll(filepath.Join(exec.RootDir, "sources", p.Domain), 0755)
+	srcDir := filepath.Join(exec.RootDir, "sources", p.Domain)
+	os.MkdirAll(srcDir, 0755)
+	// Match ownership to host user (from existing sources/ dir)
+	if info, err := os.Stat(filepath.Join(exec.RootDir, "sources")); err == nil {
+		if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+			os.Chown(srcDir, int(stat.Uid), int(stat.Gid))
+		}
+	}
 	rootDir := p.Domain
 	if p.App == "laravel" { rootDir = p.Domain + "/public" }
 	exec.Run(exec.RootDir+"/scripts/create-vhost", "--domain="+p.Domain, "--app="+p.App, "--root-dir="+rootDir, "--php-version="+p.PHP)
