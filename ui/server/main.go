@@ -136,6 +136,8 @@ func main() {
 	api.POST("/dashboards/stop", handlers.DashboardsStop)
 	api.POST("/kibana/start", handlers.KibanaStart)
 	api.POST("/kibana/stop", handlers.KibanaStop)
+	api.POST("/pgadmin/start", handlers.PgAdminStart)
+	api.POST("/pgadmin/stop", handlers.PgAdminStop)
 
 	// Commands
 	api.POST("/exec", handlers.ExecCommand)
@@ -232,6 +234,17 @@ func main() {
 		return nil
 	}
 	e.Any("/kibana7/*", echo.WrapHandler(kb7))
+
+	// pgAdmin: pass-through (uses SCRIPT_NAME=/pgadmin)
+	pga := httputil.NewSingleHostReverseProxy(&url.URL{Scheme: "http", Host: "pgadmin:80"})
+	pgaDir := pga.Director
+	pga.Director = func(r *http.Request) { pgaDir(r); r.Host = "pgadmin:80" }
+	pga.ModifyResponse = func(resp *http.Response) error {
+		resp.Header.Del("Content-Security-Policy")
+		resp.Header.Del("X-Frame-Options")
+		return nil
+	}
+	e.Any("/pgadmin/*", echo.WrapHandler(pga))
 
 	// ── Static files (embedded frontend) ────────────────────────────────
 	webFS, _ := fs.Sub(embeddedWeb, "web")

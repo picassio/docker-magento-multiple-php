@@ -203,6 +203,7 @@ project_compute_profiles() {
         case "$db_svc" in
             mariadb) echo "$profiles" | grep -qw mariadb || profiles="$profiles mariadb" ;;
             mysql80) echo "$profiles" | grep -qw mysql80 || profiles="$profiles mysql80" ;;
+            postgres) echo "$profiles" | grep -qw postgres || profiles="$profiles postgres" ;;
         esac
         # Search profiles
         case "$search" in

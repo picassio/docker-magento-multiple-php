@@ -202,7 +202,7 @@ function Projects() {
   useEffect(() => { load(); const t = setInterval(load, 5000); return () => clearInterval(t); }, []);
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [actionLog]);
   const phpOpts = ['php70','php71','php72','php73','php74','php81','php82','php83','php84','php85'];
-  const dbOpts = ['mysql','mysql80','mariadb'];
+  const dbOpts = ['mysql','mysql80','mariadb','postgres'];
   const searchOpts = ['opensearch','opensearch1','elasticsearch','elasticsearch7','none'];
   const redisOpts = ['redis','redis6','none'];
   const rabbitmqOpts = ['none','rabbitmq'];
@@ -335,7 +335,7 @@ function AddProjectModal({ show, onClose }) {
       <div class="form-group"><label>PHP</label><select value=${form.php} onChange=${e=>setForm({...form,php:e.target.value})} style="width:100%"><option>php85</option><option>php84</option><option>php83</option><option>php82</option><option>php81</option></select></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>DB</label><select value=${form.db_service} onChange=${e=>setForm({...form,db_service:e.target.value})} style="width:100%"><option value="mysql">MySQL 8.4</option><option value="mysql80">MySQL 8.0</option><option value="mariadb">MariaDB</option></select></div>
+      <div class="form-group"><label>DB</label><select value=${form.db_service} onChange=${e=>setForm({...form,db_service:e.target.value})} style="width:100%"><option value="mysql">MySQL 8.4</option><option value="mysql80">MySQL 8.0</option><option value="mariadb">MariaDB</option><option value="postgres">PostgreSQL</option></select></div>
       <div class="form-group"><label>Search</label><select value=${form.search} onChange=${e=>setForm({...form,search:e.target.value})} style="width:100%"><option value="opensearch">OpenSearch 2.x</option><option value="opensearch1">OpenSearch 1.3</option><option value="elasticsearch">ES 8.x</option><option value="elasticsearch7">ES 7.x</option><option value="none">None</option></select></div>
     </div>
     <div class="form-row">
@@ -623,11 +623,15 @@ function SQLPage() {
   const [query, setQuery] = useState('');
   const [result, setResult] = useState(null);
   const [toolsUp, setToolsUp] = useState(false);
+  const [pgadminUp, setPgadminUp] = useState(false);
 
   useEffect(() => {
     GET('/api/databases').then(d => { setDbs(d||[]); if(d&&d.length){setDb(d[0].name);setSvc(d[0].service);} });
-    // Check if debug tools running
-    GET('/api/services').then(s => { setToolsUp((s||[]).some(x => x.service === 'phpmyadmin')); });
+    GET('/api/services').then(s => {
+      if (!s) return;
+      setToolsUp(s.some(x => x.service === 'phpmyadmin'));
+      setPgadminUp(s.some(x => x.service === 'pgadmin'));
+    });
   }, []);
   useEffect(() => { if(db&&svc&&tab==='query') GET('/api/dbmanager/tables?db='+db+'&service='+svc).then(t=>setTables(t||[])); }, [db,svc,tab]);
 
@@ -636,6 +640,12 @@ function SQLPage() {
     await POST('/api/debug/start');
     setToolsUp(true);
     toast('Tools started','success');
+  };
+  const startPgAdmin = async () => {
+    toast('Starting pgAdmin...');
+    await POST('/api/pgadmin/start');
+    setPgadminUp(true);
+    toast('pgAdmin started','success');
   };
 
   const runQuery = async () => {
@@ -654,7 +664,7 @@ function SQLPage() {
     </div></div>
 
     <div style="display:flex;gap:0;margin-bottom:16px">
-      ${[['phpmyadmin','phpMyAdmin'],['redis','Redis'],['query','Quick Query']].map(([id,label],i,a)=>
+      ${[['phpmyadmin','phpMyAdmin'],['pgadmin','pgAdmin'],['redis','Redis'],['query','Quick Query']].map(([id,label],i,a)=>
         html`<button class="btn ${tab===id?'btn-primary':''}" style="border-radius:${i===0?'var(--radius-sm) 0 0 var(--radius-sm)':i===a.length-1?'0 var(--radius-sm) var(--radius-sm) 0':'0'};margin-left:${i>0?'-1px':'0'}" onClick=${()=>setTab(id)}>${label}</button>`
       )}
     </div>
@@ -665,6 +675,15 @@ function SQLPage() {
       <div style="padding:8px 14px;border-top:1px solid var(--border);font-size:12px;color:var(--text3);display:flex;justify-content:space-between;align-items:center">
         <span>phpMyAdmin — browse, query, manage all databases</span>
         <a href=${pmaUrl} target="_blank" class="btn btn-sm">Open in new tab</a>
+      </div>
+    </div>`}
+
+    ${tab === 'pgadmin' && html`<div class="card" style="overflow:hidden">
+      ${pgadminUp ? html`<iframe src="/pgadmin/" style="width:100%;height:calc(80vh - 160px);border:none"/>` :
+        html`<div class="empty" style="padding:40px"><p>pgAdmin is not running</p><button class="btn btn-primary" onClick=${startPgAdmin}>Start pgAdmin</button></div>`}
+      <div style="padding:8px 14px;border-top:1px solid var(--border);font-size:12px;color:var(--text3);display:flex;justify-content:space-between;align-items:center">
+        <span>pgAdmin — PostgreSQL database management</span>
+        <a href="/pgadmin/" target="_blank" class="btn btn-sm">Open in new tab</a>
       </div>
     </div>`}
 

@@ -101,7 +101,7 @@ var svcOrder = map[string]int{
 		"nginx": 1,
 		"php70": 10, "php71": 11, "php72": 12, "php73": 13, "php74": 14,
 		"php81": 15, "php82": 16, "php83": 17, "php84": 18, "php85": 19,
-		"mysql": 30, "mysql80": 31, "mariadb": 32,
+		"mysql": 30, "mysql80": 31, "mariadb": 32, "postgres": 33,
 		"redis": 40, "redis6": 41,
 		"opensearch": 50, "opensearch1": 51,
 		"elasticsearch": 52, "elasticsearch7": 53,

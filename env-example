@@ -59,6 +59,16 @@ RABBITMQ_MGMT_PORT=15672
 
 VARNISH_VERSION=7.6
 
+# ── PostgreSQL (profile: postgres) ──────────────────────────────────────────────
+POSTGRES_VERSION=17
+POSTGRES_PORT=5432
+POSTGRES_DB=app
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+PGADMIN_PORT=5050
+PGADMIN_EMAIL=admin@local.dev
+PGADMIN_PASSWORD=admin
+
 # ── Web & Tools ───────────────────────────────────────────────────────────────
 HTTP_PORT=80
 HTTPS_PORT=443

@@ -231,6 +231,32 @@ func KibanaStop(c echo.Context) error {
 	return ok(c, map[string]string{"status": "stopped"})
 }
 
+// POST /api/pgadmin/start
+func PgAdminStart(c echo.Context) error {
+	hostDir := exec.HostProjectDir()
+	res, _ := exec.Run("docker", "compose",
+		"--project-directory", hostDir,
+		"-f", exec.RootDir+"/docker-compose.yml",
+		"-f", exec.RootDir+"/compose/postgres.yml",
+		"-f", exec.RootDir+"/compose/pgadmin.yml",
+		"up", "-d", "pgadmin")
+	out := ""
+	if res != nil { out = exec.StripNoise(res.Stdout + "\n" + res.Stderr) }
+	return ok(c, map[string]string{"status": "started", "output": out})
+}
+
+// POST /api/pgadmin/stop
+func PgAdminStop(c echo.Context) error {
+	hostDir := exec.HostProjectDir()
+	exec.Run("docker", "compose",
+		"--project-directory", hostDir,
+		"-f", exec.RootDir+"/docker-compose.yml",
+		"-f", exec.RootDir+"/compose/postgres.yml",
+		"-f", exec.RootDir+"/compose/pgadmin.yml",
+		"rm", "-sf", "pgadmin")
+	return ok(c, map[string]string{"status": "stopped"})
+}
+
 func EnableSSL(c echo.Context) error {
 	domain := c.Param("domain")
 	res, _ := exec.MageTimeout(60*time.Second, "ssl", domain)

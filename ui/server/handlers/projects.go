@@ -230,6 +230,8 @@ func overridesForProject(p Project) []string {
 		ov = append(ov, "mariadb")
 	case "mysql80":
 		ov = append(ov, "mysql80")
+	case "postgres":
+		ov = append(ov, "postgres")
 	}
 	switch p.Search {
 	case "elasticsearch":

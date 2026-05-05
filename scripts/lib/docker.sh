@@ -144,8 +144,8 @@ get_mysql_password()      { local svc="${1:-mysql}"; local c; c=$(docker inspect
 # Validate db_service name
 validate_db_service() {
     local svc="$1"
-    if [[ "$svc" != @(mysql|mysql80|mariadb) ]]; then
-        _die "Invalid db_service: $svc. Must be: mysql, mysql80, or mariadb"
+    if [[ "$svc" != @(mysql|mysql80|mariadb|postgres) ]]; then
+        _die "Invalid db_service: $svc. Must be: mysql, mysql80, mariadb, or postgres"
     fi
 }
 
