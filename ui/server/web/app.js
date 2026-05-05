@@ -96,6 +96,7 @@ function Modal({ show, onClose, title, children }) {
 function Dashboard() {
   const [services, setServices] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [showPw, setShowPw] = useState(false);
   const load = async () => { setServices(await GET('/api/services') || []); setProjects(await GET('/api/projects') || []); };
   useEffect(() => { load(); const t = setInterval(load, 5000); return () => clearInterval(t); }, []);
   const running = services.filter(s => svcState(s) === 'running').length;
@@ -110,10 +111,10 @@ function Dashboard() {
         <button class="btn-icon" onClick=${async () => { toast('Restarting '+s.service); await POST('/api/services/'+(s.service)+'/restart'); load(); }}>↻</button>
       </div>`;
     })}</div>
-    <div class="card-header" style="margin-top:24px">Connection Info</div>
+    <div class="card-header" style="margin-top:24px">Connection Info <button class="btn btn-sm" style="margin-left:8px" onClick=${()=>setShowPw(!showPw)}>${showPw ? '🙈 Hide' : '👁 Show'} passwords</button></div>
     <div class="card table-wrap" style="padding:16px;font-size:13px;margin-bottom:16px">
       <table style="width:100%;border-collapse:collapse"><thead><tr style="text-align:left;opacity:0.6"><th style="padding:4px 8px">Service</th><th style="padding:4px 8px">Host</th><th style="padding:4px 8px">Port</th><th style="padding:4px 8px">User</th><th style="padding:4px 8px">Password</th><th style="padding:4px 8px">Database</th></tr></thead><tbody>
-        ${[{s:'mysql',h:'mysql',p:'3306',u:'root',pw:'root',db:'magento'},{s:'mysql80',h:'mysql80',p:'3307',u:'root',pw:'root',db:'magento'},{s:'mariadb',h:'mariadb',p:'3308',u:'root',pw:'root',db:'magento'},{s:'postgres',h:'postgres',p:'5432',u:'postgres',pw:'postgres',db:'app'},{s:'mongodb',h:'mongodb',p:'27017',u:'root',pw:'root',db:'admin'},{s:'redis',h:'redis',p:'6379',u:'',pw:'',db:''},{s:'redis6',h:'redis6',p:'6380',u:'',pw:'',db:''},{s:'opensearch',h:'opensearch',p:'9200',u:'',pw:'',db:''},{s:'elasticsearch',h:'elasticsearch',p:'9202',u:'',pw:'',db:''},{s:'rabbitmq',h:'rabbitmq',p:'5672',u:'admin',pw:'admin',db:''},].filter(r=>services.some(s=>(s.service===r.s)&&svcState(s)==='running')).map(r=>html`<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px"><b>${r.s}</b></td><td style="padding:6px 8px;font-family:var(--mono)">${r.h}</td><td style="padding:6px 8px;font-family:var(--mono)">${r.p}</td><td style="padding:6px 8px;font-family:var(--mono)">${r.u||'\u2014'}</td><td style="padding:6px 8px;font-family:var(--mono)">${r.pw||'\u2014'}</td><td style="padding:6px 8px;font-family:var(--mono)">${r.db||'\u2014'}</td></tr>`)}
+        ${[{s:'mysql',h:'mysql',p:'3306',u:'root',pw:'root',db:'magento'},{s:'mysql80',h:'mysql80',p:'3307',u:'root',pw:'root',db:'magento'},{s:'mariadb',h:'mariadb',p:'3308',u:'root',pw:'root',db:'magento'},{s:'postgres',h:'postgres',p:'5432',u:'postgres',pw:'postgres',db:'app'},{s:'mongodb',h:'mongodb',p:'27017',u:'root',pw:'root',db:'admin'},{s:'redis',h:'redis',p:'6379',u:'',pw:'',db:''},{s:'redis6',h:'redis6',p:'6380',u:'',pw:'',db:''},{s:'opensearch',h:'opensearch',p:'9200',u:'',pw:'',db:''},{s:'elasticsearch',h:'elasticsearch',p:'9202',u:'',pw:'',db:''},{s:'rabbitmq',h:'rabbitmq',p:'5672',u:'admin',pw:'admin',db:''},].filter(r=>services.some(s=>(s.service===r.s)&&svcState(s)==='running')).map(r=>html`<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px"><b>${r.s}</b></td><td style="padding:6px 8px;font-family:var(--mono)">${r.h}</td><td style="padding:6px 8px;font-family:var(--mono)">${r.p}</td><td style="padding:6px 8px;font-family:var(--mono)">${r.u||'\u2014'}</td><td style="padding:6px 8px;font-family:var(--mono)">${r.pw ? (showPw ? r.pw : '\u2022\u2022\u2022\u2022') : '\u2014'}</td><td style="padding:6px 8px;font-family:var(--mono)">${r.db||'\u2014'}</td></tr>`)}
       </tbody></table>
       <div style="margin-top:8px;font-size:11px;opacity:0.5">Credentials from .env — edit in Settings page. Host names are Docker service names (use from inside containers).</div>
     </div>
